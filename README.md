@@ -34,7 +34,9 @@ Every person has a name, an age, hunger, health and four personality traits: agg
 - **Battles** are named after the land they're fought on, for example *"Battle of Batu Plain"*. An army that loses enough soldiers breaks and flees.
 - **Sieges** wear down walls, then sack the town or conquer it outright. Defenders raise their own army to meet invaders.
 - **Navies** of canoes, galleys, galleons, ironclads and destroyers fight at sea and bombard harbors.
-- **Air power**: once a nation learns Flight it sends bombers and fighters into the sky. Planes dogfight, get shot down, and strike enemy towns. Biplanes give way to jets.
+- **Air power**: once a nation learns Flight it sends bombers and fighters into the sky. Planes dogfight, get shot down, and strike enemy towns. Propeller fighters give way to jet fighters that fire missiles.
+- **Submarines** hunt under the waves, invisible until they surface or come close, and sink ships with torpedoes.
+- **Artillery** rolls behind modern armies and shells the enemy, **helicopters** fly over them, and **anti-aircraft guns** in modern towns shoot down raiders.
 - Weapons change with the era: spears and bronze, then cavalry, muskets, rifles and finally tanks.
 
 ### Explorers and the sea
@@ -75,7 +77,9 @@ Everything that happens goes into the **Chronicle**: wars, battles, sieges, gold
 | Follow someone | Select them, then **Follow with camera** |
 | Follow an army | Click it in the **Armies** panel or its map label |
 | Speed | Pause, Slow, Normal, Fast or Max |
-| Reshape the world | Meteor, Earthquake, Plague, Wildfire, Drought, Harvest or Newcomers, then click the map |
+| Reshape the world | Meteor, Earthquake, Plague, Wildfire, Drought, Harvest, Newcomers, Volcano, Flood or Grow forest, then click the map |
+| Meddle with a nation | Golden age, Gift knowledge, Prophet, Broker peace, Sow war, Raise army or Rebellion, then click near a town |
+| Graphics | **Auto**, **Low** (phones and older PCs), **Medium** or **High**. Auto picks a level for your device and steps down if the game runs slowly. Your choice is remembered. |
 | Save or load | **Save world** and **Load saved** store your world in this browser |
 
 ## How it's built
@@ -92,6 +96,8 @@ The simulation runs headless in Node:
 node tests/run.js [era] [seed] [years]   # run a world and print stats and history
 node tests/ai.js                         # council AI strategies
 node tests/nudge.js                      # world tools (meteor, plague, ...)
+node tests/tools.js                      # new tools (volcano, golden age, peace, ...)
+node tests/war2.js                       # jets, submarines and anti-aircraft
 node tests/save.js                       # save and load round trip
 node tests/army.js                       # armies, battles and sieges in four eras
 ```
