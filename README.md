@@ -42,6 +42,11 @@ Every person has a name, an age, hunger, health and four personality traits: agg
 ### Explorers and the sea
 Nations with Sailing send captains and settlers across the sea. When they reach an empty shore, they found an allied colony there. If their ship is sunk, the whole expedition is lost.
 
+- **Islands** dot the open sea, and explorers are drawn to settle them.
+- **Merchant ships** sail between harbors, from small trading cogs to container ships stacked with cargo. Each voyage trades goods, spreads ideas and builds friendship, and opens a sea route. Pirates sometimes seize a cargo.
+- **Island communication** improves with the ages. Merchant ships carry the news at first. Then come undersea telegraph cables, radio, satellite links and fiber-optic internet cables. You can see cables on the seabed and messages flying through the sky. Linked nations grow friendlier and share ideas each year, and war cuts the link.
+- **Sea life:** whales spout, dolphins leap, fish swirl in shoals and fishing boats work the coast near harbor towns.
+
 ### Towns that grow with the ages
 ![A Nordic town with a palisade, barracks, a market and grain silos](docs/town.png)
 
@@ -98,6 +103,7 @@ node tests/ai.js                         # council AI strategies
 node tests/nudge.js                      # world tools (meteor, plague, ...)
 node tests/tools.js                      # new tools (volcano, golden age, peace, ...)
 node tests/war2.js                       # jets, submarines and anti-aircraft
+node tests/sea.js                        # islands, merchant ships and sea links
 node tests/save.js                       # save and load round trip
 node tests/army.js                       # armies, battles and sieges in four eras
 ```
