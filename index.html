@@ -1,0 +1,2126 @@
+<title>Firstlight</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+SC:wght@500;700&family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a lit diorama of the world fills the stage; a dark ledger on the right keeps the chronicle, tribes and inspector. */
+:root {
+  --ink: #0d1416;
+  --panel: #142023;
+  --panel-2: #1a292d;
+  --line: #273a3f;
+  --text: #ece5d3;
+  --muted: #93a39e;
+  --accent: #e3a64a;
+  --war: #e8604a;
+  --peace: #7fcf8e;
+  --tech: #8fb6ff;
+  --display: "Alegreya SC", "Palatino Linotype", Georgia, serif;
+  --body: "Alegreya Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body { background: var(--ink); color: var(--text); font-family: var(--body); font-size: 15px; line-height: 1.45; overflow: hidden; }
+button { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+#app { display: grid; grid-template-columns: minmax(0, 1fr) 360px; height: 100%; }
+#stage { position: relative; min-width: 0; overflow: hidden; background: var(--ink); }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+#labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.tlabel { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; pointer-events: auto; cursor: pointer;
+  font-family: var(--display); font-size: 13px; letter-spacing: .04em; padding: 1px 8px 2px; border-radius: 3px;
+  background: rgba(13, 20, 22, .72); border-left: 3px solid var(--c); color: var(--text); }
+.tlabel small { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-left: 6px; letter-spacing: 0; }
+.tlabel.war { box-shadow: 0 0 0 1px var(--war); }
+
+#hud { position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); top: 14px; display: flex; gap: 10px; align-items: baseline; pointer-events: none;
+  background: rgba(13, 20, 22, .62); padding: 4px 12px 6px; border-radius: 6px; }
+#hud .brand { font-family: var(--display); font-size: 26px; font-weight: 700; letter-spacing: .06em; color: var(--accent); }
+#hud .yr { font-family: var(--mono); font-size: 13px; color: var(--text); }
+#hint { position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); bottom: 12px; font-size: 12px; color: var(--text); pointer-events: none; background: rgba(13, 20, 22, .55); padding: 2px 8px; border-radius: 4px; }
+
+#panel { background: var(--panel); border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
+.sec { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.sec h2 { margin: 0; font-family: var(--display); font-weight: 500; font-size: 15px; letter-spacing: .08em; color: var(--muted); display: flex; justify-content: space-between; align-items: baseline; }
+.sec h2 span { font-family: var(--mono); font-size: 11px; letter-spacing: 0; }
+
+.clock { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.clock .y { font-family: var(--display); font-size: 24px; font-weight: 700; }
+.clock .era { font-family: var(--mono); font-size: 12px; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; }
+.speeds { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.speeds button { background: transparent; border: 0; border-right: 1px solid var(--line); padding: 7px 2px; font-size: 13px; cursor: pointer; color: var(--muted); }
+.speeds button:last-child { border-right: 0; }
+.speeds button[aria-pressed="true"] { background: var(--accent); color: #1b1408; font-weight: 700; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px; }
+.btn:hover { border-color: var(--accent); }
+
+#tribes { display: flex; flex-direction: column; gap: 2px; max-height: 236px; overflow-y: auto; }
+.trow { display: grid; grid-template-columns: 10px minmax(0,1fr) auto; gap: 10px; align-items: center; padding: 5px 6px; border-radius: 4px; cursor: pointer; background: transparent; border: 0; text-align: left; }
+.trow:hover, .trow.sel { background: var(--panel-2); }
+.trow i { width: 10px; height: 10px; border-radius: 2px; background: var(--c); }
+.trow .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trow .nm em { font-style: normal; color: var(--muted); font-size: 12px; margin-left: 6px; }
+.trow .st { font-family: var(--mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.badge { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; padding: 1px 5px; border-radius: 3px; border: 1px solid currentColor; }
+.badge.war { color: var(--war); }
+.badge.peace { color: var(--peace); }
+.empty { color: var(--muted); font-size: 13px; }
+
+#inspect .who { font-family: var(--display); font-size: 20px; line-height: 1.15; }
+#inspect .sub { color: var(--muted); font-size: 13px; }
+#inspect .thought { font-style: italic; color: var(--text); border-left: 2px solid var(--accent); padding-left: 10px; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-size: 13px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.bar { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; align-self: center; }
+.bar b { display: block; height: 100%; background: var(--accent); }
+.bar.hp b { background: var(--peace); }
+.bar.hu b { background: var(--war); }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { font-size: 11px; padding: 1px 6px; border-radius: 3px; background: var(--panel-2); color: var(--muted); }
+.chip.e { color: var(--text); }
+
+#log { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.ev { display: grid; grid-template-columns: 38px minmax(0,1fr); gap: 8px; cursor: default; }
+.ev .when { font-family: var(--mono); font-size: 11px; color: var(--muted); padding-top: 2px; font-variant-numeric: tabular-nums; }
+.ev .txt { border-left: 2px solid var(--line); padding-left: 8px; min-width: 0; }
+.ev.war .txt { border-color: var(--war); }
+.ev.peace .txt, .ev.tribe .txt, .ev.split .txt { border-color: var(--peace); }
+.ev.tech .txt, .ev.era .txt { border-color: var(--tech); }
+.ev.era .txt { color: var(--tech); }
+.ev.fall .txt, .ev.raid .txt, .ev.leader .txt { border-color: var(--accent); }
+.ev[data-tribe] { cursor: pointer; }
+
+#picker { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(9, 14, 16, .55); backdrop-filter: blur(2px); padding: 16px max(16px, env(safe-area-inset-right, 0px)) 16px max(16px, env(safe-area-inset-left, 0px)); overflow-y: auto; }
+.pick { width: min(640px, 100%); background: rgba(20, 32, 35, .94); border: 1px solid var(--line); border-radius: 10px; padding: 22px; display: flex; flex-direction: column; gap: 14px; }
+.pick h1 { margin: 0; font-family: var(--display); font-size: 30px; color: var(--accent); letter-spacing: .04em; text-wrap: balance; }
+.pick p { margin: 0; color: var(--muted); max-width: 60ch; }
+.eras { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+.era-btn { text-align: left; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.era-btn:hover, .era-btn:focus-visible { border-color: var(--accent); }
+.era-btn b { font-family: var(--display); font-size: 18px; font-weight: 700; }
+.era-btn span { color: var(--muted); font-size: 12px; }
+.seed { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); flex-wrap: wrap; }
+.seed input { width: 110px; background: var(--ink); border: 1px solid var(--line); border-radius: 5px; color: var(--text); padding: 5px 8px; font-family: var(--mono); }
+
+#tools { position: absolute; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); bottom: 40px; display: flex; gap: 4px; overflow-x: auto; pointer-events: none; }
+#tools button { pointer-events: auto; flex: none; background: rgba(13, 20, 22, .78); border: 1px solid var(--line); color: var(--text); border-radius: 5px; padding: 5px 10px; font-size: 13px; cursor: pointer; }
+#tools button:hover { border-color: var(--accent); }
+#tools button[aria-pressed="true"] { background: var(--accent); color: #1b1408; border-color: var(--accent); font-weight: 700; }
+#tools button[data-tool="harvest"], #tools button[data-tool="people"] { border-style: dashed; }
+.chart { display: flex; flex-direction: column; gap: 4px; }
+.chart-h { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.chart-h span:last-child { font-family: var(--mono); color: var(--text); }
+#popChart { width: 100%; height: 54px; display: block; }
+.ev.wonder .txt { border-color: var(--accent); color: var(--accent); }
+.ev.policy .txt { border-color: var(--tech); font-style: italic; }
+.ev.alliance .txt { border-color: var(--peace); }
+.ev.faith .txt { border-color: #c3aed6; }
+#nationChart { width: 100%; height: 130px; display: block; }
+.note { font-size: 12px; color: var(--muted); align-self: center; }
+.plan { display: flex; flex-direction: column; gap: 6px; background: var(--panel-2); border-radius: 6px; padding: 10px 12px; }
+.plan-h { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.plan-h b { color: var(--accent); font-weight: 700; }
+.ev.disaster .txt, .ev.naval .txt { border-color: var(--war); }
+.ev.blessing .txt, .ev.arrival .txt { border-color: var(--peace); }
+@media (max-width: 820px) {
+  #tools { bottom: 12px; }
+  body { overflow: auto; }
+  #app { grid-template-columns: 1fr; grid-template-rows: 62vh auto; height: auto; }
+  #panel { border-left: 0; border-top: 1px solid var(--line); overflow: visible; }
+  .sec { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  #hud .brand { font-size: 20px; }
+  #hint { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+
+<div id="app">
+  <div id="stage">
+    <canvas id="view" aria-label="3D map of the world"></canvas>
+    <div id="labels"></div>
+    <div id="hud"><span class="brand">Firstlight</span><span class="yr" id="hudYear"></span></div>
+    <div id="hint">Drag to orbit, right-drag to pan, scroll to zoom. Click a person or a settlement.</div>
+    <div id="tools" role="toolbar" aria-label="World tools">
+      <button type="button" data-tool="inspect" aria-pressed="true">Inspect</button>
+      <button type="button" data-tool="meteor">Meteor</button>
+      <button type="button" data-tool="quake">Earthquake</button>
+      <button type="button" data-tool="plague">Plague</button>
+      <button type="button" data-tool="fire">Wildfire</button>
+      <button type="button" data-tool="drought">Drought</button>
+      <button type="button" data-tool="harvest">Harvest</button>
+      <button type="button" data-tool="people">Newcomers</button>
+    </div>
+    <div id="picker">
+      <div class="pick" role="dialog" aria-labelledby="pickTitle">
+        <h1 id="pickTitle">Where does history begin?</h1>
+        <p>Pick a starting era. Later eras begin with settled nations that already know everything from the ages before. From there, the people decide everything themselves.</p>
+        <div class="eras" id="eraList"></div>
+        <div class="seed"><label for="seedIn">World seed</label><input id="seedIn" inputmode="numeric"><button class="btn" id="seedNew" type="button">Random</button></div>
+      </div>
+    </div>
+  </div>
+  <aside id="panel">
+    <div class="sec">
+      <div class="clock"><span class="y" id="year">Year 1</span><span class="era" id="worldEra">Stone Age</span></div>
+      <div class="speeds" role="group" aria-label="Speed">
+        <button type="button" data-s="0">Pause</button>
+        <button type="button" data-s="1">Slow</button>
+        <button type="button" data-s="2">Normal</button>
+        <button type="button" data-s="3">Fast</button>
+        <button type="button" data-s="4">Max</button>
+      </div>
+      <div class="row"><button class="btn" id="newWorld" type="button">New world</button><button class="btn" id="saveBtn" type="button">Save world</button><button class="btn" id="loadBtn" type="button">Load saved</button><span class="note" id="saveNote"></span></div>
+      <div class="chart"><div class="chart-h"><span>World population</span><span id="popNow"></span></div><canvas id="popChart" height="54"></canvas></div>
+    </div>
+    <div class="sec" id="inspect"><h2>Inspector</h2><div class="empty">Click a person or a settlement on the map.</div></div>
+    <div class="sec"><h2>Tribes <span id="tribeCount"></span></h2><div id="tribes"></div></div>
+    <div class="sec"><h2>Nations over time <span>people per nation</span></h2><canvas id="nationChart" height="130" aria-label="Population of each nation over time"></canvas></div>
+    <div class="sec"><h2>Faiths</h2><div id="faiths"></div></div>
+    <div class="sec"><h2>Chronicle <span id="evCount"></span></h2><div id="log"></div></div>
+  </aside>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+
+<script id="sim-core">
+/* ===== Simulation core: pure logic, no DOM or rendering. ===== */
+(function (root) {
+  const W = 96, H = 64, YEAR = 60;
+  const T = { WATER: 0, SAND: 1, GRASS: 2, FOREST: 3, HILLS: 4, MOUNTAIN: 5, FARM: 6 };
+  const FOOD_CAP = [0, 0.4, 2.5, 1.2, 0.3, 0, 6];
+  const FOOD_REGEN = [0, 0.001, 0.005, 0.003, 0.001, 0, 0.04];
+  const WOOD_CAP = 16;
+
+  const ERAS = [
+    { name: 'Stone Age', blurb: 'Wandering bands with nothing but each other' },
+    { name: 'Antiquity', blurb: 'Bronze, writing and the first walls' },
+    { name: 'Middle Ages', blurb: 'Steel, coin and engineering' },
+    { name: '1700s', blurb: 'Gunpowder, printing and sail' },
+    { name: '1800s', blurb: 'Steam, railways and industry' },
+    { name: '1900s', blurb: 'Electricity, engines and mass war' },
+    { name: '2000s', blurb: 'Computers and a connected world' },
+  ];
+
+  const TECHS = [
+    { id: 'tools', name: 'Stone Tools', era: 0, req: [], fx: { gather: .4 } },
+    { id: 'fire', name: 'Fire', era: 0, req: [], fx: { hunger: -.1 } },
+    { id: 'shelter', name: 'Shelter', era: 0, req: ['tools'], fx: { cap: 2 } },
+    { id: 'spear', name: 'Spears', era: 0, req: ['tools'], fx: { combat: .4 }, war: 1 },
+    { id: 'pottery', name: 'Pottery', era: 0, req: ['fire'], fx: { noSpoil: 1 } },
+    { id: 'agri', name: 'Agriculture', era: 0, req: ['tools'], fx: { farms: 1 } },
+    { id: 'barter', name: 'Barter', era: 1, req: ['pottery'], fx: { trade: 1 } },
+    { id: 'masonry', name: 'Masonry', era: 1, req: ['shelter'], fx: { walls: 1 } },
+    { id: 'bronze', name: 'Bronze Working', era: 1, req: ['spear'], fx: { combat: .4, gather: .2 }, war: 1 },
+    { id: 'writing', name: 'Writing', era: 1, req: ['barter'], fx: { research: .5 } },
+    { id: 'wheel', name: 'The Wheel', era: 1, req: ['barter'], fx: { speed: .2, range: 10 } },
+    { id: 'iron', name: 'Iron Working', era: 1, req: ['bronze'], fx: { combat: .5 }, war: 1 },
+    { id: 'currency', name: 'Currency', era: 2, req: ['writing'], fx: { tradeYield: .5 } },
+    { id: 'math', name: 'Mathematics', era: 2, req: ['writing'], fx: { research: .3 } },
+    { id: 'steel', name: 'Steel', era: 2, req: ['iron'], fx: { combat: .5, gather: .3 }, war: 1 },
+    { id: 'engineering', name: 'Engineering', era: 2, req: ['masonry', 'wheel'], fx: { cap: 2, wallStr: .3 } },
+    { id: 'irrigation', name: 'Irrigation', era: 2, req: ['agri', 'engineering'], fx: { farmYield: .8 } },
+    { id: 'gunpowder', name: 'Gunpowder', era: 3, req: ['steel', 'math'], fx: { combat: 1 }, war: 1 },
+    { id: 'navigation', name: 'Navigation', era: 3, req: ['math', 'currency'], fx: { range: 20, speed: .1 } },
+    { id: 'printing', name: 'Printing Press', era: 3, req: ['math'], fx: { research: .6, spread: .2 } },
+    { id: 'banking', name: 'Banking', era: 3, req: ['currency'], fx: { tradeYield: .5 } },
+    { id: 'steam', name: 'Steam Power', era: 4, req: ['engineering', 'printing'], fx: { gather: .5, speed: .2 } },
+    { id: 'railways', name: 'Railways', era: 4, req: ['steam'], fx: { speed: .4, range: 25 } },
+    { id: 'industry', name: 'Industry', era: 4, req: ['steam', 'banking'], fx: { cap: 4, gather: .3 } },
+    { id: 'medicine', name: 'Medicine', era: 4, req: ['printing'], fx: { life: 15 } },
+    { id: 'electricity', name: 'Electricity', era: 5, req: ['industry'], fx: { research: .8 } },
+    { id: 'combustion', name: 'Combustion Engine', era: 5, req: ['railways', 'industry'], fx: { speed: .5, range: 30 } },
+    { id: 'mechwar', name: 'Mechanized Warfare', era: 5, req: ['combustion', 'gunpowder'], fx: { combat: 1.2 }, war: 1 },
+    { id: 'vaccines', name: 'Vaccines', era: 5, req: ['medicine', 'electricity'], fx: { life: 10 } },
+    { id: 'computers', name: 'Computers', era: 6, req: ['electricity'], fx: { research: 1 } },
+    { id: 'internet', name: 'Internet', era: 6, req: ['computers'], fx: { spread: .4, range: 60 } },
+    { id: 'renewables', name: 'Renewable Energy', era: 6, req: ['electricity', 'industry'], fx: { gather: .5, farmYield: .5 } },
+  ];
+  const TECH = Object.fromEntries(TECHS.map(t => [t.id, t]));
+  const techCost = id => Math.round(220 * Math.pow(2, TECH[id].era));
+  const ERA_SIZE = ERAS.map((_, e) => TECHS.filter(t => t.era === e).length);
+
+  function computeFx(techs) {
+    const f = { gather: 1, combat: 1, speed: 1, research: 1, cap: 4, life: 0, range: 40, tradeYield: 1, farmYield: 1, wallStr: 1, spread: .15, hunger: .4, noSpoil: 0, farms: 0, trade: 0, walls: 0 };
+    for (const id of techs) for (const [k, v] of Object.entries(TECH[id].fx)) {
+      if (k === 'noSpoil' || k === 'farms' || k === 'trade' || k === 'walls') f[k] = 1; else f[k] += v;
+    }
+    return f;
+  }
+  const BASE_FX = computeFx([]);
+  function computeEra(techs) {
+    let era = 0;
+    for (let e = 1; e < ERAS.length; e++) {
+      let n = 0; for (const id of techs) if (TECH[id].era === e) n++;
+      if (n >= Math.ceil(ERA_SIZE[e] / 2)) era = e;
+    }
+    return era;
+  }
+
+  function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  function makeNoise(r) {
+    const S = 64, g = new Float32Array(S * S); for (let i = 0; i < g.length; i++) g[i] = r();
+    const s = t => t * t * (3 - 2 * t), at = (a, b) => g[(b & 63) * S + (a & 63)];
+    return (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), u = s(x - xi), v = s(y - yi);
+      return (at(xi, yi) * (1 - u) + at(xi + 1, yi) * u) * (1 - v) + (at(xi, yi + 1) * (1 - u) + at(xi + 1, yi + 1) * u) * v; };
+  }
+  function fbm(f, x, y) { let a = 0, amp = .5, fr = 1, n = 0; for (let o = 0; o < 4; o++) { a += f(x * fr, y * fr) * amp; n += amp; amp *= .5; fr *= 2; } return a / n; }
+  const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+  const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+  const SYL = ['ka', 'ru', 'mo', 'sha', 'ten', 'or', 'vel', 'an', 'is', 'dor', 'ma', 'ki', 'zu', 'el', 'tha', 'ny', 'bri', 'go', 'lu', 'sen', 'ar', 'qui', 'fen', 'ho', 'ya', 'mi', 'to', 'ra'];
+  const TRIBE_END = ['i', 'an', 'ar', 'u', 'eth', 'ani', 'os', 'im'];
+  const COLORS = ['#e4572e', '#f3b61f', '#4e8fe8', '#b065e0', '#e85d9e', '#2ec4b6', '#f4e285', '#ff8a5b', '#9aa5ff', '#d4a373', '#ef476f', '#a7e8bd'];
+  const cap1 = s => s[0].toUpperCase() + s.slice(1);
+  // cultures: each region of the world grows its own naming, habits and architecture
+  const STYLES = [
+    { id: 'steppe', name: 'Steppe', syl: ['ba', 'tu', 'khan', 'ar', 'sar', 'tem', 'ul', 'gan', 'bo', 'ji', 'mur', 'ag', 'te', 'go'], end: ['ai', 'ut', 'ar', 'an', 'ids'], bias: { war: 1.35, trade: .9, research: .9, farm: .8, build: 1 } },
+    { id: 'nordic', name: 'Nordic', syl: ['bjor', 'ulf', 'ein', 'sig', 'har', 'thor', 'gun', 'vik', 'leif', 'ran', 'dal', 'frey', 'as', 'hal'], end: ['ings', 'heim', 'ar', 'ungs', 'folk'], bias: { war: 1.25, trade: 1, research: 1, farm: .9, build: 1 } },
+    { id: 'desert', name: 'Desert', syl: ['ka', 'ra', 'neb', 'ankh', 'set', 'mer', 'hat', 'tep', 'am', 'sa', 'nef', 'ptah', 'is', 'ur'], end: ['et', 'ites', 'an', 'u', 'ash'], bias: { war: .95, trade: 1.05, research: 1, farm: 1.1, build: 1.45 } },
+    { id: 'eastern', name: 'Eastern', syl: ['ji', 'shan', 'lin', 'mei', 'tao', 'kai', 'zhu', 'han', 'yun', 'li', 'ming', 'qin', 'wu', 'jin'], end: ['', 'an', 'ing', 'ou'], bias: { war: .9, trade: 1, research: 1.3, farm: 1.1, build: 1.1 } },
+    { id: 'med', name: 'Mediterranean', syl: ['al', 'ex', 'do', 'ri', 'cas', 'ta', 'me', 'ne', 'pho', 'lo', 'the', 'ka', 'ly', 'sy'], end: ['ians', 'os', 'ians', 'enes', 'ines'], bias: { war: 1, trade: 1.5, research: 1.1, farm: 1, build: 1.1 } },
+    { id: 'meso', name: 'Jungle', syl: ['ix', 'chal', 'te', 'co', 'na', 'hua', 'tl', 'ma', 'ya', 'qui', 'pa', 'to', 'xo', 'ka'], end: ['ca', 'lan', 'tec', 'ec', 'ni'], bias: { war: 1.05, trade: .95, research: 1.05, farm: 1.35, build: 1.25 } },
+  ];
+  const WONDERS = { steppe: ["Khan's Great Tent", 'Stone Fortress'], nordic: ['Great Mead Hall', 'Stave Cathedral'], desert: ['Great Pyramid', 'Domed Palace'], eastern: ['Great Pagoda', 'Imperial Palace'], med: ['Temple of the Sky', 'Colosseum'], meso: ['Step Pyramid', 'Star Observatory'] };
+  const WONDER_ERA = [1, 3, 5];
+  // the strategies a civilization's council can choose, and how each one steers the people's work
+  const STRATS = {
+    grow: { label: 'Growing', mult: { gatherFood: 1.4, farm: 1.6, build: 1.4 }, techs: ['agri', 'irrigation', 'pottery', 'fire', 'medicine', 'vaccines', 'renewables', 'shelter', 'industry'] },
+    expand: { label: 'Expanding', mult: { gatherWood: 1.4, gatherFood: 1.2, build: 1.3, explore: 1.5 }, techs: ['wheel', 'navigation', 'railways', 'combustion'] },
+    fortify: { label: 'Fortifying', mult: { gatherStone: 1.7, walls: 1.6, hunt: 1.4, raid: .4, explore: .3, trade: .6 }, techs: ['masonry', 'engineering', 'steel', 'bronze'] },
+    military: { label: 'Arming for war', mult: { raid: 1.7, hunt: 1.5, gatherStone: 1.1, think: .7 }, techs: [] },
+    research: { label: 'Pursuing knowledge', mult: { think: 1.9, explore: 1.2 }, techs: ['writing', 'math', 'printing', 'electricity', 'computers', 'internet'] },
+    trade: { label: 'Trading', mult: { trade: 2.1, gatherWood: 1.1, gatherStone: 1.1 }, techs: ['barter', 'currency', 'banking', 'navigation', 'wheel', 'railways'] },
+  };
+  const SHIP_NAMES = ['canoe', 'war galley', 'war galley', 'galleon', 'ironclad', 'battleship', 'destroyer'];
+
+  class Sim {
+    constructor(seed, era = 0) {
+      this.seed = seed >>> 0; this.rng = mulberry32(this.seed ^ 0x9e3779b9); this.startEra = era;
+      this.tick = 0; this.agents = []; this.byId = new Map(); this.tribes = new Map(); this.nextId = 1; this.tribeCount = 0;
+      this.history = []; this.listeners = []; this.effects = []; this.dirty = new Set(); this.deadCount = 0;
+      this.ownerVersion = 0; this.usedNames = new Set(); this.ships = []; this.fires = new Map(); this.popHistory = []; this.religions = new Map();
+      this.genWorld();
+      this.owner = new Int32Array(W * H); this.ownerDist = new Float32Array(W * H);
+      if (era === 0) this.spawnBands(); else this.spawnCivs(era);
+      this.updateTerritory();
+      this.emit('start', era === 0 ? 'Scattered bands of people wander a wild land.' : `History begins in the ${ERAS[era].name}, with ${this.tribes.size} nations already settled.`);
+    }
+    // ---- events: the single channel every observer (log, UI, future tools) listens on
+    on(fn) { this.listeners.push(fn); }
+    emit(type, text, data = {}) { const e = { tick: this.tick, year: this.year(), type, text, ...data }; this.history.push(e); for (const f of this.listeners) f(e); return e; }
+    year() { return Math.floor(this.tick / YEAR) + 1; }
+    r() { return this.rng(); }
+    ri(a, b) { return a + Math.floor(this.rng() * (b - a + 1)); }
+    pick(arr) { return arr[Math.floor(this.rng() * arr.length)]; }
+    idx(x, y) { return y * W + x; }
+    inb(x, y) { return x >= 0 && y >= 0 && x < W && y < H; }
+    passable(x, y) { if (!this.inb(x, y)) return false; const t = this.terrain[y * W + x]; return t !== T.WATER && t !== T.MOUNTAIN; }
+
+    genWorld() {
+      const r = this.rng, n = W * H, hn = makeNoise(r), mn = makeNoise(r);
+      const hv = new Float32Array(n), mv = new Float32Array(n);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = y * W + x, dx = (x / (W - 1) - .5) * 2, dy = (y / (H - 1) - .5) * 2;
+        const d = Math.min(1.2, Math.sqrt(dx * dx * .85 + dy * dy * 1.1));
+        hv[i] = fbm(hn, x / 22, y / 22) - d * d * .4; mv[i] = fbm(mn, x / 16 + 30, y / 16 + 11);
+      }
+      const sorted = Float32Array.from(hv).sort(), q = p => sorted[Math.min(n - 1, Math.floor(p * n))];
+      const lo = sorted[0], hi = sorted[n - 1], wl = q(.36), sl = q(.40), hl = q(.87), ml = q(.955);
+      const landM = []; for (let i = 0; i < n; i++) if (hv[i] >= sl && hv[i] < hl) landM.push(mv[i]);
+      landM.sort((a, b) => a - b); const fl = landM[Math.floor(landM.length * .56)];
+      this.terrain = new Uint8Array(n); this.elev = new Float32Array(n); this.food = new Float32Array(n);
+      this.wood = new Float32Array(n); this.stone = new Float32Array(n); this.jit = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const h = hv[i]; let t, e;
+        if (h < wl) { t = T.WATER; e = -1.3 + (h - lo) / (wl - lo) * 1.05; }
+        else if (h < sl) { t = T.SAND; e = .06 + (h - wl) / (sl - wl) * .22; }
+        else if (h < hl) { t = mv[i] > fl ? T.FOREST : T.GRASS; e = .3 + (h - sl) / (hl - sl) * 1.6; }
+        else if (h < ml) { t = T.HILLS; e = 1.9 + (h - hl) / (ml - hl) * 1.5; }
+        else { t = T.MOUNTAIN; e = 3.4 + (h - ml) / (hi - ml) * 3.2; }
+        this.terrain[i] = t; this.elev[i] = e; this.jit[i] = r();
+        this.food[i] = FOOD_CAP[t] * (.5 + r() * .5);
+        if (t === T.FOREST) this.wood[i] = WOOD_CAP * (.6 + r() * .4);
+        if (t === T.HILLS) this.stone[i] = 20 + r() * 15;
+      }
+      const order = [0, 1, 2, 3, 4, 5]; for (let k = 5; k > 0; k--) { const j = Math.floor(r() * (k + 1)); [order[k], order[j]] = [order[j], order[k]]; }
+      this.cultureSeeds = []; for (let k = 0; k < 8; k++) this.cultureSeeds.push({ x: r() * W, y: r() * H, s: order[k % 6] });
+      // connected bodies of water, so ships only sail where they can reach
+      this.waterRegion = new Int32Array(n).fill(-1); this.regionSize = [];
+      for (let i = 0; i < n; i++) {
+        if (this.terrain[i] !== T.WATER || this.waterRegion[i] >= 0) continue;
+        const id = this.regionSize.length, q = [i]; this.waterRegion[i] = id; let size = 0;
+        while (q.length) { const c = q.pop(); size++; const cx = c % W, cy = (c / W) | 0;
+          for (const [dx, dy] of DIRS) { const x = cx + dx, y = cy + dy; if (x < 0 || y < 0 || x >= W || y >= H) continue; const j = y * W + x; if (this.terrain[j] === T.WATER && this.waterRegion[j] < 0) { this.waterRegion[j] = id; q.push(j); } } }
+        this.regionSize.push(size);
+      }
+    }
+    cultureAt(x, y) { let best = 0, bd = 1e9; for (const c of this.cultureSeeds) { const d = (c.x - x) ** 2 + (c.y - y) ** 2; if (d < bd) { bd = d; best = c.s; } } return best; }
+    style(t) { return STYLES[t.style]; }
+    findPort(t) {
+      let best = null, bd = 1e9;
+      for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
+        const x = t.camp.x + dx, y = t.camp.y + dy; if (!this.inb(x, y)) continue;
+        const i = this.idx(x, y); if (this.terrain[i] !== T.WATER || this.regionSize[this.waterRegion[i]] < 60) continue;
+        const d = dx * dx + dy * dy; if (d < bd) { bd = d; best = i; }
+      }
+      return best;
+    }
+    waterPath(from, to) {
+      if (this.waterRegion[from] !== this.waterRegion[to] || this.waterRegion[from] < 0) return null;
+      const prev = new Int32Array(W * H).fill(-2), q = [from]; prev[from] = -1;
+      for (let h = 0; h < q.length; h++) {
+        const c = q[h]; if (c === to) break; const cx = c % W, cy = (c / W) | 0;
+        for (const [dx, dy] of DIRS) { const x = cx + dx, y = cy + dy; if (x < 0 || y < 0 || x >= W || y >= H) continue; const j = y * W + x; if (prev[j] === -2 && this.terrain[j] === T.WATER) { prev[j] = c; q.push(j); } }
+      }
+      if (prev[to] === -2) return null;
+      const path = []; for (let c = to; c !== -1; c = prev[c]) path.push(c); return path.reverse();
+    }
+
+    findLand(test, tries = 3000) {
+      for (let k = 0; k < tries; k++) { const x = this.ri(2, W - 3), y = this.ri(2, H - 3); if (test(x, y)) return { x, y }; }
+      return null;
+    }
+    farFromCamps(x, y, d) { for (const t of this.tribes.values()) if (dist(t.camp, { x, y }) < d) return false; return true; }
+
+    spawnBands() {
+      const spots = [];
+      for (let g = 0; g < 9; g++) {
+        const s = this.findLand((x, y) => { const t = this.terrain[this.idx(x, y)]; return (t === T.GRASS || t === T.FOREST) && spots.every(p => dist(p, { x, y }) > 12); });
+        if (!s) continue; spots.push(s);
+        const n = this.ri(3, 6);
+        for (let k = 0; k < n; k++) { const p = this.nearPassable(s.x, s.y, 3); this.makeAgent(p.x, p.y); }
+      }
+    }
+    spawnCivs(era) {
+      const cur = TECHS.filter(t => t.era === era), techs = TECHS.filter(t => t.era < era).concat(cur.slice(0, Math.ceil(cur.length / 2))).map(t => t.id);
+      for (let k = 0; k < 7; k++) {
+        const s = this.findLand((x, y) => this.terrain[this.idx(x, y)] === T.GRASS && this.farFromCamps(x, y, 17) && this.openAround(x, y, 3));
+        if (!s) continue;
+        const pop = 7 + era * 2 + this.ri(0, 4), people = [];
+        for (let i = 0; i < pop; i++) { const p = this.nearPassable(s.x, s.y, 3); people.push(this.makeAgent(p.x, p.y)); }
+        const t = this.makeTribe(s.x, s.y, people, null, techs);
+        t.huts = Math.ceil(pop / t.fx.cap) + 1;
+        t.stock = { food: pop * 10, wood: 25, stone: 30 };
+        if (t.fx.walls) t.walls = true;
+        if (t.fx.farms) { let f = 0; for (let tries = 0; tries < 200 && f < pop; tries++) { const x = s.x + this.ri(-5, 5), y = s.y + this.ri(-5, 5), i = this.idx(x, y); if (this.inb(x, y) && this.terrain[i] === T.GRASS && cheb({ x, y }, s) >= 2) { this.terrain[i] = T.FARM; this.food[i] = 3; f++; } } }
+        for (const o of this.tribes.values()) if (o !== t) { const v = this.ri(-15, 15); t.rel.set(o.id, v); o.rel.set(t.id, v); }
+      }
+    }
+    openAround(x, y, r) { for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) if (!this.passable(x + dx, y + dy)) return false; return true; }
+    nearPassable(x, y, r) {
+      for (let k = 0; k < 40; k++) { const nx = x + this.ri(-r, r), ny = y + this.ri(-r, r); if (this.passable(nx, ny)) return { x: nx, y: ny }; }
+      return { x, y };
+    }
+
+    personName(style) { const syl = style == null ? SYL : STYLES[style].syl; let s = this.pick(syl) + this.pick(syl); if (this.r() < .25) s += this.pick(syl); return cap1(s); }
+    tribeName(style) {
+      const st = STYLES[style];
+      for (let k = 0; k < 50; k++) { const s = cap1(this.pick(st.syl) + this.pick(st.syl) + this.pick(st.end)); if (!this.usedNames.has(s)) { this.usedNames.add(s); return s; } }
+      return 'Tribe ' + this.nextId;
+    }
+
+    makeAgent(x, y, parents, style) {
+      const r = this.rng; let tr;
+      const pt = parents && this.tribes.get(parents[0].tribe);
+      const st = style ?? (pt ? pt.style : this.cultureAt(x, y));
+      if (parents) { tr = {}; for (const k of ['aggression', 'sociability', 'curiosity', 'diligence']) tr[k] = clamp01((parents[0].traits[k] + parents[1].traits[k]) / 2 + (r() - .5) * .3); }
+      else tr = { aggression: r(), sociability: r(), curiosity: r(), diligence: r() };
+      const a = { id: this.nextId++, name: this.personName(st), style: st, skin: r(), x, y, px: x, py: y, lx: -1, ly: -1, tribe: 0,
+        age: parents ? 0 : this.ri(16, 30) * YEAR, life: (38 + r() * 30) * YEAR, hunger: r() * 30, health: 100,
+        carry: { food: 0, wood: 0, stone: 0 }, traits: tr, goal: null, thought: 'Looking around', kills: 0, stuck: 0, alive: true,
+        parents: parents ? parents.map(p => p.name) : null };
+      this.agents.push(a); this.byId.set(a.id, a); return a;
+    }
+    makeTribe(x, y, founders, parent, techs) {
+      const style = parent ? parent.style : this.cultureAt(x, y);
+      const t = { id: this.nextId++, style, wonders: [], plague: 0, plagueDeaths: 0, port: null, name: this.tribeName(style), color: COLORS[this.tribeCount++ % COLORS.length], camp: { x, y },
+        members: new Set(), stock: { food: 0, wood: 0, stone: 0 }, huts: 1, walls: false,
+        techs: new Set(parent ? parent.techs : (techs || [])), research: null, progress: 0, rel: new Map(), wars: new Map(),
+        founded: this.tick, thinkers: 0, leader: 0, peak: 0, radius: 5, tradeCd: 0, trades: 0, farms: 0, deaths: 0, lastEv: {}, parent: parent ? parent.id : 0 };
+      t.fx = computeFx(t.techs); t.era = computeEra(t.techs);
+      t.port = this.findPort(t);
+      const b = STYLES[style].bias;
+      t.allies = new Set(); t.faith = parent ? parent.faith : 0; t.popHist = []; t.histStart = this.year();
+      t.ai = { strategy: 'grow', reason: 'Settling into a new home', since: this.tick, prev: null, lastScore: null, base: 0,
+        v: parent ? { ...parent.ai.v } : { grow: b.farm, expand: 1, fortify: b.build * .9, military: b.war, research: b.research, trade: b.trade } };
+      this.tribes.set(t.id, t);
+      for (const a of founders) this.join(a, t);
+      this.pickLeader(t, true);
+      return t;
+    }
+    join(a, t) {
+      if (a.tribe) { const o = this.tribes.get(a.tribe); if (o) o.members.delete(a.id); }
+      a.tribe = t.id; t.members.add(a.id); a.goal = null;
+    }
+    capacity(t) { return 2 + t.huts * t.fx.cap; }
+    members(t) { const out = []; for (const id of t.members) { const a = this.byId.get(id); if (a) out.push(a); } return out; }
+    pickLeader(t, quiet) {
+      let best = null, bs = -1; for (const a of this.members(t)) { if (a.age < 20 * YEAR) continue; const sc = a.traits.sociability + a.traits.aggression * .5 + (a.age < 50 * YEAR ? .6 : 0) + this.r() * .3; if (sc > bs) { bs = sc; best = a; } }
+      if (!best) best = this.members(t)[0];
+      if (!best) return;
+      t.leader = best.id;
+      if (!quiet) this.emit('leader', `${best.name} became chief of the ${t.name}.`, { tribe: t.id });
+    }
+    aggr(t) { const l = this.byId.get(t.leader); const ms = this.members(t); let s = 0; for (const m of ms) s += m.traits.aggression; const avg = ms.length ? s / ms.length : .5; return Math.min(1, (l ? (l.traits.aggression + avg) / 2 : avg) * STYLES[t.style].bias.war); }
+    rateOk(t, key, gap) { if (this.tick - (t.lastEv[key] ?? -1e9) < gap) return false; t.lastEv[key] = this.tick; return true; }
+
+    // ---- main loop
+    step() {
+      this.tick++;
+      if (this.tick % 5 === 0) this.regen();
+      const ag = this.agents;
+      for (let i = 0; i < ag.length; i++) { const a = ag[i]; if (a.alive) this.stepAgent(a); }
+      if (this.tick % 10 === 0) for (const t of [...this.tribes.values()]) this.stepTribe(t);
+      if (this.tick % 30 === 0) { this.diplomacy(); this.updateTerritory(); }
+      if (this.ships.length) this.stepShips();
+      if (this.fires.size && this.tick % 2 === 0) this.stepFires();
+      if (this.tick % YEAR === 0) {
+        this.popHistory.push(this.agents.length); if (this.popHistory.length > 400) this.popHistory.shift();
+        for (const t of this.tribes.values()) { t.popHist.push(t.members.size); if (t.popHist.length > 300) { t.popHist.shift(); t.histStart++; } }
+      }
+      if (this.deadCount) { this.agents = this.agents.filter(a => a.alive); this.deadCount = 0; }
+      if (this.effects.length) { for (const e of this.effects) e.ttl--; this.effects = this.effects.filter(e => e.ttl > 0); }
+    }
+    regen() {
+      const n = W * H;
+      for (let i = 0; i < n; i++) {
+        const t = this.terrain[i];
+        if (t === T.FARM) {
+          const o = this.owner[i] ? this.tribes.get(this.owner[i]) : null;
+          if (!o && this.r() < .002) { this.terrain[i] = T.GRASS; this.dirty.add(i); continue; }
+          const y = o ? o.fx.farmYield : 1; this.food[i] = Math.min(FOOD_CAP[t] * y, this.food[i] + FOOD_REGEN[t] * 5 * y);
+        } else if (FOOD_REGEN[t]) this.food[i] = Math.min(FOOD_CAP[t], this.food[i] + FOOD_REGEN[t] * 5);
+        if (t === T.FOREST && this.wood[i] < WOOD_CAP) this.wood[i] = Math.min(WOOD_CAP, this.wood[i] + .015);
+        else if (t === T.GRASS && this.owner[i] === 0 && this.r() < .00012) {
+          // untended grassland slowly turns back into forest next to existing woods
+          const x = i % W, y = (i / W) | 0; let woods = 0;
+          for (const [dx, dy] of DIRS) if (this.inb(x + dx, y + dy) && this.terrain[(y + dy) * W + x + dx] === T.FOREST) woods++;
+          if (woods >= 3) { this.terrain[i] = T.FOREST; this.wood[i] = 3; this.dirty.add(i); }
+        }
+      }
+    }
+
+    // ---- agents
+    stepAgent(a) {
+      a.px = a.x; a.py = a.y;
+      const t = a.tribe ? this.tribes.get(a.tribe) : null, fx = t ? t.fx : BASE_FX;
+      a.age++;
+      a.hunger += fx.hunger;
+      if (a.hunger >= 100) { a.hunger = 100; a.health -= .6; if (a.health <= 0) return this.kill(a, 'starvation'); }
+      else if (a.health < 100) a.health = Math.min(100, a.health + .15);
+      if (a.age > a.life + fx.life * YEAR) return this.kill(a, 'old age');
+      if (a.hunger > 40) {
+        if (a.carry.food >= 1) { a.carry.food -= 1; a.hunger = Math.max(0, a.hunger - 35); }
+        else if (t && cheb(a, t.camp) <= 2 && t.stock.food >= 1) { t.stock.food -= 1; a.hunger = Math.max(0, a.hunger - 35); }
+      }
+      if (!a.goal || ((this.tick + a.id) % 20 === 0 && this.urgent(a, t))) this.decide(a, t);
+      if (a.goal) this.act(a, t, fx);
+    }
+    urgent(a, t) {
+      const g = a.goal.type;
+      if (a.hunger > 75 && g !== 'gather' && g !== 'eat' && g !== 'deposit') return true;
+      if (t && t.wars.size && g !== 'hunt' && g !== 'raid' && a.age >= 14 * YEAR) return true;
+      return false;
+    }
+    setGoal(a, g, thought) { a.goal = g; a.stuck = 0; if (thought) a.thought = thought; return true; }
+    nearestAgent(a, R, test) {
+      let best = null, bd = R + 1;
+      for (const b of this.agents) { if (!b.alive || b === a) continue; const d = cheb(a, b); if (d < bd && test(b)) { bd = d; best = b; } }
+      return best;
+    }
+    findTile(a, val, center, R = 13) {
+      const cx = center ? center.x : a.x, cy = center ? center.y : a.y; let best = -1, bs = 0;
+      const here = this.idx(a.x, a.y), hv = val(here); if (hv > 0) { best = here; bs = hv * 1.2; }
+      for (let k = 0; k < 40; k++) {
+        const x = cx + this.ri(-R, R), y = cy + this.ri(-R, R); if (!this.passable(x, y)) continue;
+        const i = this.idx(x, y), v = val(i); if (v <= 0) continue;
+        const s = v / (1 + cheb(a, { x, y }) * .12); if (s > bs) { bs = s; best = i; }
+      }
+      return best < 0 ? null : { x: best % W, y: (best / W) | 0 };
+    }
+    explore(a, thought, R = 16) {
+      for (let k = 0; k < 20; k++) { const x = a.x + this.ri(-R, R), y = a.y + this.ri(-R, R); if (this.passable(x, y)) return this.setGoal(a, { type: 'walk', tx: x, ty: y }, thought); }
+      return false;
+    }
+    goForage(a, t, thought) {
+      const center = t && cheb(a, t.camp) < 22 ? t.camp : null;
+      const p = this.findTile(a, i => this.food[i] >= .8 ? this.food[i] : 0, center);
+      if (!p) return this.explore(a, 'Searching far and wide for food');
+      return this.setGoal(a, { type: 'gather', res: 'food', tx: p.x, ty: p.y }, thought);
+    }
+
+    decide(a, t) { if (!t) this.decideLoner(a); else this.decideMember(a, t); }
+    decideLoner(a) {
+      if (a.hunger > 55) return this.goForage(a, null, 'Hungry. Looking for berries and game');
+      const near = this.nearestAgent(a, 6, () => true);
+      if (near && this.r() < .3 + a.traits.sociability * .7) {
+        if (near.tribe) {
+          const nt = this.tribes.get(near.tribe);
+          if (nt && nt.members.size < this.capacity(nt) + 3) { this.join(a, nt); a.thought = `Asked to join the ${nt.name}, and was welcomed`; return; }
+        } else {
+          const group = this.agents.filter(b => b.alive && !b.tribe && cheb(a, b) <= 5);
+          if (group.length >= 2) {
+            const t = this.makeTribe(a.x, a.y, group);
+            for (const m of group) m.thought = `Settled down with ${group.length - 1} others as the ${t.name}`;
+            this.emit('tribe', `${a.name} gathered ${group.length} wanderers and founded the ${t.name}.`, { tribe: t.id });
+            return;
+          }
+        }
+      }
+      const far = this.nearestAgent(a, 24, () => true);
+      if (far && this.r() < .4 + a.traits.sociability * .6) return this.setGoal(a, { type: 'walk', tx: far.x, ty: far.y }, far.tribe ? `Heading toward the smoke of the ${this.tribes.get(far.tribe).name}` : 'Following tracks of other people');
+      return this.explore(a, 'Wandering alone');
+    }
+    decideMember(a, t) {
+      const fx = t.fx, pop = t.members.size, cap = this.capacity(t), d = cheb(a, t.camp), camp = t.camp, r = () => this.r();
+      if (a.age < 12 * YEAR) {
+        if (a.hunger > 55 && t.stock.food >= 1) return this.setGoal(a, { type: 'eat', tx: camp.x, ty: camp.y }, 'Running home for food');
+        const p = this.nearPassable(camp.x, camp.y, 3); return this.setGoal(a, { type: 'walk', tx: p.x, ty: p.y }, 'Playing near home');
+      }
+      const carried = a.carry.food + a.carry.wood + a.carry.stone;
+      const opts = [];
+      if (a.hunger > 55) { if (t.stock.food >= 1 && d < 30) opts.push([a.hunger / 45, 'eat']); else opts.push([a.hunger / 40, 'forage']); }
+      if (carried >= 3) opts.push([1.1 + carried * .05, 'deposit']);
+      const needFood = clamp01(1 - t.stock.food / (pop * 14 + 10));
+      opts.push([.25 + needFood * 1.1, 'gatherFood']);
+      const needHut = pop + 1 >= cap, wallsDue = fx.walls && !t.walls;
+      opts.push([(needHut ? .9 : .3) * clamp01(1 - t.stock.wood / (needHut ? 20 : 30)) + .05, 'gatherWood']);
+      const wc = this.wonderCost(t), B = STYLES[t.style].bias;
+      opts.push([(wallsDue ? .7 : wc ? .55 : .22) * clamp01(1 - t.stock.stone / (wallsDue ? 45 : wc || 25)) + .03, 'gatherStone']);
+      if (wc && t.stock.wood < wc) opts.push([.45, 'gatherWood']);
+      if (needHut && t.stock.wood >= 15) opts.push([1.3, 'build']);
+      if (wallsDue && t.stock.stone >= 40) opts.push([1.0, 'walls']);
+      if (t.research && t.thinkers < 2 + pop * (t.ai.strategy === 'research' ? .14 : .06)) opts.push([.2 + a.traits.curiosity * .7, 'think']);
+      if (fx.farms && t.farms < pop * .8 + 2) opts.push([(.35 + needFood * .6) * B.farm, 'farm']);
+      if (fx.trade && t.tradeCd <= 0) opts.push([(.3 + a.traits.sociability * .6) * B.trade, 'trade']);
+      if (t.wars.size) { const chief = t.leader === a.id; if (!chief) opts.push([a.traits.aggression * 1.3, 'raid']); if (!chief || d < 5) opts.push([.35 + a.traits.aggression * 1.2, 'hunt']); }
+      opts.push([a.traits.curiosity * .12, 'explore']);
+      const work = .85 + a.traits.diligence * .3, sm = STRATS[t.ai.strategy].mult;
+      for (const op of opts) op[0] *= sm[op[1]] || 1;
+      opts.sort((p, q) => q[0] * (.75 + r() * .5) - p[0] * (.75 + r() * .5));
+      for (const [, o] of opts) if (this.tryOption(a, t, o, work)) return;
+      this.explore(a, 'Taking a walk', 6);
+    }
+    tryOption(a, t, o, work) {
+      const camp = t.camp, fx = t.fx;
+      switch (o) {
+        case 'eat': return this.setGoal(a, { type: 'eat', tx: camp.x, ty: camp.y }, 'Hungry. Heading home to eat from the stores');
+        case 'forage': return this.goForage(a, t, 'Hungry, and the stores are empty. Foraging');
+        case 'deposit': return this.setGoal(a, { type: 'deposit', tx: camp.x, ty: camp.y }, 'Carrying goods back home');
+        case 'gatherFood': {
+          const center = cheb(a, camp) < 22 ? camp : null;
+          const p = this.findTile(a, i => this.food[i] >= .8 ? this.food[i] * (this.terrain[i] === T.FARM ? 1.5 : 1) : 0, center);
+          return p ? this.setGoal(a, { type: 'gather', res: 'food', tx: p.x, ty: p.y }, t.stock.food < t.members.size * 5 ? `The ${t.name} are running low on food. Gathering more` : 'Gathering food for the stores') : false;
+        }
+        case 'gatherWood': {
+          const p = this.findTile(a, i => this.wood[i] >= 1 ? this.wood[i] : 0, cheb(a, camp) < 22 ? camp : null, 16);
+          return p ? this.setGoal(a, { type: 'gather', res: 'wood', tx: p.x, ty: p.y }, t.members.size + 1 >= this.capacity(t) ? 'Cutting timber. Home is getting crowded and we need another hut' : 'Cutting timber') : false;
+        }
+        case 'gatherStone': {
+          const p = this.findTile(a, i => this.stone[i] >= 1 ? this.stone[i] / 4 : 0, cheb(a, camp) < 22 ? camp : null, 18);
+          return p ? this.setGoal(a, { type: 'gather', res: 'stone', tx: p.x, ty: p.y }, t.fx.walls && !t.walls ? 'Quarrying stone for the walls' : 'Quarrying stone') : false;
+        }
+        case 'build': return this.setGoal(a, { type: 'build', tx: camp.x, ty: camp.y, work: Math.round(20 / work) }, 'Building a new home for the growing family');
+        case 'walls': return this.setGoal(a, { type: 'walls', tx: camp.x, ty: camp.y, work: Math.round(40 / work) }, 'Raising stone walls around home');
+        case 'think': {
+          const p = this.nearPassable(camp.x, camp.y, 2);
+          return this.setGoal(a, { type: 'think', tx: p.x, ty: p.y, work: 30 }, `Pondering a new idea: ${TECH[t.research].name}`);
+        }
+        case 'farm': {
+          const p = this.findTile(a, i => this.terrain[i] === T.GRASS && this.owner[i] === t.id && cheb({ x: i % W, y: (i / W) | 0 }, camp) >= 2 ? 1 : 0, camp, Math.ceil(t.radius));
+          return p ? this.setGoal(a, { type: 'farm', tx: p.x, ty: p.y, work: Math.round(15 / work) }, 'Clearing a new field') : false;
+        }
+        case 'trade': {
+          const p = this.tradePartner(t); if (!p) return false;
+          let res = null, best = 0;
+          for (const k of ['food', 'wood', 'stone']) { const surplus = t.stock[k] - (k === 'food' ? t.members.size * 6 : 15); if (surplus > best) { best = surplus; res = k; } }
+          if (!res || best < 8) return false;
+          const amt = Math.min(10, best); t.stock[res] -= amt; t.tradeCd = 90;
+          return this.setGoal(a, { type: 'trade', tx: p.camp.x, ty: p.camp.y, partner: p.id, res, amt }, `Taking ${Math.round(amt)} ${res} to trade with the ${p.name}`);
+        }
+        case 'raid': {
+          let raiders = 0; for (const m of this.members(t)) if (m.goal && m.goal.type === 'raid') raiders++;
+          if (raiders >= Math.max(1, t.members.size / 4)) return false;
+          let target = null, bd = 1e9;
+          for (const id of t.wars.keys()) { const e = this.tribes.get(id); if (!e) continue; const d = dist(e.camp, camp); if (d < bd) { bd = d; target = e; } }
+          if (!target || bd > fx.range + 30) return false;
+          return this.setGoal(a, { type: 'raid', tx: target.camp.x, ty: target.camp.y, target: target.id }, `Marching to raid the ${target.name}`);
+        }
+        case 'hunt': {
+          const b = this.nearestAgent(a, 12, b => b.tribe && t.wars.has(b.tribe));
+          if (!b) return false;
+          return this.setGoal(a, { type: 'hunt', target: b.id, tx: b.x, ty: b.y, ttl: 80 }, `Going after ${b.name} of the ${this.tribes.get(b.tribe).name}`);
+        }
+        case 'explore': return this.explore(a, 'Scouting the land beyond the camp', 20);
+      }
+      return false;
+    }
+    stepsFor(fx) { const s = fx.speed; return Math.floor(s) + (this.r() < s - Math.floor(s) ? 1 : 0); }
+    moveToward(a, tx, ty) {
+      const cur = Math.max(Math.abs(tx - a.x), Math.abs(ty - a.y)) + .4 * Math.min(Math.abs(tx - a.x), Math.abs(ty - a.y));
+      let bx = 0, by = 0, bd = Infinity;
+      for (const [dx, dy] of DIRS) {
+        const nx = a.x + dx, ny = a.y + dy;
+        if (!this.passable(nx, ny) || (nx === a.lx && ny === a.ly)) continue;
+        const ax = Math.abs(tx - nx), ay = Math.abs(ty - ny), d = Math.max(ax, ay) + .4 * Math.min(ax, ay) + this.r() * .3;
+        if (d < bd) { bd = d; bx = nx; by = ny; }
+      }
+      if (bd === Infinity) { a.stuck += 5; return; }
+      a.stuck = bd < cur ? Math.max(0, a.stuck - 1) : a.stuck + 1;
+      a.lx = a.x; a.ly = a.y; a.x = bx; a.y = by;
+    }
+    act(a, t, fx) {
+      const g = a.goal;
+      if (g.type === 'hunt') {
+        const b = this.byId.get(g.target);
+        if (!b || !b.alive || g.ttl-- <= 0 || !t || !t.wars.has(b.tribe)) { a.goal = null; return; }
+        if (cheb(a, b) <= 1) { this.attack(a, b, t); return; }
+        g.tx = b.x; g.ty = b.y;
+      }
+      if (a.x !== g.tx || a.y !== g.ty) {
+        const n = this.stepsFor(fx);
+        for (let s = 0; s < n && (a.x !== g.tx || a.y !== g.ty); s++) this.moveToward(a, g.tx, g.ty);
+        if (a.stuck > 14) { a.goal = null; a.stuck = 0; a.thought = 'Could not find a way through. Rethinking'; }
+        return;
+      }
+      const i = this.idx(a.x, a.y);
+      switch (g.type) {
+        case 'gather': {
+          const arr = this[g.res], take = Math.min(arr[i], .5 * fx.gather * (.7 + a.traits.diligence * .6));
+          arr[i] -= take; a.carry[g.res] += take;
+          if (g.res === 'wood' && arr[i] < .05 && this.terrain[i] === T.FOREST) { this.terrain[i] = T.GRASS; this.food[i] = .5; this.dirty.add(i); }
+          if (g.res === 'stone' && arr[i] < .05) this.dirty.add(i);
+          const full = a.carry[g.res] >= 8, empty = arr[i] < .3;
+          if (!t) { if (a.carry.food >= 2 || empty) a.goal = null; }
+          else if (full) this.setGoal(a, { type: 'deposit', tx: t.camp.x, ty: t.camp.y }, `Bringing ${g.res} home`);
+          else if (empty) a.goal = null;
+          break;
+        }
+        case 'deposit':
+          if (t) for (const k of ['food', 'wood', 'stone']) { t.stock[k] += a.carry[k]; a.carry[k] = 0; }
+          a.goal = null; break;
+        case 'build':
+          if (--g.work <= 0) {
+            if (t && t.stock.wood >= 15) { t.stock.wood -= 15; t.huts++; if (t.huts % 10 === 0) this.emit('build', `The ${t.name} home now has ${t.huts} buildings.`, { tribe: t.id }); }
+            a.goal = null;
+          } break;
+        case 'walls':
+          if (--g.work <= 0) {
+            if (t && !t.walls && t.stock.stone >= 40) { t.stock.stone -= 40; t.walls = true; this.emit('build', `The ${t.name} raised stone walls around their home.`, { tribe: t.id }); }
+            a.goal = null;
+          } break;
+        case 'think':
+          if (t && t.research) t.progress += (.4 + a.traits.curiosity) * fx.research * .3 * STYLES[t.style].bias.research;
+          if (--g.work <= 0) a.goal = null; break;
+        case 'farm':
+          if (--g.work <= 0) { if (this.terrain[i] === T.GRASS) { this.terrain[i] = T.FARM; this.food[i] = 1; this.dirty.add(i); } a.goal = null; }
+          break;
+        case 'trade': this.completeTrade(a, t, g); break;
+        case 'raid': this.completeRaid(a, t, g); break;
+        default: a.goal = null;
+      }
+    }
+    tradePartner(t) {
+      let best = null, bs = -1e9;
+      for (const o of this.tribes.values()) {
+        if (o === t || t.wars.has(o.id)) continue;
+        const d = dist(o.camp, t.camp), rel = t.rel.get(o.id) ?? 0;
+        if (d > t.fx.range || rel < -25) continue;
+        const s = rel - d * .4 + this.r() * 10; if (s > bs) { bs = s; best = o; }
+      }
+      return best;
+    }
+    completeTrade(a, t, g) {
+      const p = this.tribes.get(g.partner);
+      if (!t) { a.goal = null; return; }
+      if (!p || t.wars.has(p.id)) { a.carry[g.res] += g.amt; this.setGoal(a, { type: 'deposit', tx: t.camp.x, ty: t.camp.y }, 'The trading partner is gone. Returning with the goods'); return; }
+      p.stock[g.res] += g.amt;
+      let back = null, best = 0;
+      for (const k of ['food', 'wood', 'stone']) if (k !== g.res && p.stock[k] > best) { best = p.stock[k]; back = k; }
+      let got = 0;
+      if (back && best >= 6) { got = Math.min(p.stock[back] * .5, g.amt * t.fx.tradeYield); p.stock[back] -= got; a.carry[back] += got; }
+      t.rel.set(p.id, Math.min(100, (t.rel.get(p.id) ?? 0) + 7)); p.rel.set(t.id, Math.min(100, (p.rel.get(t.id) ?? 0) + 7));
+      t.trades++; p.trades++;
+      this.effects.push({ type: 'trade', x: t.camp.x, y: t.camp.y, x2: p.camp.x, y2: p.camp.y, ttl: 70, color: t.color });
+      const key = 'tr' + p.id;
+      if (!t.lastEv[key] && !p.lastEv['tr' + t.id]) this.emit('trade', `The ${t.name} and the ${p.name} traded for the first time.`, { tribe: t.id });
+      t.lastEv[key] = this.tick;
+      // ideas travel with goods
+      this.diffuse(t, p, (t.fx.spread + p.fx.spread * .5) * .5);
+      this.diffuse(p, t, (t.fx.spread + p.fx.spread) * .15);
+      this.spreadFaith(t, p, .12); this.spreadFaith(p, t, .08);
+      this.setGoal(a, { type: 'deposit', tx: t.camp.x, ty: t.camp.y }, got ? `Traded with the ${p.name}. Bringing ${Math.round(got)} ${back} home` : `Delivered goods to the ${p.name}. Heading home`);
+    }
+    diffuse(learner, teacher, chance) {
+      if (this.r() > chance) return;
+      const can = [...teacher.techs].filter(id => !learner.techs.has(id) && TECH[id].req.every(q => learner.techs.has(q)));
+      if (can.length) this.learn(learner, this.pick(can), teacher);
+    }
+    completeRaid(a, t, g) {
+      const e = this.tribes.get(g.target);
+      if (!t || !e || !t.wars.has(e.id)) { a.goal = null; return; }
+      if (e.walls && this.r() < .45 * e.fx.wallStr) {
+        a.health -= 30;
+        if (this.rateOk(e, 'walls' + t.id, 120)) this.emit('raid', `The walls of the ${e.name} held against raiders from the ${t.name}.`, { tribe: e.id });
+        if (a.health <= 0) { this.kill(a, 'battle'); return; }
+        this.setGoal(a, { type: 'walk', tx: t.camp.x, ty: t.camp.y }, 'The walls were too strong. Retreating home');
+        return;
+      }
+      let took = 0;
+      for (const k of ['food', 'wood', 'stone']) { const n = Math.min(e.stock[k] * .3, 6); e.stock[k] -= n; a.carry[k] += n; took += n; }
+      e.rel.set(t.id, Math.max(-100, (e.rel.get(t.id) ?? 0) - 8));
+      this.effects.push({ type: 'battle', x: e.camp.x, y: e.camp.y, ttl: 16 });
+      if (took > 2 && this.rateOk(t, 'raid' + e.id, 90)) this.emit('raid', `Raiders from the ${t.name} looted the stores of the ${e.name}.`, { tribe: t.id });
+      this.setGoal(a, { type: 'deposit', tx: t.camp.x, ty: t.camp.y }, took > 2 ? 'Carrying loot home' : 'Their stores were empty. Heading home');
+    }
+    attack(a, b, t) {
+      const bt = this.tribes.get(b.tribe);
+      let p = 7 * t.fx.combat * (.5 + this.r()) * (.7 + a.traits.aggression * .6);
+      if (bt) { p /= Math.sqrt(bt.fx.combat); if (bt.walls && cheb(b, bt.camp) <= 3) p *= .6 / bt.fx.wallStr; }
+      b.health -= p;
+      this.effects.push({ type: 'battle', x: b.x, y: b.y, ttl: 10 });
+      if (b.health <= 0) { a.kills++; a.thought = `Killed ${b.name} in battle`; this.kill(b, 'battle', a); if (a.kills === 8 && this.rateOk(t, 'hero' + a.id, 1e9)) this.emit('hero', `${a.name} of the ${t.name} has slain eight enemies and is feared across the land.`, { tribe: t.id }); }
+      else if (!b.goal || b.goal.type !== 'hunt') this.setGoal(b, { type: 'hunt', target: a.id, tx: a.x, ty: a.y, ttl: 60 }, `Fighting back against ${a.name}`);
+    }
+    kill(a, cause, killer) {
+      if (!a.alive) return;
+      a.alive = false; a.cause = cause; this.deadCount++; this.byId.delete(a.id);
+      const t = a.tribe ? this.tribes.get(a.tribe) : null;
+      if (!t) return;
+      t.members.delete(a.id); t.deaths++;
+      const kt = killer ? this.tribes.get(killer.tribe) : null;
+      if (kt) { const w = t.wars.get(kt.id); if (w) w.deaths++; t.rel.set(kt.id, Math.max(-100, (t.rel.get(kt.id) ?? 0) - 2)); }
+      if (t.leader === a.id) {
+        const loud = cause !== 'battle' || this.rateOk(t, 'chiefFell', 300);
+        const age = Math.floor(a.age / YEAR);
+        const how = cause === 'battle' ? (kt ? `fell in battle against the ${kt.name}` : 'fell in battle') : cause === 'starvation' ? 'starved to death' : cause === 'plague' ? 'died of plague' : cause === 'disaster' ? 'was killed in the disaster' : `died of old age at ${age}`;
+        t.leader = 0; this.pickLeader(t, true);
+        const heir = this.byId.get(t.leader);
+        if (loud) this.emit('leader', `Chief ${a.name} of the ${t.name} ${how}.${heir ? ` ${heir.name} now leads them.` : ''}`, { tribe: t.id });
+      }
+    }
+
+    // ---- tribes
+    stepTribe(t) {
+      if (t.members.size === 0) { this.removeTribe(t); return; }
+      const pop = t.members.size, cap = this.capacity(t);
+      if (t.tradeCd > 0) t.tradeCd -= 10;
+      t.thinkers = 0; for (const a of this.members(t)) if (a.goal && a.goal.type === 'think') t.thinkers++;
+      if (!t.fx.noSpoil) t.stock.food *= .985;
+      t.progress += pop * .04 * t.fx.research * STYLES[t.style].bias.research;
+      if (!t.research) this.chooseResearch(t);
+      if (t.research && t.progress >= techCost(t.research)) { const id = t.research; t.research = null; t.progress = 0; this.learn(t, id); }
+      if (pop >= 2 && pop < cap && t.stock.food > pop * 4 + 12 && this.r() < .3) {
+        const adults = this.members(t).filter(m => m.age > 16 * YEAR && cheb(m, t.camp) <= 10);
+        if (adults.length >= 2) {
+          const p1 = this.pick(adults); let p2 = this.pick(adults); if (p2 === p1) p2 = adults.find(m => m !== p1);
+          const c = this.makeAgent(t.camp.x, t.camp.y, [p1, p2]); this.join(c, t); c.thought = 'Just born'; t.stock.food -= 12;
+        }
+      }
+      const m = [100, 50, 25, 10].find(v => t.members.size >= v) || 0;
+      if (m > t.peak) { t.peak = m; this.emit('growth', `The ${t.name} now number ${m}.`, { tribe: t.id }); }
+      if (!t.leader || !this.byId.get(t.leader)) this.pickLeader(t);
+      if (t.stock.food < 1) {
+        const hungry = this.members(t).filter(a => a.hunger > 80).length;
+        if (hungry > pop / 2 && this.rateOk(t, 'famine', 600)) this.emit('famine', `Famine strikes the ${t.name}. Their stores are empty.`, { tribe: t.id });
+      }
+      if (pop >= 18 && this.r() < .03 * (pop - 16)) this.split(t);
+      if (t.plague > 0) this.stepPlague(t);
+      if ((this.tick / 10 + t.id) % 6 === 0) { this.think(t); if (!this.tribes.has(t.id)) return; }
+      const wc = this.wonderCost(t);
+      if (wc && t.stock.stone >= wc && t.stock.wood >= wc) {
+        t.stock.stone -= wc; t.stock.wood -= wc;
+        const lvl = t.wonders.length, name = lvl < 2 ? WONDERS[STYLES[t.style].id][lvl] : 'Grand Tower';
+        t.wonders.push(name);
+        this.emit('wonder', `The ${t.name} completed the ${name}.`, { tribe: t.id });
+        for (const o of this.tribes.values()) if (o !== t && dist(o.camp, t.camp) < o.fx.range) o.rel.set(t.id, Math.min(100, (o.rel.get(t.id) ?? 0) + 5));
+      }
+      if (t.port !== null && t.era >= 1 && t.wars.size && t.stock.wood >= 35) {
+        const mine = this.ships.filter(s => s.alive && s.tribe === t.id).length;
+        const reach = [...t.wars.keys()].some(id => { const e = this.tribes.get(id); return e && e.port !== null && this.waterRegion[e.port] === this.waterRegion[t.port]; });
+        if (reach && mine < 1 + Math.floor(t.era / 2)) { t.stock.wood -= 35; this.launchShip(t); }
+      }
+    }
+    wonderCost(t) {
+      const lvl = t.wonders.length; if (lvl >= WONDER_ERA.length || t.era < WONDER_ERA[lvl] || t.members.size < 8) return 0;
+      return Math.round((50 + lvl * 50) / STYLES[t.style].bias.build);
+    }
+    stepPlague(t) {
+      t.plague -= 10;
+      for (const a of this.members(t)) if (this.r() < .015 / (1 + t.fx.life / 15)) { t.plagueDeaths++; this.kill(a, 'plague'); }
+      for (const o of this.tribes.values()) if (o !== t && !o.plague && dist(o.camp, t.camp) < 22 && this.r() < .012) {
+        o.plague = 200; o.plagueDeaths = 0; this.emit('disaster', `The plague spread from the ${t.name} to the ${o.name}.`, { tribe: o.id });
+      }
+      if (t.plague <= 0) { t.plague = 0; this.emit('blessing', `The plague among the ${t.name} has passed. It killed ${t.plagueDeaths}.`, { tribe: t.id }); }
+    }
+
+    // ---- ships and sea war
+    launchShip(t) {
+      const x = t.port % W + .5, y = ((t.port / W) | 0) + .5, era = t.era;
+      const first = !this.ships.some(s => s.tribe === t.id);
+      this.ships.push({ id: this.nextId++, tribe: t.id, era, x, y, px: x, py: y, heading: 0, hp: 40 + era * 18, maxHp: 40 + era * 18, mode: 'home', path: null, pi: 0, cd: 0, target: 0, alive: true });
+      if (first) this.emit('naval', `The ${t.name} launched their first ${SHIP_NAMES[era]}.`, { tribe: t.id });
+    }
+    shipTile(s) { return Math.floor(s.y) * W + Math.floor(s.x); }
+    stepShips() {
+      for (const s of this.ships) {
+        if (!s.alive) continue;
+        s.px = s.x; s.py = s.y;
+        const t = this.tribes.get(s.tribe); if (!t || t.port === null) { s.alive = false; continue; }
+        if (s.cd > 0) s.cd--;
+        let foe = null, fd = 7;
+        for (const o of this.ships) { if (!o.alive || o.tribe === s.tribe || !t.wars.has(o.tribe)) continue; const d = Math.hypot(o.x - s.x, o.y - s.y); if (d < fd) { fd = d; foe = o; } }
+        if (foe && fd <= 1.8) {
+          if (s.cd <= 0) {
+            const ft = this.tribes.get(foe.tribe);
+            foe.hp -= 9 * t.fx.combat * (.6 + this.r() * .8) / Math.sqrt(ft ? ft.fx.combat : 1); s.cd = 5;
+            this.effects.push({ type: 'battle', x: foe.x - .5, y: foe.y - .5, ttl: 8, sea: true });
+            if (foe.hp <= 0) this.sink(foe, t);
+          }
+          s.heading = Math.atan2(foe.x - s.x, foe.y - s.y);
+          continue;
+        }
+        if (foe && s.mode !== 'attack') { s.mode = 'attack'; s.target = foe.id; s.path = this.waterPath(this.shipTile(s), this.shipTile(foe)); s.pi = 0; }
+        if (s.mode === 'attack' && (this.tick + s.id) % 15 === 0) {
+          const f = this.ships.find(o => o.id === s.target && o.alive);
+          if (f) { s.path = this.waterPath(this.shipTile(s), this.shipTile(f)); s.pi = 0; } else s.path = null;
+        }
+        if (!s.path || s.pi >= s.path.length) {
+          if (s.mode === 'raid' && s.path) this.bombard(s, t);
+          s.path = null;
+          if (s.cd > 0) continue;
+          let target = null, bd = 1e9;
+          for (const id of t.wars.keys()) { const e = this.tribes.get(id); if (!e || e.port === null || this.waterRegion[e.port] !== this.waterRegion[t.port]) continue; const d = dist(e.camp, t.camp); if (d < bd) { bd = d; target = e; } }
+          if (target) { s.mode = 'raid'; s.target = target.id; s.path = this.waterPath(this.shipTile(s), target.port); s.pi = 0; }
+          else if (this.shipTile(s) !== t.port) { s.mode = 'home'; s.path = this.waterPath(this.shipTile(s), t.port); s.pi = 0; }
+          else { s.mode = 'dock'; s.cd = 30; }
+          if (!s.path && s.mode !== 'dock') { s.mode = 'dock'; s.cd = 30; }
+          continue;
+        }
+        const wp = s.path[s.pi], tx = wp % W + .5, ty = ((wp / W) | 0) + .5, dx = tx - s.x, dy = ty - s.y, d = Math.hypot(dx, dy);
+        const v = .3 * Math.min(2.2, t.fx.speed);
+        if (d <= v) { s.x = tx; s.y = ty; s.pi++; } else { s.x += dx / d * v; s.y += dy / d * v; }
+        if (d > .01) s.heading = Math.atan2(dx, dy);
+      }
+      if (this.tick % 60 === 0) this.ships = this.ships.filter(s => s.alive);
+    }
+    sink(s, by) {
+      s.alive = false;
+      const t = this.tribes.get(s.tribe);
+      this.effects.push({ type: 'blast', x: s.x - .5, y: s.y - .5, ttl: 30, r: 1.5, sea: true });
+      if (t && this.rateOk(by, 'sink' + t.id, 120)) this.emit('naval', `A ${SHIP_NAMES[s.era]} of the ${t.name} was sunk by the ${by.name} navy.`, { tribe: by.id });
+    }
+    bombard(s, t) {
+      const e = this.tribes.get(s.target); s.cd = 50;
+      if (!e || !t.wars.has(e.id)) return;
+      let killed = 0;
+      for (const k of ['food', 'wood', 'stone']) { const n = e.stock[k] * .2; e.stock[k] -= n; t.stock[k] += n * .5; }
+      for (const a of this.members(e)) if (cheb(a, e.camp) <= 4 && this.r() < (e.walls ? .08 : .18) * Math.min(2, t.fx.combat / 2)) { this.kill(a, 'battle', { tribe: t.id }); killed++; if (killed >= 3) break; }
+      if (t.era >= 3 && e.huts > 1 && this.r() < .5) { e.huts--; }
+      this.effects.push({ type: 'blast', x: e.camp.x, y: e.camp.y, ttl: 24, r: 1.2 });
+      e.rel.set(t.id, Math.max(-100, (e.rel.get(t.id) ?? 0) - 6));
+      if (this.rateOk(t, 'bomb' + e.id, 150)) this.emit('naval', `Warships of the ${t.name} ${t.era >= 3 ? 'bombarded' : 'raided'} the harbor of the ${e.name}${killed ? `, killing ${killed}` : ''}.`, { tribe: t.id });
+    }
+
+    // ---- world tools: how the watcher nudges history
+    nudge(kind, x, y) {
+      const p = { x, y }, ts = [...this.tribes.values()];
+      let nearT = null, nd = 18; for (const t of ts) { const d = dist(t.camp, p); if (d < nd) { nd = d; nearT = t; } }
+      const where = nearT ? `near the ${nearT.name}` : 'in the wilderness';
+      const area = (r, fn) => { for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) { const tx = x + dx, ty = y + dy; if (this.inb(tx, ty) && dx * dx + dy * dy <= r * r) fn(this.idx(tx, ty), tx, ty, Math.hypot(dx, dy)); } };
+      const people = r => this.agents.filter(a => a.alive && Math.hypot(a.x - x, a.y - y) <= r);
+      let n = 0;
+      switch (kind) {
+        case 'meteor': {
+          for (const a of people(5)) { const d = Math.hypot(a.x - x, a.y - y); if (d <= 2.5 || (a.health -= 60) <= 0) { this.kill(a, 'disaster'); n++; } }
+          area(3, i => { if (this.terrain[i] === T.FOREST || this.terrain[i] === T.FARM) { this.terrain[i] = T.GRASS; this.wood[i] = 0; this.dirty.add(i); } this.food[i] = 0; });
+          for (const t of ts) if (dist(t.camp, p) <= 5) { t.huts = Math.max(1, Math.floor(t.huts * .4)); t.walls = false; }
+          this.effects.push({ type: 'blast', x, y, ttl: 50, r: 4 }, { type: 'quake', x, y, ttl: 25 });
+          return this.emit('disaster', `A meteor struck ${where}${n ? `, killing ${n}` : ''}.`, { tribe: nearT && nearT.id });
+        }
+        case 'quake': {
+          const hit = ts.filter(t => dist(t.camp, p) <= 14);
+          for (const t of hit) { t.huts = Math.max(1, Math.round(t.huts * (.4 + this.r() * .3))); t.walls = false; for (const a of this.members(t)) if (cheb(a, t.camp) <= 3 && this.r() < .15) { this.kill(a, 'disaster'); n++; } }
+          this.effects.push({ type: 'quake', x, y, ttl: 60 });
+          return this.emit('disaster', `An earthquake shook the land ${where}${hit.length ? `, toppling homes in ${hit.length} town${hit.length > 1 ? 's' : ''}` : ''}${n ? ` and killing ${n}` : ''}.`, { tribe: nearT && nearT.id });
+        }
+        case 'plague': {
+          if (!nearT) return this.emit('disaster', 'A sickness rose in the wilderness, but found no one to infect.');
+          nearT.plague = 300; nearT.plagueDeaths = 0;
+          return this.emit('disaster', `A plague broke out among the ${nearT.name}.`, { tribe: nearT.id });
+        }
+        case 'fire': {
+          area(2, i => { if (this.terrain[i] === T.FOREST || this.terrain[i] === T.GRASS || this.terrain[i] === T.FARM) this.fires.set(i, 8); });
+          return this.emit('disaster', `A wildfire broke out ${where}.`, { tribe: nearT && nearT.id });
+        }
+        case 'drought': {
+          area(12, i => { this.food[i] *= .1; });
+          for (const t of ts) if (dist(t.camp, p) <= 12) t.stock.food *= .35;
+          return this.emit('disaster', `A drought withered the land ${where}.`, { tribe: nearT && nearT.id });
+        }
+        case 'harvest': {
+          area(9, i => { const t = this.terrain[i]; if (t === T.GRASS || t === T.FARM || t === T.FOREST) this.food[i] = Math.max(this.food[i], FOOD_CAP[t] * 1.5); });
+          for (const t of ts) if (dist(t.camp, p) <= 10) t.stock.food += 25 * t.members.size;
+          return this.emit('blessing', `A bountiful harvest blessed the land ${where}.`, { tribe: nearT && nearT.id });
+        }
+        case 'people': {
+          if (!this.passable(x, y)) return null;
+          const st = this.r() < .5 ? this.cultureAt(x, y) : this.ri(0, 5);
+          for (let k = 0; k < 6; k++) { const q = this.nearPassable(x, y, 2); this.makeAgent(q.x, q.y, null, st).thought = 'Just arrived in a strange new land'; }
+          return this.emit('arrival', `Six ${STYLES[st].name.toLowerCase()} strangers arrived ${where}.`, { tribe: nearT && nearT.id });
+        }
+      }
+      return null;
+    }
+    stepFires() {
+      const next = [];
+      for (const [i, ttl] of this.fires) {
+        const x = i % W, y = (i / W) | 0;
+        for (const [dx, dy] of DIRS) {
+          const nx = x + dx, ny = y + dy; if (!this.inb(nx, ny)) continue; const j = this.idx(nx, ny);
+          if (this.fires.has(j)) continue; const t = this.terrain[j];
+          const p = t === T.FOREST ? .09 : t === T.GRASS || t === T.FARM ? .01 : 0;
+          if (p && this.r() < p) next.push(j);
+        }
+        for (const a of this.agents) if (a.alive && a.x === x && a.y === y) { a.health -= 25; if (a.health <= 0) this.kill(a, 'disaster'); }
+        for (const t of this.tribes.values()) if (t.camp.x === x && t.camp.y === y && t.huts > 1 && this.r() < .3) t.huts--;
+        if (ttl <= 1) { this.fires.delete(i); if (this.terrain[i] === T.FOREST || this.terrain[i] === T.FARM) this.terrain[i] = T.GRASS; this.wood[i] = 0; this.food[i] = 0; this.dirty.add(i); }
+        else this.fires.set(i, ttl - 1);
+      }
+      for (const j of next) if (this.fires.size < 900) this.fires.set(j, 8);
+    }
+    chooseResearch(t) {
+      const ag = this.aggr(t), opts = TECHS.filter(x => !t.techs.has(x.id) && x.era <= t.era + 1 && x.req.every(q => t.techs.has(q)));
+      if (!opts.length) return;
+      const st = t.ai.strategy, focus = STRATS[st].techs;
+      let total = 0; const w = opts.map(x => { const v = (x.war ? .4 + ag * 1.6 : 1) * (x.era <= t.era ? 1.5 : 1) * (focus.includes(x.id) || (st === 'military' && x.war) ? 2 : 1); total += v; return v; });
+      let k = this.r() * total; for (let i = 0; i < opts.length; i++) { k -= w[i]; if (k <= 0) { t.research = opts[i].id; return; } }
+      t.research = opts[opts.length - 1].id;
+    }
+    learn(t, id, from) {
+      if (t.techs.has(id)) return;
+      const before = t.era;
+      t.techs.add(id); t.fx = computeFx(t.techs); t.era = computeEra(t.techs);
+      if (t.research === id) { t.research = null; t.progress = 0; }
+      if (t.fx.walls && !t.walls && t.huts >= 4 && this.r() < .3) {}
+      this.emit('tech', from ? `The ${t.name} learned ${TECH[id].name} from the ${from.name}.` : `The ${t.name} invented ${TECH[id].name}.`, { tribe: t.id, tech: id });
+      if (t.era > before) this.emit('era', `The ${t.name} entered the ${ERAS[t.era].name}.`, { tribe: t.id });
+    }
+    findSite(from, minD, maxD) {
+      for (let k = 0; k < 300; k++) {
+        const ang = this.r() * Math.PI * 2, d = minD + this.r() * (maxD - minD);
+        const x = Math.round(from.x + Math.cos(ang) * d), y = Math.round(from.y + Math.sin(ang) * d);
+        if (!this.inb(x, y) || this.terrain[this.idx(x, y)] !== T.GRASS || !this.farFromCamps(x, y, 11) || !this.openAround(x, y, 1)) continue;
+        let ok = true; for (let s = 1; s < 12 && ok; s++) { const px = Math.round(from.x + (x - from.x) * s / 12), py = Math.round(from.y + (y - from.y) * s / 12); if (!this.passable(px, py)) ok = false; }
+        if (ok) return { x, y };
+      }
+      return null;
+    }
+    // ---- the council: each civilization's own strategic mind
+    military(t) {
+      if (t._milTick === this.tick) return t._mil;
+      let n = 0; for (const id of t.members) { const a = this.byId.get(id); if (a && a.age >= 16 * YEAR) n += .6 + a.traits.aggression * .8; }
+      t._milTick = this.tick; t._mil = n * t.fx.combat * (t.walls ? 1.25 : 1); return t._mil;
+    }
+    power(t) { let p = this.military(t); for (const id of t.allies) { const o = this.tribes.get(id); if (o) p += this.military(o) * .5; } return p; }
+    think(t) {
+      const ai = t.ai, pop = t.members.size, cap = this.capacity(t);
+      // learn: did last year's strategy make us stronger?
+      const score = pop * 2.5 + t.techs.size * 2 + (t.stock.food + t.stock.wood + t.stock.stone) / 40 + t.wonders.length * 8 + t.huts;
+      if (ai.lastScore != null && ai.prev) {
+        const reward = Math.max(-1, Math.min(1, (score - ai.lastScore) / Math.max(8, ai.lastScore * .08)));
+        ai.v[ai.prev] = Math.max(.5, Math.min(2.2, ai.v[ai.prev] + .1 * (reward - ai.base)));
+        ai.base += .15 * (reward - ai.base);
+      }
+      ai.lastScore = score;
+      // assess the world around us
+      const mine = this.power(t), ag = this.aggr(t);
+      let threat = 0, threatT = null, tmax = 0, prey = null, preyRatio = 0, friends = 0;
+      for (const o of this.tribes.values()) {
+        if (o === t) continue; const d = dist(o.camp, t.camp); if (d > t.fx.range + 10) continue;
+        const rel = t.rel.get(o.id) ?? 0, op = this.power(o);
+        if (t.wars.has(o.id) || rel < -30) { const th = op / (1 + d / 25); threat += th; if (th > tmax) { tmax = th; threatT = o; } }
+        if (!t.allies.has(o.id) && rel < 5 && !t.wars.has(o.id)) { const ratio = mine / Math.max(1, op) * (t.faith && o.faith && t.faith !== o.faith ? 1.25 : 1); if (ratio > preyRatio) { preyRatio = ratio; prey = o; } }
+        if (rel > 30) friends++;
+      }
+      const threatRatio = threat / Math.max(1, mine), foodSec = t.stock.food / Math.max(10, pop * 10), housing = pop / cap;
+      const sc = {
+        grow: (1 - Math.min(1, foodSec)) * 1.2 + (housing > .9 ? .5 : 0) + .2,
+        expand: pop >= 14 && housing > .8 && foodSec > .4 ? .7 + housing * .3 : .05,
+        fortify: Math.min(1.6, threatRatio * .8) + (t.wars.size ? .25 : 0),
+        military: t.wars.size ? (threatRatio < 1 ? .8 : .3) : prey && preyRatio > 1.4 ? .25 + ag * .9 : .05,
+        research: (t.research ? .32 : .05) + (foodSec > .8 ? .2 : 0) + (threatRatio < .3 ? .15 : 0),
+        trade: t.fx.trade ? .3 + Math.min(4, friends) * .12 : 0,
+      };
+      let best = ai.strategy, bs = -1;
+      for (const k in sc) { const v = sc[k] * ai.v[k] + (k === ai.strategy ? .15 : 0); if (v > bs) { bs = v; best = k; } }
+      const reasons = {
+        grow: foodSec < .5 ? 'the food stores are running low' : 'homes are crowded, so they farm and build',
+        expand: 'the town is full and it is time to found a colony',
+        fortify: t.wars.size ? 'they are at war and must hold their home' : `the ${threatT ? threatT.name : 'neighbors'} grow dangerous at their border`,
+        military: t.wars.size ? 'they mean to win the war they are in' : prey && t.faith && prey.faith && prey.faith !== t.faith ? `the ${prey.name} follow another faith and look weak` : `the ${prey ? prey.name : 'neighbors'} look weak and ripe for conquest`,
+        research: 'they are safe and fed, so they seek new knowledge',
+        trade: 'their neighbors are friendly and trade will make them rich',
+      };
+      const changed = best !== ai.strategy;
+      ai.strategy = best; ai.reason = reasons[best]; ai.prev = best; if (changed) ai.since = this.tick;
+      if (changed && this.rateOk(t, 'policy', best === 'military' || best === 'expand' ? 240 : 1200)) {
+        const l = this.byId.get(t.leader);
+        this.emit('policy', `${l ? 'Chief ' + l.name + ' of the ' : 'The '}${t.name} turned to ${STRATS[best].label.toLowerCase()}: ${reasons[best]}.`, { tribe: t.id });
+      }
+      // act on the plan
+      if (best === 'expand' && this.r() < .6) this.split(t, true);
+      // faith: found a new religion, or catch one from a neighbor
+      if (!t.faith && t.era >= 1 && this.religions.size < 6 && this.r() < .05) this.foundFaith(t);
+      for (const o of this.tribes.values()) if (o !== t && o.faith && dist(o.camp, t.camp) < 20) this.spreadFaith(o, t, .03);
+      if (best === 'military' && !t.wars.size && prey && preyRatio > 1.4 && this.r() < .35 + ag * .4) this.declareWar(t, prey, 'conquest');
+      for (const id of [...t.wars.keys()]) {
+        const e = this.tribes.get(id), w = t.wars.get(id); if (!e || !w) continue;
+        const ratio = this.power(e) / Math.max(1, mine);
+        if (this.tick - w.since > 150 && ratio > 1.8 && pop < 10 + e.members.size * .5 && this.r() < .5) this.surrender(t, e, w);
+      }
+      for (const o of this.tribes.values()) {
+        if (o === t || t.allies.has(o.id) || t.wars.has(o.id) || dist(o.camp, t.camp) > t.fx.range) continue;
+        const rel = t.rel.get(o.id) ?? 0, back = o.rel.get(t.id) ?? 0;
+        const shared = [...t.wars.keys()].some(id => o.wars.has(id)) || (threatT && (o.rel.get(threatT.id) ?? 0) < -30);
+        if (rel > 50 && back > 50 && shared && this.r() < .5) {
+          t.allies.add(o.id); o.allies.add(t.id);
+          this.emit('alliance', `The ${t.name} and the ${o.name} swore an alliance${threatT ? ` against the ${threatT.name}` : ''}.`, { tribe: t.id });
+        }
+      }
+      for (const id of [...t.allies]) { const o = this.tribes.get(id); if (!o || (t.rel.get(id) ?? 0) < 15) { t.allies.delete(id); if (o) { o.allies.delete(t.id); this.emit('alliance', `The alliance between the ${t.name} and the ${o.name} fell apart.`, { tribe: t.id }); } } }
+    }
+    foundFaith(t) {
+      const st = STYLES[t.style], d = cap1(this.pick(st.syl) + this.pick(st.syl));
+      const name = this.pick([`the Way of ${d}`, `the Children of ${d}`, `the Light of ${d}`, `the Order of ${d}`, `the Faith of ${d}`]);
+      const id = this.nextId++, cols = ['#f6d365', '#c3aed6', '#9be7ff', '#ffb4a2', '#b8f2c2', '#f7a8d8'];
+      this.religions.set(id, { id, name, color: cols[this.religions.size % cols.length], founder: t.name, year: this.year() });
+      t.faith = id;
+      const l = this.byId.get(t.leader);
+      this.emit('faith', `${l ? l.name + ' of the ' + t.name : 'The ' + t.name} founded a new faith: ${name}.`, { tribe: t.id });
+    }
+    spreadFaith(from, to, chance) {
+      if (!from.faith || to.faith === from.faith || !this.religions.has(from.faith)) return;
+      if (this.r() > chance * (to.faith ? .35 : 1)) return;
+      to.faith = from.faith;
+      if (this.rateOk(to, 'conv', 600)) this.emit('faith', `The ${to.name} converted to ${this.religions.get(from.faith).name}.`, { tribe: to.id });
+    }
+    followers(id) { let n = 0, p = 0; for (const t of this.tribes.values()) if (t.faith === id) { n++; p += t.members.size; } return { nations: n, people: p }; }
+
+    // ---- saving: everything is plain data keyed by ids, so it round-trips through JSON
+    serialize() {
+      const arr = a => Array.from(a, v => Math.round(v * 1000) / 1000), wars = [];
+      const tribes = [...this.tribes.values()].map(t => {
+        for (const [id, w] of t.wars) if (t.id < id) wars.push([t.id, id, w.since, w.deaths]);
+        const { fx, members, techs, rel, wars: _w, allies, _mil, _milTick, ...rest } = t;
+        return { ...rest, members: [...members], techs: [...techs], rel: [...rel], allies: [...allies] };
+      });
+      const agents = this.agents.filter(a => a.alive).map(a => { const o = {}; for (const k in a) if (k[0] !== '_') o[k] = a[k]; return o; });
+      return JSON.stringify({ v: 1, seed: this.seed, startEra: this.startEra, tick: this.tick, nextId: this.nextId, tribeCount: this.tribeCount,
+        terrain: arr(this.terrain), elev: arr(this.elev), food: arr(this.food), wood: arr(this.wood), stone: arr(this.stone), jit: arr(this.jit), waterRegion: arr(this.waterRegion),
+        regionSize: this.regionSize, cultureSeeds: this.cultureSeeds, usedNames: [...this.usedNames], agents, tribes, wars, ships: this.ships.filter(x => x.alive),
+        fires: [...this.fires], popHistory: this.popHistory, religions: [...this.religions.values()], history: this.history.slice(-300) });
+    }
+    static load(json) {
+      const d = JSON.parse(json), s = Object.create(Sim.prototype);
+      Object.assign(s, { seed: d.seed, startEra: d.startEra, tick: d.tick, nextId: d.nextId, tribeCount: d.tribeCount, rng: mulberry32((d.seed ^ d.tick) >>> 0),
+        terrain: Uint8Array.from(d.terrain), elev: Float32Array.from(d.elev), food: Float32Array.from(d.food), wood: Float32Array.from(d.wood), stone: Float32Array.from(d.stone),
+        jit: Float32Array.from(d.jit), waterRegion: Int32Array.from(d.waterRegion), regionSize: d.regionSize, cultureSeeds: d.cultureSeeds, usedNames: new Set(d.usedNames),
+        listeners: [], effects: [], dirty: new Set(), deadCount: 0, ownerVersion: 0, ships: d.ships, fires: new Map(d.fires), popHistory: d.popHistory,
+        religions: new Map(d.religions.map(r => [r.id, r])), history: d.history, agents: d.agents, byId: new Map(), tribes: new Map() });
+      for (const a of s.agents) s.byId.set(a.id, a);
+      for (const t of d.tribes) {
+        Object.assign(t, { members: new Set(t.members), techs: new Set(t.techs), rel: new Map(t.rel), allies: new Set(t.allies), wars: new Map() });
+        t.fx = computeFx(t.techs); s.tribes.set(t.id, t);
+      }
+      for (const [a, b, since, deaths] of d.wars) { const w = { since, deaths }, A = s.tribes.get(a), B = s.tribes.get(b); if (A && B) { A.wars.set(b, w); B.wars.set(a, w); } }
+      s.owner = new Int32Array(W * H); s.ownerDist = new Float32Array(W * H); s.updateTerritory();
+      return s;
+    }
+
+    surrender(t, e, w) {
+      for (const k of ['food', 'wood', 'stone']) { const n = t.stock[k] * .33; t.stock[k] -= n; e.stock[k] += n; }
+      t.wars.delete(e.id); e.wars.delete(t.id);
+      t.rel.set(e.id, -10); e.rel.set(t.id, 10);
+      const yrs = Math.max(1, Math.round((this.tick - w.since) / YEAR));
+      this.emit('peace', `The ${t.name} surrendered to the ${e.name} after ${yrs} year${yrs === 1 ? '' : 's'} of war and handed over a third of their stores as tribute.`, { tribe: e.id, other: t.id });
+    }
+    siteScore(x, y) {
+      let s = 0;
+      for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) { const tx = x + dx, ty = y + dy; if (!this.inb(tx, ty)) continue; const i = this.idx(tx, ty); s += this.food[i] + Math.min(4, this.wood[i] / 4) + Math.min(3, this.stone[i] / 8) + (this.terrain[i] === T.WATER ? .3 : 0); }
+      return s;
+    }
+    split(t, planned) {
+      let site = null;
+      if (planned) { let bs = -1; for (let k = 0; k < 12; k++) { const c = this.findSite(t.camp, 12, 28); if (!c) continue; const v = this.siteScore(c.x, c.y); if (v > bs) { bs = v; site = c; } } }
+      else site = this.findSite(t.camp, 13, 26);
+      if (!site) return;
+      const pool = this.members(t).filter(a => a.id !== t.leader).map(a => [a.traits.curiosity + (1 - a.traits.sociability) * .5 + this.r() * .6, a]).sort((p, q) => q[0] - p[0]).map(p => p[1]);
+      const group = pool.slice(0, Math.floor(t.members.size / (planned ? 3.5 : 3))); if (group.length < 3) return;
+      const nt = this.makeTribe(site.x, site.y, group, t);
+      for (const k of ['food', 'wood', 'stone']) { const n = t.stock[k] / 3; t.stock[k] -= n; nt.stock[k] += n; }
+      nt.rel.set(t.id, planned ? 70 : 30); t.rel.set(nt.id, planned ? 70 : 30);
+      if (planned) { nt.allies.add(t.id); t.allies.add(nt.id); }
+      for (const o of this.tribes.values()) if (o !== t && o !== nt) { const v = t.rel.get(o.id) ?? 0; nt.rel.set(o.id, v); o.rel.set(nt.id, o.rel.get(t.id) ?? 0); }
+      for (const a of group) this.setGoal(a, { type: 'walk', tx: site.x, ty: site.y }, `Leaving the ${t.name} to start a new home`);
+      const l = this.byId.get(nt.leader);
+      if (planned) this.emit('split', `The ${t.name} sent ${group.length} settlers to the best land they could find. Their colony, the ${nt.name}, stays allied to them.`, { tribe: nt.id });
+      else this.emit('split', `${l ? l.name : 'A restless group'} led ${group.length} people away from the ${t.name} to found the ${nt.name}.`, { tribe: nt.id });
+    }
+    removeTribe(t) {
+      for (const s of this.ships) if (s.tribe === t.id) s.alive = false;
+      const yrs = Math.max(1, Math.round((this.tick - t.founded) / YEAR));
+      this.emit('fall', `The ${t.name} are no more. They lasted ${yrs} year${yrs === 1 ? '' : 's'}.`, { tribe: t.id, x: t.camp.x, y: t.camp.y });
+      for (const o of this.tribes.values()) { o.rel.delete(t.id); o.wars.delete(t.id); o.allies.delete(t.id); }
+      this.tribes.delete(t.id);
+    }
+    diplomacy() {
+      const ts = [...this.tribes.values()];
+      for (let i = 0; i < ts.length; i++) for (let j = i + 1; j < ts.length; j++) {
+        const A = ts[i], B = ts[j], d = dist(A.camp, B.camp);
+        if (d > Math.max(A.fx.range, B.fx.range) + 10) continue;
+        let ra = A.rel.get(B.id) ?? 0, rb = B.rel.get(A.id) ?? 0;
+        const overlap = A.radius + B.radius - d, aa = this.aggr(A), ab = this.aggr(B);
+        if (overlap > 0) { ra -= overlap * .12 * (.5 + aa); rb -= overlap * .12 * (.5 + ab); }
+        else { ra += -ra * .03 + .2; rb += -rb * .03 + .2; }
+        if (A.faith && B.faith) { const f = A.faith === B.faith ? .6 : -.25; ra += f; rb += f; }
+        const war = A.wars.get(B.id);
+        if (war) {
+          const len = this.tick - war.since; ra += 1.5 + war.deaths * .3; rb += 1.5 + war.deaths * .3;
+          if ((len > 300 && ra > -35 && rb > -35 && this.r() < .3) || len > 900) { this.makePeace(A, B, war); ra = Math.max(ra, -5); rb = Math.max(rb, -5); }
+        } else {
+          const pa = this.power(A), pb = this.power(B), allied = A.allies.has(B.id);
+          if (allied) { ra = Math.max(ra, 20); rb = Math.max(rb, 20); }
+          else if (ra < -40 && pa > pb * .8 && this.r() < aa * .35) { this.declareWar(A, B, overlap > 0); ra = Math.min(ra, -50); rb = Math.min(rb, -50); }
+          else if (rb < -40 && pb > pa * .8 && this.r() < ab * .35) { this.declareWar(B, A, overlap > 0); ra = Math.min(ra, -50); rb = Math.min(rb, -50); }
+        }
+        A.rel.set(B.id, Math.max(-100, Math.min(100, ra))); B.rel.set(A.id, Math.max(-100, Math.min(100, rb)));
+      }
+    }
+    declareWar(A, B, border) {
+      if (A.wars.has(B.id) || A.allies.has(B.id)) return;
+      const w = { since: this.tick, deaths: 0 }; A.wars.set(B.id, w); B.wars.set(A.id, w);
+      const l = this.byId.get(A.leader);
+      const why = border === 'conquest' ? 'to conquer their land' : border ? 'over disputed land' : 'after years of distrust';
+      this.emit('war', `${l ? 'Chief ' + l.name + ' of the ' : 'The '}${A.name} declared war on the ${B.name} ${why}.`, { tribe: A.id, other: B.id });
+      // allies honor their pacts
+      for (const id of B.allies) {
+        const C = this.tribes.get(id); if (!C || C === A || C.wars.has(A.id) || A.allies.has(C.id)) continue;
+        const w2 = { since: this.tick, deaths: 0 }; C.wars.set(A.id, w2); A.wars.set(C.id, w2);
+        this.emit('alliance', `The ${C.name} joined the war against the ${A.name} to defend their ally, the ${B.name}.`, { tribe: C.id, other: A.id });
+      }
+    }
+    makePeace(A, B, w) {
+      A.wars.delete(B.id); B.wars.delete(A.id);
+      const yrs = Math.max(1, Math.round((this.tick - w.since) / YEAR));
+      this.emit('peace', `The ${A.name} and the ${B.name} made peace after ${yrs} year${yrs === 1 ? '' : 's'} of war and ${w.deaths} dead.`, { tribe: A.id, other: B.id });
+    }
+    updateTerritory() {
+      this.owner.fill(0); this.ownerDist.fill(1e9);
+      for (const t of this.tribes.values()) {
+        t.radius = Math.min(14, 3.5 + Math.sqrt(t.members.size) * 1.5 + t.huts * .12);
+        const R = Math.ceil(t.radius); let farms = 0;
+        for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+          const x = t.camp.x + dx, y = t.camp.y + dy; if (!this.inb(x, y)) continue;
+          const d = Math.hypot(dx, dy); if (d > t.radius) continue;
+          const i = this.idx(x, y); if (d < this.ownerDist[i]) { this.ownerDist[i] = d; this.owner[i] = t.id; }
+        }
+      }
+      for (const t of this.tribes.values()) t.farms = 0;
+      for (let i = 0; i < W * H; i++) if (this.terrain[i] === T.FARM && this.owner[i]) { const t = this.tribes.get(this.owner[i]); if (t) t.farms++; }
+      this.ownerVersion++;
+    }
+    stats() {
+      let pop = this.agents.length, era = 0; for (const t of this.tribes.values()) era = Math.max(era, t.era);
+      return { pop, tribes: this.tribes.size, era, loners: this.agents.filter(a => !a.tribe).length };
+    }
+  }
+  Sim.STRATS = STRATS; Sim.STYLES = STYLES; Sim.SHIP_NAMES = SHIP_NAMES; Sim.W = W; Sim.H = H; Sim.YEAR = YEAR; Sim.T = T; Sim.ERAS = ERAS; Sim.TECHS = TECHS; Sim.TECH = TECH; Sim.techCost = techCost;
+  root.Sim = Sim;
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+
+<script>
+/* ===== 3D view and interface ===== */
+(function () {
+  const { W, H, T, ERAS, TECHS, TECH, YEAR } = Sim;
+  const $ = s => document.querySelector(s);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const SPEEDS = [0, 4, 12, 40, 160];
+  let sim, speed = 2, acc = 0, selected = null, lastUI = 0, logDirty = true, started = false, clock = 0;
+
+  // ---------- three.js setup
+  const canvas = $('#view'), stage = $('#stage');
+  if (typeof THREE === 'undefined') { $('#hint').textContent = 'The 3D library could not load. Check your connection and reload.'; return; }
+  THREE.ColorManagement.legacyMode = false;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .9;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  const scene = new THREE.Scene();
+  const HORIZON = new THREE.Color('#c9d8e2');
+  scene.background = HORIZON.clone();
+  scene.fog = new THREE.Fog(HORIZON, 110, 330);
+  const camera = new THREE.PerspectiveCamera(40, 1, .1, 1200);
+  const HOME_POS = new THREE.Vector3(0, 50, 64), HOME_TGT = new THREE.Vector3(0, 0, 5);
+  camera.position.copy(HOME_POS);
+  const controls = new THREE.OrbitControls(camera, canvas);
+  controls.enableDamping = true; controls.dampingFactor = .08; controls.maxPolarAngle = 1.38; controls.minDistance = 5; controls.maxDistance = 150;
+  controls.target.copy(HOME_TGT);
+
+  // sky dome: a vertical gradient that meets the fog at the horizon
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: { top: { value: new THREE.Color('#4f86c0') }, mid: { value: new THREE.Color('#a9c6dd') }, bottom: { value: HORIZON } },
+    vertexShader: 'varying vec3 vp; void main(){ vp = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: 'uniform vec3 top; uniform vec3 mid; uniform vec3 bottom; varying vec3 vp; void main(){ float h = vp.y; vec3 c = h > 0.0 ? mix(mid, top, pow(clamp(h*1.6,0.0,1.0),0.7)) : bottom; c = mix(bottom, c, smoothstep(-0.02, 0.12, h)); gl_FragColor = vec4(c,1.0); }'
+  }));
+  scene.add(sky);
+  scene.add(new THREE.HemisphereLight(0xc4dcf2, 0x4a3c28, .55));
+  const sun = new THREE.DirectionalLight(0xfff1dc, 1.7);
+  sun.position.set(-55, 75, 38); sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -62, right: 62, top: 48, bottom: -48, near: 1, far: 260 });
+  sun.shadow.bias = -.0004; sun.shadow.normalBias = .03;
+  scene.add(sun, sun.target);
+
+  let world = null;
+  const C = c => new THREE.Color(c);
+  // natural ground palette per terrain type
+  const GROUND = [C('#8c7a55'), C('#cdb983'), C('#58802f'), C('#3f5a25'), C('#7a7258'), C('#5f5952'), C('#b59a4e')];
+  const SNOW = C('#f3f5f7'), SEABED_DEEP = C('#3a5b5e');
+  const tmpC = new THREE.Color(), tmpCol = new THREE.Color(), tc = new THREE.Color(), tmpM = new THREE.Matrix4(), tmpQ = new THREE.Quaternion(), tmpS = new THREE.Vector3(), tmpP = new THREE.Vector3(), tmpV = new THREE.Vector3(), tmpN = new THREE.Vector3();
+  const UP = new THREE.Vector3(0, 1, 0);
+
+  // small value-noise used for surface detail
+  function hash(x, y) { const s = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return s - Math.floor(s); }
+  function vnoise(x, y) { const xi = Math.floor(x), yi = Math.floor(y), u = x - xi, v = y - yi, f = t => t * t * (3 - 2 * t);
+    const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
+    return (a * (1 - f(u)) + b * f(u)) * (1 - f(v)) + (c * (1 - f(u)) + d * f(u)) * f(v); }
+
+  function cornerHeights(s) {
+    const ch = new Float32Array((W + 1) * (H + 1));
+    for (let y = 0; y <= H; y++) for (let x = 0; x <= W; x++) {
+      let sum = 0, n = 0, land = false;
+      for (const [dx, dy] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) { const tx = x + dx, ty = y + dy; if (tx >= 0 && ty >= 0 && tx < W && ty < H) { const e = s.elev[ty * W + tx]; sum += e; n++; if (e > 0) land = true; } }
+      let h = sum / n;
+      if (land) h += (vnoise(x * .7 + s.seed % 97, y * .7) - .5) * .25 * Math.min(1, Math.max(.3, h * .5));
+      ch[y * (W + 1) + x] = h;
+    }
+    return ch;
+  }
+  function heightAt(fx, fy) {
+    const ch = world.ch, x = Math.max(0, Math.min(W - .001, fx)), y = Math.max(0, Math.min(H - .001, fy));
+    const xi = Math.floor(x), yi = Math.floor(y), u = x - xi, v = y - yi, w = W + 1;
+    return (ch[yi * w + xi] * (1 - u) + ch[yi * w + xi + 1] * u) * (1 - v) + (ch[(yi + 1) * w + xi] * (1 - u) + ch[(yi + 1) * w + xi + 1] * u) * v;
+  }
+  const wx = x => x - W / 2, wz = y => y - H / 2;
+
+  function instanced(geo, mat, count, shadow = true) {
+    const m = new THREE.InstancedMesh(geo, mat, count); m.count = 0; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    m.castShadow = shadow; m.receiveShadow = true; return m;
+  }
+  function setInst(mesh, i, x, y, z, sx, sy, sz, rot = 0) {
+    tmpP.set(x, y, z); tmpQ.setFromAxisAngle(UP, rot); tmpS.set(sx, sy, sz); tmpM.compose(tmpP, tmpQ, tmpS); mesh.setMatrixAt(i, tmpM);
+  }
+  const hide = (mesh, i) => { tmpM.makeScale(0, 0, 0); mesh.setMatrixAt(i, tmpM); };
+
+  function canvasTexture(size, draw) {
+    const c = document.createElement('canvas'); c.width = c.height = size; draw(c.getContext('2d'), size);
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+  }
+  // ripple normal map for the sea, built from summed sine waves
+  function waterNormals() {
+    return canvasTexture(128, (g, n) => {
+      const img = g.createImageData(n, n), hgt = (x, y) => Math.sin((x + y * .3) / n * Math.PI * 8) * .5 + Math.sin((x * .4 - y) / n * Math.PI * 10) * .35 + Math.sin((x * 1.3 + y * .9) / n * Math.PI * 18) * .2;
+      for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+        const dx = hgt(x + 1, y) - hgt(x - 1, y), dy = hgt(x, y + 1) - hgt(x, y - 1), l = Math.hypot(dx, dy, 1), o = (y * n + x) * 4;
+        img.data[o] = (-dx / l * .5 + .5) * 255; img.data[o + 1] = (-dy / l * .5 + .5) * 255; img.data[o + 2] = (1 / l * .5 + .5) * 255; img.data[o + 3] = 255;
+      }
+      g.putImageData(img, 0, 0);
+    });
+  }
+  function fieldTexture() {
+    return canvasTexture(64, (g, n) => {
+      g.fillStyle = '#7b5f3a'; g.fillRect(0, 0, n, n);
+      for (let k = 0; k < 8; k++) { g.fillStyle = k % 2 ? '#a99a3f' : '#c4ae4d'; g.fillRect(0, k * 8 + 1, n, 6); }
+      for (let k = 0; k < 220; k++) { g.fillStyle = `rgba(${90 + Math.random() * 60},${110 + Math.random() * 50},40,.5)`; g.fillRect(Math.random() * n, Math.random() * n, 1.5, 1.5); }
+    });
+  }
+
+  // ---------- primitive part sets
+  const PART_GEOS = (() => {
+    const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, .5, 0);
+    const cyl = new THREE.CylinderGeometry(.5, .5, 1, 12); cyl.translate(0, .5, 0);
+    const pyr = new THREE.ConeGeometry(.7071, 1, 4); pyr.rotateY(Math.PI / 4); pyr.translate(0, .5, 0);
+    const cone = new THREE.ConeGeometry(.5, 1, 12); cone.translate(0, .5, 0);
+    const dome = new THREE.SphereGeometry(.5, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+    const sphere = new THREE.SphereGeometry(.5, 10, 8); sphere.translate(0, .5, 0);
+    const v = [[-.5, 0, -.5], [.5, 0, -.5], [-.5, 1, 0], [.5, 1, 0], [-.5, 0, .5], [.5, 0, .5]], pr = [];
+    for (const k of [0, 2, 1, 1, 2, 3, 4, 5, 2, 5, 3, 2, 0, 4, 2, 1, 3, 5]) pr.push(...v[k]);
+    const prism = new THREE.BufferGeometry(); prism.setAttribute('position', new THREE.Float32BufferAttribute(pr, 3)); prism.computeVertexNormals();
+    return { box, cyl, pyr, cone, dome, sphere, prism };
+  })();
+  function partSet(cap, group) {
+    const set = { meshes: {}, n: {} };
+    for (const k in PART_GEOS) {
+      const flat = k === 'pyr' || k === 'prism' || k === 'cone';
+      const m = instanced(PART_GEOS[k], new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .82, flatShading: flat }), cap);
+      m.setColorAt(0, tmpC.set('#fff')); set.meshes[k] = m; set.n[k] = 0; group.add(m);
+    }
+    return set;
+  }
+  const BASE = new THREE.Matrix4(), LOC = new THREE.Matrix4(), OUT = new THREE.Matrix4(), tmpE = new THREE.Euler(), q2 = new THREE.Quaternion(), p2 = new THREE.Vector3(), s2v = new THREE.Vector3();
+  function base(x, y, z, rot, s = 1) { p2.set(x, y, z); q2.setFromAxisAngle(UP, rot); s2v.set(s, s, s); return BASE.compose(p2, q2, s2v); }
+  function local(B, x, y, z, sx, sy, sz, rx = 0, ry = 0, rz = 0) { p2.set(x, y, z); tmpE.set(rx, ry, rz); q2.setFromEuler(tmpE); s2v.set(sx, sy, sz); LOC.compose(p2, q2, s2v); return OUT.multiplyMatrices(B, LOC); }
+  function part(set, type, B, x, y, z, sx, sy, sz, color, rx, ry, rz) {
+    const m = set.meshes[type], i = set.n[type]; if (i >= m.instanceMatrix.count) return;
+    m.setMatrixAt(i, local(B, x, y, z, sx, sy, sz, rx, ry, rz)); m.setColorAt(i, tmpC.set(color)); set.n[type] = i + 1;
+  }
+  function beginSet(set) { for (const k in set.n) set.n[k] = 0; }
+  function endSet(set) { for (const k in set.n) { const m = set.meshes[k]; m.count = set.n[k]; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; } }
+
+  // ---------- architecture by culture and era
+  function house(S, B, style, e, j, k) {
+    const st = e === 0 ? 0 : e <= 2 ? 1 : e <= 4 ? 2 : 3;
+    if (st === 3 && j > .3) {
+      const h = e === 5 ? 1.2 + j * 2.2 : 1.6 + j * 3.6, col = e >= 6 ? (j > .6 ? '#86a3b5' : '#a8b8c2') : (j > .6 ? '#b2aa9c' : '#9d8f80');
+      part(S, 'box', B, 0, 0, 0, .5, h, .5, col);
+      if (style === 'eastern') part(S, 'pyr', B, 0, h, 0, .56, .25, .56, '#3d5552');
+      else if (style === 'desert') part(S, 'dome', B, 0, h, 0, .4, .3, .4, '#cdb38c');
+      else part(S, 'box', B, 0, h, 0, .3, .12, .3, '#55595e');
+      return;
+    }
+    if (st === 2 && e === 4 && j < .12) { part(S, 'box', B, 0, 0, 0, .55, .45, .5, '#8c4f3d'); part(S, 'cyl', B, .15, 0, .1, .16, 1.5, .16, '#7d4e3e'); return; }
+    const s = st >= 2 ? 2 : st;
+    switch (style) {
+      case 'steppe':
+        if (s < 2) { part(S, 'cyl', B, 0, 0, 0, .62, .32, .62, '#e6dcc6'); part(S, 'cone', B, 0, .32, 0, .68, .26, .68, '#cdb88f'); if (s) part(S, 'cyl', B, 0, .12, 0, .63, .05, .63, '#9b3b2e'); }
+        else { part(S, 'box', B, 0, 0, 0, .6, .42, .48, '#a88a64'); part(S, 'pyr', B, 0, .42, 0, .66, .28, .54, '#7d3326'); }
+        break;
+      case 'nordic':
+        if (s === 0) part(S, 'prism', B, 0, 0, 0, .75, .42, .55, '#5d6b3a');
+        else if (s === 1) { part(S, 'box', B, 0, 0, 0, .95, .26, .42, '#6b4f36'); part(S, 'prism', B, 0, .26, 0, 1.02, .34, .5, '#3f3a31'); }
+        else { part(S, 'box', B, 0, 0, 0, .55, .5, .44, '#ebe3d1'); part(S, 'box', B, 0, .24, 0, .57, .03, .46, '#4a3626'); part(S, 'prism', B, 0, .5, 0, .6, .44, .5, '#3a3631'); }
+        break;
+      case 'desert':
+        if (s === 0) { part(S, 'cyl', B, 0, 0, 0, .5, .34, .5, '#cfae7c'); part(S, 'dome', B, 0, .34, 0, .5, .36, .5, '#cfae7c'); }
+        else { const h = .4 + j * (s === 2 ? .45 : .25); part(S, 'box', B, 0, 0, 0, .6, h, .6, '#d6b88a'); part(S, 'box', B, .12, h, .12, .3, .16, .3, '#cba674'); if (s === 2 && j > .6) part(S, 'dome', B, -.12, h, -.12, .25, .2, .25, '#e6d3ae'); }
+        break;
+      case 'eastern':
+        if (s === 0) { part(S, 'cyl', B, 0, 0, 0, .5, .25, .5, '#a28a62'); part(S, 'cone', B, 0, .25, 0, .66, .38, .66, '#c2a868'); }
+        else {
+          part(S, 'box', B, 0, 0, 0, .6, .06, .5, '#7a2f22'); part(S, 'box', B, 0, .06, 0, .55, .32, .44, '#efe6d6'); part(S, 'pyr', B, 0, .38, 0, .86, .2, .74, '#3d5552');
+          if (j > .55 || s === 2) { part(S, 'box', B, 0, .52, 0, .36, .24, .3, '#efe6d6'); part(S, 'pyr', B, 0, .76, 0, .6, .18, .52, '#3d5552'); }
+        }
+        break;
+      case 'med':
+        if (s === 0) part(S, 'cone', B, 0, 0, 0, .6, .6, .6, '#a48b5e');
+        else { const h = s === 2 && j > .45 ? .72 : .42; part(S, 'box', B, 0, 0, 0, .58, h, .48, '#efeae0'); part(S, 'pyr', B, 0, h, 0, .68, .2, .58, '#b5583a'); }
+        break;
+      default: // jungle
+        if (s === 0) { part(S, 'cyl', B, 0, 0, 0, .48, .28, .48, '#a59c86'); part(S, 'cone', B, 0, .28, 0, .62, .4, .62, '#a08a55'); }
+        else { part(S, 'box', B, 0, 0, 0, .72, .14, .72, '#9d9480'); part(S, 'box', B, 0, .14, 0, .5, .34, .44, '#e0d6bd'); part(S, 'pyr', B, 0, .48, 0, .62, .3, .56, s === 2 ? '#7f6a4a' : '#9a8550'); }
+    }
+  }
+  function wonder(S, B, style, lvl) {
+    if (lvl >= 2) { part(S, 'box', B, 0, 0, 0, 1, 6, 1, '#a9bccb'); part(S, 'box', B, 0, 6, 0, .7, 1, .7, '#8fa5b5'); part(S, 'cyl', B, 0, 7, 0, .05, 1.2, .05, '#d0d0d0'); return; }
+    const key = style + lvl;
+    switch (key) {
+      case 'desert0': part(S, 'pyr', B, 0, 0, 0, 2.6, 2, 2.6, '#d9c08a'); break;
+      case 'desert1': part(S, 'box', B, 0, 0, 0, 1.8, .7, 1.8, '#e2cfa8'); part(S, 'dome', B, 0, .7, 0, 1.3, 1.1, 1.3, '#3f7f8a');
+        for (const [x, z] of [[-.85, -.85], [.85, -.85], [-.85, .85], [.85, .85]]) { part(S, 'cyl', B, x, 0, z, .18, 1.6, .18, '#e2cfa8'); part(S, 'cone', B, x, 1.6, z, .22, .3, .22, '#3f7f8a'); } break;
+      case 'med0': part(S, 'box', B, 0, 0, 0, 1.9, .18, 1.3, '#e9e4d8');
+        for (let x = -.8; x <= .81; x += .4) for (const z of [-.5, .5]) part(S, 'cyl', B, x, .18, z, .12, .75, .12, '#f2eee4');
+        part(S, 'box', B, 0, .93, 0, 1.9, .1, 1.3, '#e9e4d8'); part(S, 'prism', B, 0, 1.03, 0, 1.95, .35, 1.35, '#e9e4d8'); break;
+      case 'med1': part(S, 'cyl', B, 0, 0, 0, 2.4, .8, 2.4, '#cdbd9c'); part(S, 'cyl', B, 0, 0, 0, 1.7, .81, 1.7, '#8e7f66');
+        for (let a = 0; a < 16; a++) part(S, 'box', B, Math.cos(a / 16 * Math.PI * 2) * 1.21, .2, Math.sin(a / 16 * Math.PI * 2) * 1.21, .02, .34, .14, '#5a4f40', 0, -a / 16 * Math.PI * 2, 0); break;
+      case 'eastern0': for (let k = 0; k < 5; k++) { const sz = 1.2 - k * .18, y = k * .55; part(S, 'box', B, 0, y, 0, sz * .7, .4, sz * .7, '#b23a2a'); part(S, 'pyr', B, 0, y + .4, 0, sz * 1.1, .2, sz * 1.1, '#2f4a47'); }
+        part(S, 'cyl', B, 0, 2.95, 0, .05, .5, .05, '#c9a64a'); break;
+      case 'eastern1': part(S, 'box', B, 0, 0, 0, 2.2, .25, 1.6, '#d8d0c0'); part(S, 'box', B, 0, .25, 0, 1.7, .55, 1, '#a8352a'); part(S, 'pyr', B, 0, .8, 0, 2.1, .5, 1.4, '#c49a3a'); break;
+      case 'nordic0': part(S, 'box', B, 0, 0, 0, 2, .45, .8, '#5e4430'); part(S, 'prism', B, 0, .45, 0, 2.1, .6, .95, '#3a3530'); break;
+      case 'nordic1': part(S, 'box', B, 0, 0, 0, 1, .7, 1, '#4e3a2a'); part(S, 'prism', B, 0, .7, 0, 1.1, .5, 1.1, '#2f2b27');
+        part(S, 'box', B, 0, 1, 0, .55, .5, .55, '#4e3a2a'); part(S, 'prism', B, 0, 1.5, 0, .6, .5, .6, '#2f2b27', 0, Math.PI / 2, 0); part(S, 'cyl', B, 0, 1.9, 0, .06, .6, .06, '#2f2b27'); break;
+      case 'steppe0': part(S, 'cyl', B, 0, 0, 0, 2, .7, 2, '#efe6d0'); part(S, 'cone', B, 0, .7, 0, 2.2, .8, 2.2, '#c9a64a'); part(S, 'cyl', B, 0, .3, 0, 2.02, .12, 2.02, '#9b3b2e'); break;
+      case 'steppe1': part(S, 'box', B, 0, 0, 0, 1.8, .6, 1.8, '#9a927f'); part(S, 'box', B, 0, .6, 0, .8, .7, .8, '#9a927f');
+        for (const [x, z] of [[-.9, -.9], [.9, -.9], [-.9, .9], [.9, .9]]) { part(S, 'cyl', B, x, 0, z, .5, 1.1, .5, '#8f8774'); part(S, 'cone', B, x, 1.1, z, .55, .45, .55, '#6a3b2c'); } break;
+      case 'meso0': for (let k = 0; k < 5; k++) part(S, 'box', B, 0, k * .32, 0, 2.4 - k * .42, .32, 2.4 - k * .42, k % 2 ? '#a59c86' : '#988f79');
+        part(S, 'box', B, 0, 1.6, 0, .5, .35, .5, '#c9bfa8'); part(S, 'box', B, 0, 0, 1.0, .36, 1.6, .5, '#b3aa94', -.9, 0, 0); break;
+      default: part(S, 'box', B, 0, 0, 0, 1.6, .4, 1.6, '#a59c86'); part(S, 'cyl', B, 0, .4, 0, .9, .8, .9, '#e0d6bd'); part(S, 'dome', B, 0, 1.2, 0, .9, .6, .9, '#d9cfb6');
+    }
+  }
+  function ship(S, B, era, col) {
+    if (era <= 2) {
+      part(S, 'box', B, 0, -.05, 0, .32, .16, 1, '#6b4a2f'); part(S, 'pyr', B, 0, -.05, .55, .3, .16, .2, '#6b4a2f', Math.PI / 2, 0, 0);
+      part(S, 'cyl', B, 0, .11, 0, .03, .8, .03, '#4a3626'); part(S, 'box', B, 0, .38, 0, .55, .4, .02, col);
+      for (const x of [-.22, .22]) part(S, 'box', B, x, .02, 0, .22, .015, .7, '#4a3626');
+    } else if (era === 3) {
+      part(S, 'box', B, 0, -.05, 0, .42, .24, 1.3, '#5a3b24'); part(S, 'box', B, 0, .19, -.45, .4, .2, .36, '#6b4a2f');
+      [[-.3, .95], [.05, 1.1], [.4, .85]].forEach(([z, h]) => { part(S, 'cyl', B, 0, .15, z, .03, h, .03, '#3e2c1d'); part(S, 'box', B, 0, .42, z, .55, .3, .02, '#efe9da'); part(S, 'box', B, 0, .76, z, .45, .22, .02, '#efe9da'); });
+      part(S, 'box', B, 0, 1.18, .05, .16, .1, .01, col);
+    } else if (era === 4) {
+      part(S, 'box', B, 0, -.05, 0, .46, .2, 1.3, '#3b3e42'); part(S, 'box', B, 0, .15, -.1, .3, .14, .6, '#55585c');
+      part(S, 'cyl', B, 0, .29, 0, .12, .4, .12, '#2b2b2b'); part(S, 'cyl', B, 0, .55, 0, .125, .06, .125, col);
+    } else {
+      part(S, 'box', B, 0, -.05, 0, .46, .18, 1.55, '#6f7780'); part(S, 'box', B, 0, .13, -.15, .28, .3, .4, '#858d96');
+      for (const z of [.45, -.6]) { part(S, 'cyl', B, 0, .13, z, .2, .1, .2, '#5d646c'); part(S, 'box', B, 0, .17, z + Math.sign(z) * .2, .035, .035, .35, '#4a5057'); }
+      part(S, 'cyl', B, 0, .43, -.15, .025, .4, .025, '#4a5057'); part(S, 'box', B, 0, .78, -.15, .14, .09, .01, col);
+    }
+  }
+
+  function buildWorld() {
+    if (world) { scene.remove(world.group); world.group.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+    const group = new THREE.Group(); world = { group, ch: cornerHeights(sim) };
+    const ch = world.ch, n = W * H, VW = W + 1;
+    // terrain: smooth shaded grid; each vertex blends the colors of the tiles around it
+    const vcount = (W + 1) * (H + 1), pos = new Float32Array(vcount * 3), col = new Float32Array(vcount * 3), index = [];
+    for (let y = 0; y <= H; y++) for (let x = 0; x <= W; x++) { const v = y * VW + x; pos[v * 3] = wx(x); pos[v * 3 + 1] = ch[v]; pos[v * 3 + 2] = wz(y); }
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const a = y * VW + x, b = a + 1, d = a + VW, c = d + 1; index.push(a, d, b, b, d, c); }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.setIndex(index); geo.computeVertexNormals();
+    world.terrain = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .96, metalness: 0 }));
+    world.terrain.receiveShadow = true; world.terrain.castShadow = true;
+    // seasons: autumn turns green ground golden, winter lays snow on flat land
+    const season = world.seasonU = { uSnow: { value: 0 }, uAutumn: { value: 0 } };
+    world.terrain.material.onBeforeCompile = sh => {
+      Object.assign(sh.uniforms, season);
+      sh.vertexShader = 'varying float vUpY; varying float vH;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vUpY = normal.y; vH = position.y;');
+      sh.fragmentShader = 'uniform float uSnow; uniform float uAutumn; varying float vUpY; varying float vH;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+        float green = clamp((diffuseColor.g - max(diffuseColor.r, diffuseColor.b)) * 8.0, 0.0, 1.0);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.5, 1.02, 0.45), green * uAutumn);
+        float snow = uSnow * smoothstep(0.45, 0.8, vUpY) * clamp((vH - 0.06) * 3.0, 0.0, 1.0);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.92, 0.95), snow);`);
+    };
+    group.add(world.terrain);
+    world.tileCol = new Float32Array(n * 3);
+    // open sea to the horizon, with a seabed under it
+    const seabed = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshStandardMaterial({ color: '#2f4f55', roughness: 1 }));
+    seabed.rotation.x = -Math.PI / 2; seabed.position.y = -1.32; group.add(seabed);
+    world.waterTex = waterNormals(); world.waterTex.repeat.set(140, 140);
+    const water = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshStandardMaterial({ color: '#2a6f8c', roughness: .12, metalness: .15, transparent: true, opacity: .8, normalMap: world.waterTex, normalScale: new THREE.Vector2(.35, .35) }));
+    water.rotation.x = -Math.PI / 2; water.position.y = -.03; water.receiveShadow = true; group.add(water); world.water = water;
+    world.roads = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, polygonOffset: true, polygonOffsetFactor: -3 }));
+    world.roads.receiveShadow = true; world.roads.frustumCulled = false; group.add(world.roads);
+    // trees: a mix of conifers on high ground and broadleaf trees lower down, two or three per forest tile
+    const MAXT = n * 3;
+    const trunkGeo = new THREE.CylinderGeometry(.035, .055, .36, 5); trunkGeo.translate(0, .18, 0);
+    const pineGeo = new THREE.ConeGeometry(.26, .95, 7); pineGeo.translate(0, .74, 0);
+    const leafGeo = new THREE.IcosahedronGeometry(.3, 1); leafGeo.scale(1, .85, 1); leafGeo.translate(0, .58, 0);
+    world.trunks = instanced(trunkGeo, new THREE.MeshStandardMaterial({ color: '#5a4330', roughness: 1 }), MAXT);
+    world.pines = instanced(pineGeo, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .9 }), MAXT);
+    world.leaves = instanced(leafGeo, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .9, flatShading: true }), MAXT);
+    world.pines.setColorAt(0, tmpC.set('#fff')); world.leaves.setColorAt(0, tmpC.set('#fff'));
+    world.treeSlots = new Array(n); world.nT = 0; world.nP = 0; world.nL = 0;
+    for (let i = 0; i < n; i++) if (sim.terrain[i] === T.FOREST) placeTrees(i);
+    // rocks on the hills
+    const rocks = []; for (let i = 0; i < n; i++) if (sim.terrain[i] === T.HILLS && sim.jit[i] < .5) rocks.push(i);
+    const rockGeo = new THREE.DodecahedronGeometry(.26, 0); rockGeo.translate(0, .08, 0);
+    world.rocks = instanced(rockGeo, new THREE.MeshStandardMaterial({ color: '#9a9488', roughness: .95, flatShading: true }), rocks.length);
+    world.rockAt = new Int32Array(n).fill(-1);
+    rocks.forEach((i, k) => { const x = i % W, y = (i / W) | 0, j = sim.jit[i]; world.rockAt[i] = k; setInst(world.rocks, k, wx(x + .3 + j * .4), heightAt(x + .3 + j * .4, y + .7 - j * .4), wz(y + .7 - j * .4), .8 + j, .5 + j * .5, .8 + j, j * 6); });
+    world.rocks.count = rocks.length;
+    // crop fields as textured patches laid on the slope
+    world.fieldTex = fieldTexture(); world.fieldTex.encoding = THREE.sRGBEncoding;
+    const fieldGeo = new THREE.PlaneGeometry(.96, .96); fieldGeo.rotateX(-Math.PI / 2);
+    world.fields = instanced(fieldGeo, new THREE.MeshStandardMaterial({ map: world.fieldTex, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2 }), n, false);
+    world.fieldsKey = -1;
+    group.add(world.trunks, world.pines, world.leaves, world.rocks, world.fields);
+    // people: jointed figures (legs and arms swing as they walk)
+    const MAXA = 2500;
+    const legGeo = new THREE.BoxGeometry(.045, .19, .05); legGeo.translate(0, -.095, 0);
+    const armGeo = new THREE.BoxGeometry(.032, .16, .034); armGeo.translate(0, -.08, 0);
+    const torsoGeo = new THREE.BoxGeometry(.12, .17, .075); torsoGeo.translate(0, .085, 0);
+    const headGeo = new THREE.SphereGeometry(.052, 10, 8);
+    const hatGeo = new THREE.ConeGeometry(.5, 1, 10); hatGeo.translate(0, .5, 0);
+    const pm = () => new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .8 });
+    world.legs = instanced(legGeo, pm(), MAXA * 2); world.arms = instanced(armGeo, pm(), MAXA * 2);
+    world.torsos = instanced(torsoGeo, pm(), MAXA); world.heads = instanced(headGeo, pm(), MAXA); world.hats = instanced(hatGeo, pm(), MAXA);
+    for (const m of [world.legs, world.arms, world.torsos, world.heads, world.hats]) { m.setColorAt(0, tmpC.set('#fff')); group.add(m); }
+    // buildings, wonders, ships and war machines are assembled from a few primitive parts
+    world.bset = partSet(9000, group);
+    world.dset = partSet(6000, group);
+    const wallGeo = new THREE.BoxGeometry(.6, .36, .2); wallGeo.translate(0, .18, 0);
+    const poleGeo = new THREE.CylinderGeometry(.025, .025, 1.7, 5); poleGeo.translate(0, .85, 0);
+    const flagGeo = new THREE.PlaneGeometry(.55, .32); flagGeo.translate(.3, 1.5, 0);
+    const std = (o) => new THREE.MeshStandardMaterial(Object.assign({ color: '#ffffff', roughness: .85 }, o));
+    world.walls = instanced(wallGeo, std({ color: '#a59d8c', roughness: 1 }), 4000);
+    world.poles = instanced(poleGeo, std({ color: '#4a3a2a' }), 200);
+    world.flags = instanced(flagGeo, std({ side: THREE.DoubleSide }), 200);
+    world.flags.setColorAt(0, tmpC.set('#fff'));
+    group.add(world.walls, world.poles, world.flags);
+    const flameGeo = new THREE.ConeGeometry(.22, .7, 6); flameGeo.translate(0, .35, 0);
+    world.flames = instanced(flameGeo, new THREE.MeshBasicMaterial({ color: '#ff8a2a', transparent: true, opacity: .85 }), 1000, false);
+    group.add(world.flames);
+    // effects
+    world.sparks = instanced(new THREE.OctahedronGeometry(.16), new THREE.MeshBasicMaterial({ color: '#ff6a3c' }), 400, false);
+    group.add(world.sparks);
+    world.arcs = [];
+    for (let k = 0; k < 40; k++) {
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(24 * 3), 3));
+      const l = new THREE.Line(g, new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0 })); l.frustumCulled = false; l.visible = false; group.add(l); world.arcs.push(l);
+    }
+    world.borders = new Map();
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(.3, .035, 6, 24), new THREE.MeshBasicMaterial({ color: '#ffd27a' }));
+    ring.rotation.x = -Math.PI / 2; ring.visible = false; world.ring = ring; group.add(ring);
+    const tline = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), new THREE.LineDashedMaterial({ color: '#ffd27a', dashSize: .4, gapSize: .25 }));
+    tline.visible = false; tline.frustumCulled = false; world.tline = tline; group.add(tline);
+    scene.add(group);
+    world.ownerSeen = -1; world.buildKey = '';
+    for (let i = 0; i < n; i++) tileColor(i);
+    for (let v = 0; v < vcount; v++) paintVertex(v);
+    geo.attributes.color.needsUpdate = true;
+    $('#labels').innerHTML = ''; world.labels = new Map();
+  }
+
+  function placeTrees(i) {
+    const x = i % W, y = (i / W) | 0, j = sim.jit[i], e = sim.elev[i], slots = [];
+    const count = 2 + (j > .55 ? 1 : 0);
+    for (let k = 0; k < count; k++) {
+      const h1 = hash(i * 3.1 + k, k * 7.7), h2 = hash(k * 1.9, i * .37 + k), h3 = hash(i + k * 13.3, 2.2);
+      const px = x + .15 + h1 * .7, py = y + .15 + h2 * .7, s = .75 + h3 * .6;
+      const pine = e > 1.15 ? h3 > .15 : h3 > .72;
+      const ti = world.nT++, fi = pine ? world.nP++ : world.nL++, fm = pine ? world.pines : world.leaves;
+      const gy = heightAt(px, py) - .03;
+      setInst(world.trunks, ti, wx(px), gy, wz(py), s, s, s, h1 * 6);
+      fm.setMatrixAt(fi, tmpM);
+      fm.setColorAt(fi, pine ? tmpC.setHSL(.3 + h2 * .05, .38, .17 + h1 * .07) : tmpC.setHSL(.2 + h1 * .1, .45 + h2 * .15, .22 + h3 * .1));
+      slots.push([ti, pine ? 1 : 0, fi, px, py, s, h1]);
+    }
+    world.treeSlots[i] = slots;
+    world.trunks.count = world.nT; world.pines.count = world.nP; world.leaves.count = world.nL;
+    flagTrees();
+  }
+  function flagTrees() {
+    world.trunks.instanceMatrix.needsUpdate = world.pines.instanceMatrix.needsUpdate = world.leaves.instanceMatrix.needsUpdate = true;
+    if (world.pines.instanceColor) world.pines.instanceColor.needsUpdate = true;
+    if (world.leaves.instanceColor) world.leaves.instanceColor.needsUpdate = true;
+  }
+  function showTrees(i, on) {
+    const slots = world.treeSlots[i];
+    if (!slots) { if (on) placeTrees(i); return; }
+    for (const [ti, pine, fi, px, py, s, h1] of slots) {
+      const fm = pine ? world.pines : world.leaves;
+      if (on) { setInst(world.trunks, ti, wx(px), heightAt(px, py) - .03, wz(py), s, s, s, h1 * 6); fm.setMatrixAt(fi, tmpM); }
+      else { hide(world.trunks, ti); hide(fm, fi); }
+    }
+    flagTrees();
+  }
+
+  function tileColor(i) {
+    const t = sim.terrain[i], j = sim.jit[i], e = sim.elev[i], x = i % W, y = (i / W) | 0;
+    if (t === T.WATER) tc.copy(GROUND[0]).lerp(SEABED_DEEP, Math.min(1, -e));
+    else {
+      tc.copy(t === T.FARM ? GROUND[T.GRASS] : GROUND[t]);
+      const nz = vnoise(x * .35, y * .35);
+      if (t === T.GRASS || t === T.FARM) tc.lerp(tmpCol.set('#7d8c3c'), nz * .4);
+      if (t === T.HILLS) tc.lerp(GROUND[T.GRASS], (1 - nz) * .3 * (sim.stone[i] < 1 ? 1.5 : 1));
+      if (t === T.MOUNTAIN) tc.lerp(SNOW, Math.min(1, Math.max(0, (e - 5.3) * 1.2)));
+      if (t === T.SAND && e > .2) tc.lerp(GROUND[T.GRASS], .25);
+      tc.offsetHSL(0, 0, (j - .5) * .03);
+    }
+    world.tileCol[i * 3] = tc.r; world.tileCol[i * 3 + 1] = tc.g; world.tileCol[i * 3 + 2] = tc.b;
+  }
+  function paintVertex(v) {
+    const VW = W + 1, x = v % VW, y = (v / VW) | 0, col = world.terrain.geometry.attributes.color.array;
+    let r = 0, g = 0, b = 0, n = 0;
+    for (const [dx, dy] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) {
+      const tx = x + dx, ty = y + dy; if (tx < 0 || ty < 0 || tx >= W || ty >= H) continue;
+      const i = ty * W + tx; r += world.tileCol[i * 3]; g += world.tileCol[i * 3 + 1]; b += world.tileCol[i * 3 + 2]; n++;
+    }
+    col[v * 3] = r / n; col[v * 3 + 1] = g / n; col[v * 3 + 2] = b / n;
+  }
+  function syncTiles() {
+    if (!sim.dirty.size) return;
+    const VW = W + 1;
+    sim.dirty.forEach(i => {
+      showTrees(i, sim.terrain[i] === T.FOREST);
+      const r = world.rockAt[i]; if (r >= 0 && sim.stone[i] < 1) { hide(world.rocks, r); world.rocks.instanceMatrix.needsUpdate = true; }
+      tileColor(i);
+      const x = i % W, y = (i / W) | 0;
+      for (const v of [y * VW + x, y * VW + x + 1, (y + 1) * VW + x, (y + 1) * VW + x + 1]) paintVertex(v);
+    });
+    sim.dirty.clear();
+    world.terrain.geometry.attributes.color.needsUpdate = true;
+    world.fieldsKey = -1;
+  }
+  function updateFields() {
+    if (world.fieldsKey === sim.ownerVersion) return; world.fieldsKey = sim.ownerVersion;
+    const VW = W + 1, ch = world.ch; let n = 0;
+    for (let i = 0; i < W * H; i++) {
+      if (sim.terrain[i] !== T.FARM) continue;
+      const x = i % W, y = (i / W) | 0, a = ch[y * VW + x], b = ch[y * VW + x + 1], c = ch[(y + 1) * VW + x], d = ch[(y + 1) * VW + x + 1];
+      tmpN.set((a + c) - (b + d), 2, (a + b) - (c + d)).normalize();
+      tmpQ.setFromUnitVectors(UP, tmpN);
+      const turn = new THREE.Quaternion().setFromAxisAngle(UP, (sim.jit[i] > .5 ? Math.PI / 2 : 0));
+      tmpQ.multiply(turn);
+      tmpP.set(wx(x + .5), (a + b + c + d) / 4 + .015, wz(y + .5)); tmpS.set(1, 1, 1);
+      tmpM.compose(tmpP, tmpQ, tmpS); world.fields.setMatrixAt(n++, tmpM);
+    }
+    world.fields.count = n; world.fields.instanceMatrix.needsUpdate = true;
+  }
+  function updateBorders() {
+    if (world.ownerSeen === sim.ownerVersion) return; world.ownerSeen = sim.ownerVersion;
+    const seen = new Set();
+    for (const t of sim.tribes.values()) {
+      seen.add(t.id);
+      let l = world.borders.get(t.id);
+      if (!l) {
+        const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(97 * 3), 3));
+        l = new THREE.Line(g, new THREE.LineDashedMaterial({ color: t.color, dashSize: .5, gapSize: .35, transparent: true, opacity: .75 }));
+        l.frustumCulled = false; world.group.add(l); world.borders.set(t.id, l);
+      }
+      const p = l.geometry.attributes.position.array, cx = t.camp.x + .5, cy = t.camp.y + .5;
+      for (let k = 0; k <= 96; k++) {
+        const ang = k / 96 * Math.PI * 2, bx = cx + Math.cos(ang) * t.radius, by = cy + Math.sin(ang) * t.radius;
+        p[k * 3] = wx(bx); p[k * 3 + 1] = Math.max(0, heightAt(bx, by)) + .06; p[k * 3 + 2] = wz(by);
+      }
+      l.geometry.attributes.position.needsUpdate = true; l.computeLineDistances();
+    }
+    updateRoads();
+    for (const [id, l] of world.borders) if (!seen.has(id)) { world.group.remove(l); l.geometry.dispose(); world.borders.delete(id); }
+  }
+
+  // roads appear between towns once they trade, and get paved as the era advances
+  const ROAD_COL = [C('#8a7254'), C('#8a7254'), C('#93836a'), C('#9a9284'), C('#55575b'), C('#3c3f43'), C('#3a3d42')];
+  function updateRoads() {
+    const pos = [], col = [], done = new Set();
+    for (const t of sim.tribes.values()) for (const key in t.lastEv) {
+      if (!key.startsWith('tr')) continue;
+      const o = sim.tribes.get(+key.slice(2)); if (!o) continue;
+      const pk = Math.min(t.id, o.id) + '-' + Math.max(t.id, o.id); if (done.has(pk)) continue; done.add(pk);
+      const c = ROAD_COL[Math.min(t.era, o.era)], w = Math.min(t.era, o.era) >= 4 ? .17 : .11;
+      const x1 = t.camp.x + .5, y1 = t.camp.y + .5, x2 = o.camp.x + .5, y2 = o.camp.y + .5, L = Math.hypot(x2 - x1, y2 - y1), steps = Math.ceil(L / .5);
+      const nx = -(y2 - y1) / L * w, ny = (x2 - x1) / L * w;
+      for (let k = 0; k < steps; k++) {
+        const u0 = k / steps, u1 = (k + 1) / steps;
+        const ax = x1 + (x2 - x1) * u0, ay = y1 + (y2 - y1) * u0, bx = x1 + (x2 - x1) * u1, by = y1 + (y2 - y1) * u1;
+        if (!sim.passable(Math.floor(ax), Math.floor(ay)) || !sim.passable(Math.floor(bx), Math.floor(by))) continue;
+        const pts = [[ax + nx, ay + ny], [ax - nx, ay - ny], [bx + nx, by + ny], [bx - nx, by - ny]].map(([px, py]) => [wx(px), heightAt(px, py) + .035, wz(py)]);
+        for (const q of [pts[0], pts[1], pts[2], pts[2], pts[1], pts[3]]) { pos.push(q[0], q[1], q[2]); col.push(c.r, c.g, c.b); }
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.computeVertexNormals();
+    world.roads.geometry.dispose(); world.roads.geometry = g;
+  }
+
+  // ---------- seasons
+  const SEASONS = ['Spring', 'Summer', 'Autumn', 'Winter'];
+  const peak = (f, at, width) => Math.max(0, Math.min(1, (Math.cos((f - at) * Math.PI * 2) - width) / (1 - width)));
+  const LEAF_AUTUMN = C('#e07d2e'), LEAF_WINTER = C('#6b5b4a'), LEAF_SPRING = C('#d4ff9a'), PINE_SNOW = C('#dfe8ea'), FIELD_SPRING = C('#79a845'), FIELD_SNOW = C('#e4e8ec'), WATER_SUMMER = C('#2a6f8c'), WATER_WINTER = C('#4f7f91');
+  function seasonFrac() { return ((sim.tick % YEAR) + Math.min(1, acc)) / YEAR; }
+  function applySeason() {
+    const f = seasonFrac(), snow = peak(f, .9, .55), autumn = peak(f, .64, .6), spring = peak(f, .12, .6);
+    world.seasonU.uSnow.value = snow; world.seasonU.uAutumn.value = autumn;
+    world.leaves.material.color.setRGB(1, 1, 1).lerp(LEAF_SPRING, spring * .5).lerp(LEAF_AUTUMN, autumn * .85).lerp(LEAF_WINTER, snow * .9);
+    world.pines.material.color.setRGB(1, 1, 1).lerp(PINE_SNOW, snow * .55);
+    world.fields.material.color.setRGB(1, 1, 1).lerp(FIELD_SPRING, spring * .8).lerp(FIELD_SNOW, snow * .9);
+    world.water.material.color.copy(WATER_SUMMER).lerp(WATER_WINTER, snow * .6);
+    sun.intensity = 1.7 - snow * .35; sun.color.setRGB(1, .95 - autumn * .05, .86 - autumn * .1);
+  }
+  const seasonName = () => SEASONS[Math.min(3, Math.floor(seasonFrac() * 4))];
+
+  // ---------- per-frame updates
+  const SKIN = { steppe: ['#d9b18a', '#b88a63'], nordic: ['#f1d3bd', '#dfb597'], desert: ['#b98657', '#7f5232'], eastern: ['#ecc9a3', '#d3a67b'], med: ['#d8ab82', '#b2835b'], meso: ['#b8835a', '#87563a'] };
+  const PANTS = { steppe: '#5b4632', nordic: '#4b5563', desert: '#e8dcc4', eastern: '#2f3b4a', med: '#e2d8c2', meso: '#d8c9a3' };
+  const HAT = { steppe: [.13, .1, '#6b4a30'], nordic: [.11, .05, '#d9b26a'], desert: [.13, .09, '#efe8d8'], eastern: [.22, .06, '#d2b56a'], med: [.11, .04, '#3b2a20'], meso: [.04, .16, '#3f8a5a'] };
+  const HELMET = [null, [.13, .09, '#b08d57'], [.13, .1, '#9a9a9a'], [.17, .06, '#1f1f22'], [.1, .14, '#1f2a44'], [.14, .07, '#4b5a3a'], [.14, .07, '#4a5040']];
+  const MODERN_HAIR = [.11, .04, '#3b2f28'];
+  const STY = i => Sim.STYLES[i || 0].id;
+  const skinC = new THREE.Color(), pantsC = new THREE.Color(), clothC = new THREE.Color();
+  function updatePeople(alpha) {
+    const L = world.legs, A = world.arms, To = world.torsos, He = world.heads, Ha = world.hats, D = world.dset;
+    let n = 0, nl = 0, na = 0, ns = 0; world.slots = world.slots || [];
+    for (const a of sim.agents) {
+      if (!a.alive || ns >= 2500) continue;
+      const fx = a.px + (a.x - a.px) * alpha + .5 + ((a.id * 37) % 7 - 3) * .05, fy = a.py + (a.y - a.py) * alpha + .5 + ((a.id * 53) % 7 - 3) * .05;
+      const moving = a.x !== a.px || a.y !== a.py, child = a.age < 12 * YEAR, s = child ? .62 : 1;
+      const t = a.tribe ? sim.tribes.get(a.tribe) : null, e = t ? t.era : 0, sid = STY(a.style);
+      const g = a.goal && a.goal.type, soldier = !!t && (g === 'hunt' || g === 'raid') && !child;
+      const mounted = soldier && g === 'raid' && e >= 2 && e <= 4, tank = soldier && g === 'raid' && e >= 5;
+      const rot = moving ? Math.atan2(a.x - a.px, a.y - a.py) : (a._rot || 0); a._rot = rot;
+      const gy = heightAt(fx, fy), col = t ? t.color : '#b8ab92';
+      world.slots[ns++] = a; a._wx = wx(fx); a._wy = gy; a._wz = wz(fy);
+      const sw = moving ? Math.sin(clock * 12 + a.id) * .7 : 0;
+      if (tank) {
+        const B = base(wx(fx), gy, wz(fy), rot);
+        part(D, 'box', B, 0, 0, 0, .42, .16, .62, '#5d6b4a'); part(D, 'box', B, -.24, 0, 0, .1, .12, .66, '#2f3329'); part(D, 'box', B, .24, 0, 0, .1, .12, .66, '#2f3329');
+        part(D, 'box', B, 0, .16, -.03, .26, .12, .28, '#56633f'); part(D, 'box', B, 0, .215, .24, .04, .04, .42, '#3f4a31'); part(D, 'box', B, 0, .28, -.03, .27, .012, .29, col);
+        continue;
+      }
+      if (mounted) {
+        const B = base(wx(fx), gy, wz(fy), rot), hc = a.id % 3 ? '#6b4a2f' : '#3e3028';
+        part(D, 'box', B, 0, .18, 0, .16, .16, .46, hc); part(D, 'box', B, 0, .26, .2, .08, .2, .08, hc, .55, 0, 0); part(D, 'box', B, 0, .4, .3, .07, .07, .16, hc);
+        for (const [x, z, k] of [[-.055, .16, 1], [.055, .16, -1], [-.055, -.16, -1], [.055, -.16, 1]]) part(D, 'cyl', B, x, .19, z, .035, .19, .035, '#4a3324', Math.PI + sw * k * .8, 0, 0);
+      }
+      const bob = moving && !mounted ? Math.abs(Math.sin(clock * 12 + a.id)) * .02 : 0;
+      const B = base(wx(fx), gy + (mounted ? .26 : 0) + bob, wz(fy), rot, s);
+      To.setMatrixAt(n, local(B, 0, .19, 0, 1, 1, 1)); To.setColorAt(n, clothC.set(col));
+      He.setMatrixAt(n, local(B, 0, .41, 0, 1, 1, 1));
+      const sk = SKIN[sid]; skinC.set(sk[0]).lerp(tmpCol.set(sk[1]), a.skin || 0); He.setColorAt(n, skinC);
+      const hs = soldier && HELMET[e] ? HELMET[e] : e >= 4 ? MODERN_HAIR : HAT[sid];
+      Ha.setMatrixAt(n, local(B, 0, .425, 0, hs[0], hs[1], hs[0])); Ha.setColorAt(n, tmpC.set(hs[2]));
+      pantsC.set(e >= 4 ? '#3a3f4a' : PANTS[sid]);
+      L.setMatrixAt(nl, local(B, -.032, .19, 0, 1, 1, 1, mounted ? -1.2 : sw)); L.setColorAt(nl++, pantsC);
+      L.setMatrixAt(nl, local(B, .032, .19, 0, 1, 1, 1, mounted ? -1.2 : -sw)); L.setColorAt(nl++, pantsC);
+      A.setMatrixAt(na, local(B, -.085, .35, 0, 1, 1, 1, soldier && e >= 1 && e <= 2 ? -.5 : -sw * .8)); A.setColorAt(na++, clothC);
+      A.setMatrixAt(na, local(B, .085, .35, 0, 1, 1, 1, soldier ? -.9 : sw * .8)); A.setColorAt(na++, clothC);
+      if (soldier) {
+        if (e <= 2) { part(D, 'cyl', B, .11, .08, .07, .022, .95, .022, '#6b5236'); part(D, 'cone', B, .11, 1.03, .07, .045, .12, .045, '#a0a0a0'); if (e >= 1) part(D, 'cyl', B, -.105, .22, .03, .2, .025, .2, col, 0, 0, Math.PI / 2); }
+        else part(D, 'box', B, .09, .3, .02, .024, .024, e >= 5 ? .42 : .5, e >= 5 ? '#2b2b2b' : '#4a3626', -.25, 0, 0);
+      }
+      n++;
+    }
+    world.slots.length = ns;
+    To.count = He.count = Ha.count = n; L.count = nl; A.count = na;
+    for (const m of [L, A, To, He, Ha]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+  }
+  function updateShips(alpha) {
+    for (const s of sim.ships) {
+      if (!s.alive) continue; const t = sim.tribes.get(s.tribe); if (!t) continue;
+      const x = s.px + (s.x - s.px) * alpha, y = s.py + (s.y - s.py) * alpha;
+      const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
+      ship(world.dset, B, s.era, t.color);
+    }
+  }
+  function updateFires() {
+    let n = 0;
+    for (const [i, ttl] of sim.fires) {
+      if (n >= 1000) break;
+      const x = i % W + .5, y = ((i / W) | 0) + .5, f = .75 + Math.sin(clock * 22 + i * 1.7) * .25;
+      setInst(world.flames, n++, wx(x), heightAt(x, y), wz(y), f, f * (.6 + ttl * .08), f, i);
+    }
+    world.flames.count = n; world.flames.instanceMatrix.needsUpdate = true;
+  }
+  function campY(t) { return heightAt(t.camp.x + .5, t.camp.y + .5); }
+  function updateBuildings() {
+    let key = ''; for (const t of sim.tribes.values()) key += t.id + ':' + t.huts + ':' + t.era + ':' + (t.walls ? 1 : 0) + ':' + t.wonders.length + ':' + t.faith + ';';
+    if (key === world.buildKey) return; world.buildKey = key;
+    const S = world.bset; beginSet(S);
+    const M = { walls: 0, poles: 0, flags: 0 };
+    for (const t of sim.tribes.values()) {
+      const cx = t.camp.x + .5, cy = t.camp.y + .5, style = STY(t.style), wn = t.wonders.length;
+      for (let w = 0; w < wn; w++) {
+        const ang = t.id * .7 + w * 2.1, rw = w === 0 ? 0 : 2.4, px = cx + Math.cos(ang) * rw, py = cy + Math.sin(ang) * rw;
+        if (!sim.passable(Math.floor(px), Math.floor(py))) continue;
+        wonder(S, base(wx(px), heightAt(px, py) - .05, wz(py), t.id * .7, .85), style, w);
+      }
+      let extent = 1;
+      const nb = Math.max(t.huts, Math.ceil(sim.capacity(t) / 3)), start = wn ? 1.9 : 1.1;
+      for (let k = 0; k < nb; k++) {
+        const ang = k * 2.399 + t.id, rad = start + Math.sqrt(k) * .62;
+        const bx = cx + Math.cos(ang) * rad, by = cy + Math.sin(ang) * rad, tx = Math.floor(bx), ty = Math.floor(by);
+        if (!sim.passable(tx, ty) || sim.terrain[ty * W + tx] === T.FARM) continue;
+        extent = Math.max(extent, rad);
+        const jj = ((k * 7919 + t.id * 31) % 100) / 100;
+        house(S, base(wx(bx), heightAt(bx, by) - .02, wz(by), Math.atan2(cx - bx, cy - by)), style, t.era, jj, k);
+      }
+      const rel = t.faith && sim.religions.get(t.faith);
+      if (rel) {
+        const tx = cx - (wn ? 1.4 : .9), ty = cy + (wn ? 1.4 : .9);
+        if (sim.passable(Math.floor(tx), Math.floor(ty))) {
+          const B = base(wx(tx), heightAt(tx, ty) - .02, wz(ty), t.id), e = t.era;
+          part(S, 'box', B, 0, 0, 0, .5, .55, .5, e >= 4 ? '#d9d2c4' : '#e8e0cc');
+          if (e >= 2) { part(S, 'box', B, 0, .55, 0, .22, .45, .22, '#e8e0cc'); part(S, 'pyr', B, 0, 1, 0, .26, .45, .26, rel.color); }
+          else part(S, 'pyr', B, 0, .55, 0, .6, .4, .6, rel.color);
+        }
+      }
+      const fx = cx + (wn ? 1.3 : 0), fy = cy - (wn ? 1.3 : 0), y0 = heightAt(fx, fy);
+      setInst(world.poles, M.poles++, wx(fx), y0, wz(fy), 1, 1, 1, 0);
+      setInst(world.flags, M.flags, wx(fx), y0, wz(fy), 1, 1, 1, .4); world.flags.setColorAt(M.flags++, tc.set(t.color));
+      if (t.walls) {
+        const R = extent + 1, segs = Math.max(12, Math.round(Math.PI * 2 * R / .56));
+        for (let s2 = 0; s2 < segs; s2++) {
+          const ang = s2 / segs * Math.PI * 2, bx = cx + Math.cos(ang) * R, by = cy + Math.sin(ang) * R;
+          if (!sim.passable(Math.floor(bx), Math.floor(by)) || heightAt(bx, by) < .08) continue;
+          setInst(world.walls, M.walls++, wx(bx), heightAt(bx, by) - .03, wz(by), 1, 1 + Math.min(t.era, 4) * .15, 1, -ang + Math.PI / 2);
+        }
+      }
+    }
+    endSet(S);
+    for (const k in M) { const m = world[k]; m.count = M[k]; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+  }
+  function updateEffects() {
+    let n = 0, arc = 0; world.shake = 0;
+    for (const e of sim.effects) {
+      if (e.type === 'quake') { world.shake = Math.max(world.shake, e.ttl / 60); continue; }
+      if ((e.type === 'battle' || e.type === 'blast') && n < 400) {
+        const y = e.sea ? .12 : heightAt(e.x + .5, e.y + .5) + (e.type === 'blast' ? .3 : .6);
+        const s = e.type === 'blast' ? e.r * 3.5 * (1.15 - e.ttl / 55) : .4 + (e.ttl % 4) * .25;
+        setInst(world.sparks, n++, wx(e.x + .5), y, wz(e.y + .5), s, s, s, e.ttl);
+      } else if (e.type === 'trade' && arc < world.arcs.length) {
+        const l = world.arcs[arc++], p = l.geometry.attributes.position.array;
+        const x1 = e.x + .5, y1 = e.y + .5, x2 = e.x2 + .5, y2 = e.y2 + .5, h1 = heightAt(x1, y1), h2 = heightAt(x2, y2), lift = 1.5 + Math.hypot(x2 - x1, y2 - y1) * .12;
+        for (let k = 0; k < 24; k++) { const u = k / 23; p[k * 3] = wx(x1 + (x2 - x1) * u); p[k * 3 + 1] = h1 + (h2 - h1) * u + Math.sin(u * Math.PI) * lift; p[k * 3 + 2] = wz(y1 + (y2 - y1) * u); }
+        l.geometry.attributes.position.needsUpdate = true; l.material.color.set(e.color); l.material.opacity = Math.min(1, e.ttl / 30) * .8; l.visible = true;
+      }
+    }
+    world.sparks.count = n; world.sparks.instanceMatrix.needsUpdate = true;
+    for (let k = arc; k < world.arcs.length; k++) world.arcs[k].visible = false;
+  }
+  function updateSelection() {
+    const ring = world.ring, tl = world.tline;
+    ring.visible = tl.visible = false;
+    if (!selected) return;
+    if (selected.kind === 'agent') {
+      const a = sim.byId.get(selected.id); if (!a || a._wx === undefined) return;
+      ring.visible = true; ring.scale.setScalar(1); ring.position.set(a._wx, a._wy + .04, a._wz);
+      if (a.goal && a.goal.tx !== undefined && (a.goal.tx !== a.x || a.goal.ty !== a.y)) {
+        const p = tl.geometry.attributes.position.array, gx = a.goal.tx + .5, gy = a.goal.ty + .5;
+        p[0] = a._wx; p[1] = a._wy + .25; p[2] = a._wz; p[3] = wx(gx); p[4] = heightAt(gx, gy) + .25; p[5] = wz(gy);
+        tl.geometry.attributes.position.needsUpdate = true; tl.computeLineDistances(); tl.visible = true;
+      }
+    } else {
+      const t = sim.tribes.get(selected.id); if (!t) return;
+      ring.visible = true; ring.position.set(wx(t.camp.x + .5), campY(t) + .05, wz(t.camp.y + .5)); ring.scale.setScalar(3);
+    }
+  }
+  function updateLabels() {
+    const box = stage.getBoundingClientRect(), seen = new Set();
+    for (const t of sim.tribes.values()) {
+      seen.add(t.id);
+      let el = world.labels.get(t.id);
+      if (!el) { el = document.createElement('div'); el.className = 'tlabel'; el.dataset.tribe = t.id; el.addEventListener('click', () => select({ kind: 'tribe', id: t.id }, true)); $('#labels').appendChild(el); world.labels.set(t.id, el); }
+      tmpP.set(wx(t.camp.x + .5), campY(t) + 2.3, wz(t.camp.y + .5)).project(camera);
+      if (tmpP.z > 1) { el.hidden = true; continue; }
+      el.hidden = false;
+      el.style.left = ((tmpP.x + 1) / 2 * box.width) + 'px'; el.style.top = ((1 - tmpP.y) / 2 * box.height) + 'px';
+      el.style.setProperty('--c', t.color);
+      const html = `${esc(t.name)}<small>${t.members.size}</small>`;
+      if (el._h !== html) { el.innerHTML = html; el._h = html; }
+      el.classList.toggle('war', t.wars.size > 0);
+    }
+    for (const [id, el] of world.labels) if (!seen.has(id)) { el.remove(); world.labels.delete(id); }
+  }
+
+  // ---------- picking and camera focus
+  let down = null, focus = null, follow = 0, tool = 'inspect';
+  const ray = new THREE.Raycaster(), mouse = new THREE.Vector2();
+  canvas.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY }; if (!follow) focus = null; });
+  canvas.addEventListener('pointerup', e => {
+    if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) return;
+    const box = canvas.getBoundingClientRect(), mx = e.clientX - box.left, my = e.clientY - box.top;
+    if (tool !== 'inspect') {
+      mouse.set(mx / box.width * 2 - 1, -(my / box.height) * 2 + 1); ray.setFromCamera(mouse, camera);
+      const hit = ray.intersectObject(world.terrain)[0]; if (!hit) return;
+      const tx = Math.floor(hit.point.x + W / 2), ty = Math.floor(hit.point.z + H / 2);
+      if (sim.inb(tx, ty)) { sim.nudge(tool, tx, ty); renderLog(); }
+      return;
+    }
+    let best = null, bd = 16;
+    for (const a of world.slots || []) {
+      tmpP.set(a._wx, a._wy + .35, a._wz).project(camera); if (tmpP.z > 1) continue;
+      const d = Math.hypot((tmpP.x + 1) / 2 * box.width - mx, (1 - tmpP.y) / 2 * box.height - my); if (d < bd) { bd = d; best = { kind: 'agent', id: a.id }; }
+    }
+    if (!best) for (const t of sim.tribes.values()) {
+      tmpP.set(wx(t.camp.x + .5), campY(t) + .5, wz(t.camp.y + .5)).project(camera);
+      const d = Math.hypot((tmpP.x + 1) / 2 * box.width - mx, (1 - tmpP.y) / 2 * box.height - my); if (d < 34 && d < bd + 20) { bd = d; best = { kind: 'tribe', id: t.id }; }
+    }
+    select(best, false);
+  });
+  function select(s, fly) {
+    if (!s || s.kind !== 'agent' || s.id !== follow) follow = 0;
+    selected = s; renderInspector(); renderTribes();
+    if (s && fly) {
+      const t = s.kind === 'tribe' ? sim.tribes.get(s.id) : null;
+      if (t) focus = new THREE.Vector3(wx(t.camp.x + .5), campY(t), wz(t.camp.y + .5));
+    }
+  }
+
+  // ---------- panel
+  function worldEra() { let e = 0; for (const t of sim.tribes.values()) e = Math.max(e, t.era); return e; }
+  function renderClock() {
+    const y = sim.year(), d = (sim.tick % YEAR) + 1;
+    $('#year').textContent = `Year ${y} · ${seasonName()}`; $('#hudYear').textContent = `Year ${y} · ${seasonName()} · ${sim.agents.length} people`;
+    $('#worldEra').textContent = ERAS[worldEra()].name;
+  }
+  function renderTribes() {
+    const ts = [...sim.tribes.values()].sort((a, b) => b.members.size - a.members.size);
+    $('#tribeCount').textContent = ts.length ? `${ts.length} · ${sim.agents.filter(a => !a.tribe).length} wanderers` : '';
+    if (!ts.length) { setHTML($('#tribes'), '<div class="empty">No tribes yet. The wanderers are still looking for each other.</div>'); return; }
+    setHTML($('#tribes'), ts.map(t => {
+      const sel = selected && selected.kind === 'tribe' && selected.id === t.id;
+      const war = t.wars.size ? `<span class="badge war">war</span> ` : '';
+      return `<button type="button" class="trow${sel ? ' sel' : ''}" data-tribe="${t.id}" style="--c:${t.color}"><i></i><span class="nm">${esc(t.name)}<em>${Sim.STYLES[t.style].name} · ${ERAS[t.era].name} · ${Sim.STRATS[t.ai.strategy].label}</em></span><span class="st">${war}${t.members.size}</span></button>`;
+    }).join(''));
+  }
+  $('#tribes').addEventListener('click', e => { const b = e.target.closest('[data-tribe]'); if (b) select({ kind: 'tribe', id: +b.dataset.tribe }, true); });
+  function setHTML(el, html) { if (el._html !== html) { el.innerHTML = html; el._html = html; } }
+  const pct = v => Math.max(0, Math.min(100, v)).toFixed(0);
+  function renderInspector() {
+    const box = $('#inspect');
+    let html = '<h2>Inspector</h2>';
+    if (selected && selected.kind === 'agent') {
+      const a = sim.byId.get(selected.id);
+      if (!a) { html += `<div class="empty">This person has died.</div>`; }
+      else {
+        const t = a.tribe ? sim.tribes.get(a.tribe) : null, age = Math.floor(a.age / YEAR);
+        const chief = t && t.leader === a.id;
+        const carry = Object.entries(a.carry).filter(([, v]) => v >= .5).map(([k, v]) => `${Math.round(v)} ${k}`).join(', ') || 'nothing';
+        const role = a.goal && (a.goal.type === 'hunt' || a.goal.type === 'raid') ? ' · <span class="badge war">soldier</span>' : '';
+        html += `<div><div class="who">${esc(a.name)}</div><div class="sub">${chief ? 'Chief of the ' : t ? 'Of the ' : ''}${t ? `<span style="color:${t.color}">${esc(t.name)}</span>` : 'A wanderer with no tribe'} · ${Sim.STYLES[a.style || 0].name} · ${age} years old${role}</div></div>
+        <div class="row"><button class="btn" type="button" data-follow="${a.id}" aria-pressed="${follow === a.id}">${follow === a.id ? 'Stop following' : 'Follow with camera'}</button></div>
+        <div class="thought">${esc(a.thought)}</div>
+        <dl class="kv"><dt>Hunger</dt><dd class="bar hu"><b style="width:${pct(a.hunger)}%"></b></dd><dt>Health</dt><dd class="bar hp"><b style="width:${pct(a.health)}%"></b></dd>
+        <dt>Aggression</dt><dd class="bar"><b style="width:${pct(a.traits.aggression * 100)}%"></b></dd><dt>Sociability</dt><dd class="bar"><b style="width:${pct(a.traits.sociability * 100)}%"></b></dd>
+        <dt>Curiosity</dt><dd class="bar"><b style="width:${pct(a.traits.curiosity * 100)}%"></b></dd><dt>Diligence</dt><dd class="bar"><b style="width:${pct(a.traits.diligence * 100)}%"></b></dd>
+        <dt>Carrying</dt><dd>${carry}</dd>${a.kills ? `<dt>Kills</dt><dd>${a.kills}</dd>` : ''}${a.parents ? `<dt>Parents</dt><dd>${esc(a.parents.join(' and '))}</dd>` : ''}</dl>`;
+      }
+    } else if (selected && selected.kind === 'tribe') {
+      const t = sim.tribes.get(selected.id);
+      if (!t) html += `<div class="empty">This tribe is gone.</div>`;
+      else {
+        const l = sim.byId.get(t.leader), cap = sim.capacity(t);
+        const rels = [...t.rel.entries()].map(([id, v]) => [sim.tribes.get(id), v]).filter(p => p[0]).sort((p, q) => q[1] - p[1]);
+        const relHtml = rels.length ? rels.map(([o, v]) => `<dt><span style="color:${o.color}">${esc(o.name)}</span></dt><dd>${t.wars.has(o.id) ? '<span class="badge war">at war</span>' : t.allies.has(o.id) ? '<span class="badge peace">allied</span>' : v > 30 ? '<span class="badge peace">friendly</span>' : (v < -25 ? 'hostile' : 'neutral')} ${Math.round(v)}</dd>`).join('') : '<dt>None yet</dt><dd></dd>';
+        const res = t.research ? `${TECH[t.research].name} <span class="sub">${pct(t.progress / Sim.techCost(t.research) * 100)}%</span>` : 'Nothing left to discover';
+        const known = TECHS.filter(x => t.techs.has(x.id));
+        html += `<div><div class="who" style="color:${t.color}">The ${esc(t.name)}</div><div class="sub">${ERAS[t.era].name} · founded in year ${Math.floor(t.founded / YEAR) + 1}${l ? ` · Chief ${esc(l.name)}` : ''}</div></div>
+        <div class="plan"><div class="plan-h">Council's plan · <b>${Sim.STRATS[t.ai.strategy].label}</b></div><div class="thought">Because ${esc(t.ai.reason)}.</div></div>
+        <dl class="kv"><dt>People</dt><dd>${t.members.size} of ${cap} housed</dd><dt>Buildings</dt><dd>${t.huts}${t.walls ? ', walled' : ''}${t.farms ? `, ${t.farms} fields` : ''}</dd>
+        <dt>Stores</dt><dd>${Math.round(t.stock.food)} food · ${Math.round(t.stock.wood)} wood · ${Math.round(t.stock.stone)} stone</dd>
+        <dt>Culture</dt><dd>${Sim.STYLES[t.style].name}</dd>
+        <dt>Faith</dt><dd>${t.faith && sim.religions.get(t.faith) ? `<span style="color:${sim.religions.get(t.faith).color}">${esc(capFirst(sim.religions.get(t.faith).name))}</span>` : 'None yet'}</dd>
+        <dt>Wonders</dt><dd>${t.wonders.length ? esc(t.wonders.join(', ')) : 'None yet'}</dd>
+        ${sim.ships.some(x => x.alive && x.tribe === t.id) ? `<dt>Navy</dt><dd>${sim.ships.filter(x => x.alive && x.tribe === t.id).length} ${Sim.SHIP_NAMES[t.era]}s</dd>` : ''}
+        ${t.plague ? '<dt>Plague</dt><dd><span class="badge war">outbreak</span></dd>' : ''}
+        <dt>Researching</dt><dd>${res}</dd><dt>Trades</dt><dd>${t.trades}</dd><dt>Deaths</dt><dd>${t.deaths}</dd></dl>
+        <div class="chips">${known.length ? known.map(x => `<span class="chip${x.era === t.era ? ' e' : ''}">${x.name}</span>`).join('') : '<span class="empty">No technology yet</span>'}</div>
+        <h2>What they have learned works <span>trust</span></h2>
+        <dl class="kv">${Object.entries(t.ai.v).sort((p, q) => q[1] - p[1]).map(([k, v]) => `<dt>${Sim.STRATS[k].label}</dt><dd class="bar"><b style="width:${pct(v / 2.2 * 100)}%"></b></dd>`).join('')}</dl>
+        <h2>Relations</h2><dl class="kv">${relHtml}</dl>`;
+      }
+    } else html += '<div class="empty">Click a person or a settlement on the map to see what they are doing and why.</div>';
+    setHTML(box, html);
+  }
+  const logEl = $('#log');
+  function renderLog() {
+    const evs = sim.history.slice(-80).reverse();
+    $('#evCount').textContent = sim.history.length + ' events';
+    setHTML(logEl, evs.map(e => `<div class="ev ${e.type}"${e.tribe && sim.tribes.has(e.tribe) ? ` data-tribe="${e.tribe}"` : ''}><span class="when">Y${e.year}</span><span class="txt">${esc(e.text)}</span></div>`).join(''));
+    logDirty = false;
+  }
+  logEl.addEventListener('click', e => { const r = e.target.closest('[data-tribe]'); if (r) select({ kind: 'tribe', id: +r.dataset.tribe }, true); });
+
+  // ---------- controls
+  const TOOL_HINT = { inspect: 'Drag to orbit, right-drag to pan, scroll to zoom. Click a person or a settlement.', meteor: 'Click the map to drop a meteor.', quake: 'Click the map to set off an earthquake.', plague: 'Click a town to start a plague there.', fire: 'Click a forest to start a wildfire.', drought: 'Click the map to bring a drought.', harvest: 'Click the map to bless it with a bountiful harvest.', people: 'Click the map to bring six newcomers.' };
+  $('#tools').addEventListener('click', e => {
+    const b = e.target.closest('[data-tool]'); if (!b) return;
+    tool = b.dataset.tool; document.querySelectorAll('#tools button').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+    $('#hint').textContent = TOOL_HINT[tool]; canvas.style.cursor = tool === 'inspect' ? '' : 'crosshair';
+  });
+  $('#inspect').addEventListener('pointerdown', e => {
+    const b = e.target.closest('[data-follow]'); if (!b) return;
+    const id = +b.dataset.follow; follow = follow === id ? 0 : id; if (!follow) focus = null; renderInspector();
+  });
+  // lets tests and future tools point the camera at a tile
+  window.addEventListener('focusTile', e => { const { x, y } = e.detail; const tgt = new THREE.Vector3(wx(x), Math.max(0, heightAt(x, y)), wz(y)); controls.target.copy(tgt); camera.position.copy(tgt).add(new THREE.Vector3(0, 4.5, 6)); focus = null; follow = 0; });
+  function drawPop() {
+    const c = $('#popChart'), w = c.clientWidth; if (!w) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1); if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(54 * dpr); }
+    const g = c.getContext('2d'), h = c.height, data = sim.popHistory.concat([sim.agents.length]);
+    g.clearRect(0, 0, c.width, h);
+    $('#popNow').textContent = sim.agents.length;
+    if (data.length < 2) return;
+    const max = Math.max(...data) * 1.1, X = i => i / (data.length - 1) * c.width, Y = v => h - 2 * dpr - v / max * (h - 6 * dpr);
+    g.beginPath(); data.forEach((v, i) => i ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v)));
+    g.lineTo(c.width, h); g.lineTo(0, h); g.closePath(); g.fillStyle = 'rgba(227,166,74,.18)'; g.fill();
+    g.beginPath(); data.forEach((v, i) => i ? g.lineTo(X(i), Y(v)) : g.moveTo(X(i), Y(v))); g.strokeStyle = '#e3a64a'; g.lineWidth = 1.5 * dpr; g.stroke();
+    g.fillStyle = '#e3a64a'; g.beginPath(); g.arc(X(data.length - 1), Y(data[data.length - 1]), 2.5 * dpr, 0, 7); g.fill();
+  }
+  function setSpeed(s) { speed = s; document.querySelectorAll('.speeds button').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.s === s))); }
+  document.querySelector('.speeds').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setSpeed(+b.dataset.s); });
+  const randSeed = () => Math.floor(Math.random() * 99999) + 1;
+  $('#seedIn').value = randSeed();
+  $('#seedNew').addEventListener('click', () => { $('#seedIn').value = randSeed(); newWorld(+$('#seedIn').value, 0, false); });
+  $('#seedIn').addEventListener('change', () => newWorld(+$('#seedIn').value || 1, 0, false));
+  $('#eraList').innerHTML = ERAS.map((e, i) => `<button type="button" class="era-btn" data-era="${i}"><b>${e.name}</b><span>${e.blurb}</span></button>`).join('');
+  $('#eraList').addEventListener('click', e => { const b = e.target.closest('[data-era]'); if (!b) return; newWorld(+$('#seedIn').value || 1, +b.dataset.era, true); });
+  $('#newWorld').addEventListener('click', () => { $('#picker').hidden = false; started = false; });
+
+  const capFirst = s => s[0].toUpperCase() + s.slice(1);
+  const SAVE_KEY = 'firstlight-save-v1';
+  $('#saveBtn').addEventListener('click', () => {
+    try { localStorage.setItem(SAVE_KEY, sim.serialize()); $('#saveNote').textContent = `Saved year ${sim.year()}`; }
+    catch (e) { $('#saveNote').textContent = 'This browser blocked saving here'; }
+  });
+  $('#loadBtn').addEventListener('click', () => {
+    let json = null; try { json = localStorage.getItem(SAVE_KEY); } catch (e) {}
+    if (!json) { $('#saveNote').textContent = 'No saved world yet'; return; }
+    try { attach(Sim.load(json)); $('#picker').hidden = true; started = true; $('#saveNote').textContent = `Loaded year ${sim.year()}`; }
+    catch (e) { $('#saveNote').textContent = 'That save could not be read'; }
+  });
+  function attach(s) {
+    sim = s; window.sim = sim; sim.on(() => { logDirty = true; });
+    selected = null; follow = 0; acc = 0; buildWorld(); renderTribes(); renderInspector(); renderLog();
+  }
+  function drawNations() {
+    const c = $('#nationChart'), w = c.clientWidth; if (!w) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1); if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(130 * dpr); }
+    const g = c.getContext('2d'), h = c.height, now = sim.year();
+    g.clearRect(0, 0, c.width, h);
+    const ts = [...sim.tribes.values()].filter(t => t.popHist.length > 1).sort((a, b) => b.members.size - a.members.size).slice(0, 8);
+    if (!ts.length) { g.fillStyle = '#93a39e'; g.font = `${12 * dpr}px sans-serif`; g.fillText('Fills in as the years pass', 4 * dpr, h / 2); return; }
+    const start = Math.min(...ts.map(t => t.histStart)), span = Math.max(1, now - start), max = Math.max(...ts.map(t => Math.max(...t.popHist))) * 1.1;
+    g.strokeStyle = 'rgba(147,163,158,.18)'; g.lineWidth = 1; for (let k = 1; k < 4; k++) { const y = h * k / 4; g.beginPath(); g.moveTo(0, y); g.lineTo(c.width, y); g.stroke(); }
+    for (const t of ts) {
+      g.beginPath(); g.strokeStyle = t.color; g.lineWidth = 1.6 * dpr;
+      t.popHist.forEach((v, i) => { const x = (t.histStart + i - start) / span * (c.width - 4 * dpr), y = h - 3 * dpr - v / max * (h - 8 * dpr); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+      g.stroke();
+    }
+    g.fillStyle = '#93a39e'; g.font = `${10 * dpr}px "IBM Plex Mono", monospace`; g.fillText(`Y${start}`, 2 * dpr, h - 3 * dpr); const lbl = `Y${now}`; g.fillText(lbl, c.width - g.measureText(lbl).width - 2 * dpr, h - 3 * dpr);
+    g.fillText(String(Math.round(max)), 2 * dpr, 11 * dpr);
+  }
+  function renderFaiths() {
+    const rs = [...sim.religions.values()].map(r => [r, sim.followers(r.id)]).filter(([, f]) => f.nations).sort((a, b) => b[1].people - a[1].people);
+    setHTML($('#faiths'), rs.length ? '<dl class="kv">' + rs.map(([r, f]) => `<dt><span style="color:${r.color}">${esc(capFirst(r.name))}</span></dt><dd>${f.nations} nation${f.nations > 1 ? 's' : ''} · ${f.people} people</dd>`).join('') + '</dl>' : '<div class="empty">No faiths yet. Nations found them once they leave the Stone Age.</div>');
+  }
+  function newWorld(seed, era, start) {
+    sim = new Sim(seed, era); window.sim = sim;
+    sim.on(() => { logDirty = true; });
+    selected = null; acc = 0; buildWorld(); renderTribes(); renderInspector(); renderLog();
+    if (start) { $('#picker').hidden = true; started = true; setSpeed(2); camera.position.copy(HOME_POS); controls.target.copy(HOME_TGT); focus = null; }
+  }
+
+  function resize() {
+    const w = stage.clientWidth, h = stage.clientHeight;
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(stage);
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(.1, (now - last) / 1000); last = now;
+    // behind the era picker the world idles slowly as a living backdrop
+    const tps = started ? SPEEDS[speed] : 3;
+    let steps = 0;
+    if (tps) { acc += dt * tps; while (acc >= 1 && steps < 30) { sim.step(); acc -= 1; steps++; } if (steps >= 30) acc = 0; }
+    const alpha = tps && tps <= 40 ? Math.min(1, acc) : 1;
+    clock += dt; world.waterTex.offset.set(clock * .004, clock * .0025);
+    syncTiles(); updateFields(); updateBorders(); applySeason(); beginSet(world.dset); updatePeople(alpha); updateShips(alpha); endSet(world.dset); updateFires(); updateBuildings(); updateEffects(); updateSelection();
+    if (follow) { const a = sim.byId.get(follow); if (a && a._wx !== undefined) focus = new THREE.Vector3(a._wx, a._wy, a._wz); else follow = 0; }
+    if (focus) { tmpV.copy(focus).sub(controls.target).multiplyScalar(.08); controls.target.add(tmpV); camera.position.add(tmpV); if (tmpV.lengthSq() < 1e-5 && !follow) focus = null; }
+    if (!started) { const r = Math.hypot(camera.position.x - controls.target.x, camera.position.z - controls.target.z); const a = Math.atan2(camera.position.z - controls.target.z, camera.position.x - controls.target.x) + dt * .05; camera.position.x = controls.target.x + Math.cos(a) * r; camera.position.z = controls.target.z + Math.sin(a) * r; }
+    controls.update();
+    if (world.shake) { tmpN.set(Math.random() - .5, Math.random() - .5, Math.random() - .5).multiplyScalar(world.shake * .9); camera.position.add(tmpN); renderer.render(scene, camera); camera.position.sub(tmpN); }
+    else renderer.render(scene, camera);
+    updateLabels();
+    if (now - lastUI > 300) { lastUI = now; renderClock(); drawPop(); drawNations(); renderFaiths(); renderTribes(); if (selected) renderInspector(); if (logDirty) renderLog(); }
+    requestAnimationFrame(frame);
+  }
+  setSpeed(2);
+  newWorld(+$('#seedIn').value, 0, false);
+  resize();
+  requestAnimationFrame(frame);
+})();
+</script>
