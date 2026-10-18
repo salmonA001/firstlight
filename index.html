@@ -95,6 +95,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .ev.fall .txt, .ev.raid .txt, .ev.leader .txt { border-color: var(--accent); }
 .ev[data-tribe] { cursor: pointer; }
 
+[hidden] { display: none !important; }
 #picker { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(9, 14, 16, .55); backdrop-filter: blur(2px); padding: 16px max(16px, env(safe-area-inset-right, 0px)) 16px max(16px, env(safe-area-inset-left, 0px)); overflow-y: auto; }
 .pick { width: min(640px, 100%); background: rgba(20, 32, 35, .94); border: 1px solid var(--line); border-radius: 10px; padding: 22px; display: flex; flex-direction: column; gap: 14px; }
 .pick h1 { margin: 0; font-family: var(--display); font-size: 30px; color: var(--accent); letter-spacing: .04em; text-wrap: balance; }
@@ -120,6 +121,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .ev.policy .txt { border-color: var(--tech); font-style: italic; }
 .ev.alliance .txt { border-color: var(--peace); }
 .ev.faith .txt { border-color: #c3aed6; }
+.ev.army .txt { border-color: var(--war); }
+.ev.battle .txt { border-color: var(--war); color: #f0b4a4; }
+.ev.golden .txt { border-color: var(--accent); color: var(--accent); }
+.ev.rebel .txt { border-color: var(--war); font-style: italic; }
+.ev.discovery .txt { border-color: var(--tech); }
+.tlabel.alabel { font-size: 11px; font-family: var(--mono); letter-spacing: 0; padding: 0 6px 1px; background: rgba(40, 14, 12, .72); }
+.trow .st small { color: var(--muted); font-family: var(--mono); }
 #nationChart { width: 100%; height: 130px; display: block; }
 .note { font-size: 12px; color: var(--muted); align-self: center; }
 .plan { display: flex; flex-direction: column; gap: 6px; background: var(--panel-2); border-radius: 6px; padding: 10px 12px; }
@@ -179,6 +187,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     </div>
     <div class="sec" id="inspect"><h2>Inspector</h2><div class="empty">Click a person or a settlement on the map.</div></div>
     <div class="sec"><h2>Tribes <span id="tribeCount"></span></h2><div id="tribes"></div></div>
+    <div class="sec"><h2>Armies <span id="armyCount"></span></h2><div id="armies"></div></div>
     <div class="sec"><h2>Nations over time <span>people per nation</span></h2><canvas id="nationChart" height="130" aria-label="Population of each nation over time"></canvas></div>
     <div class="sec"><h2>Faiths</h2><div id="faiths"></div></div>
     <div class="sec"><h2>Chronicle <span id="evCount"></span></h2><div id="log"></div></div>
@@ -214,39 +223,60 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     { id: 'spear', name: 'Spears', era: 0, req: ['tools'], fx: { combat: .4 }, war: 1 },
     { id: 'pottery', name: 'Pottery', era: 0, req: ['fire'], fx: { noSpoil: 1 } },
     { id: 'agri', name: 'Agriculture', era: 0, req: ['tools'], fx: { farms: 1 } },
+    { id: 'traps', name: 'Hunting Traps', era: 0, req: ['tools'], fx: { gather: .2 } },
+    { id: 'herbs', name: 'Herbal Lore', era: 0, req: ['fire'], fx: { life: 3 } },
     { id: 'barter', name: 'Barter', era: 1, req: ['pottery'], fx: { trade: 1 } },
     { id: 'masonry', name: 'Masonry', era: 1, req: ['shelter'], fx: { walls: 1 } },
     { id: 'bronze', name: 'Bronze Working', era: 1, req: ['spear'], fx: { combat: .4, gather: .2 }, war: 1 },
     { id: 'writing', name: 'Writing', era: 1, req: ['barter'], fx: { research: .5 } },
     { id: 'wheel', name: 'The Wheel', era: 1, req: ['barter'], fx: { speed: .2, range: 10 } },
     { id: 'iron', name: 'Iron Working', era: 1, req: ['bronze'], fx: { combat: .5 }, war: 1 },
+    { id: 'horse', name: 'Horseback Riding', era: 1, req: ['wheel'], fx: { speed: .15, combat: .2 }, war: 1 },
+    { id: 'calendar', name: 'Calendar', era: 1, req: ['agri', 'writing'], fx: { farmYield: .3 } },
+    { id: 'sailing', name: 'Sailing', era: 1, req: ['barter'], fx: { range: 8 } },
     { id: 'currency', name: 'Currency', era: 2, req: ['writing'], fx: { tradeYield: .5 } },
     { id: 'math', name: 'Mathematics', era: 2, req: ['writing'], fx: { research: .3 } },
     { id: 'steel', name: 'Steel', era: 2, req: ['iron'], fx: { combat: .5, gather: .3 }, war: 1 },
     { id: 'engineering', name: 'Engineering', era: 2, req: ['masonry', 'wheel'], fx: { cap: 2, wallStr: .3 } },
     { id: 'irrigation', name: 'Irrigation', era: 2, req: ['agri', 'engineering'], fx: { farmYield: .8 } },
+    { id: 'philosophy', name: 'Philosophy', era: 2, req: ['writing', 'calendar'], fx: { research: .3, spread: .1 } },
+    { id: 'castles', name: 'Castles', era: 2, req: ['engineering'], fx: { wallStr: .5 } },
+    { id: 'guilds', name: 'Guilds', era: 2, req: ['currency'], fx: { gather: .2, tradeYield: .2 } },
     { id: 'gunpowder', name: 'Gunpowder', era: 3, req: ['steel', 'math'], fx: { combat: 1 }, war: 1 },
     { id: 'navigation', name: 'Navigation', era: 3, req: ['math', 'currency'], fx: { range: 20, speed: .1 } },
     { id: 'printing', name: 'Printing Press', era: 3, req: ['math'], fx: { research: .6, spread: .2 } },
     { id: 'banking', name: 'Banking', era: 3, req: ['currency'], fx: { tradeYield: .5 } },
+    { id: 'cannons', name: 'Cannons', era: 3, req: ['gunpowder'], fx: { siege: 1, combat: .3 }, war: 1 },
+    { id: 'astronomy', name: 'Astronomy', era: 3, req: ['math', 'philosophy'], fx: { research: .4 } },
+    { id: 'university', name: 'Universities', era: 3, req: ['printing', 'philosophy'], fx: { research: .5 } },
     { id: 'steam', name: 'Steam Power', era: 4, req: ['engineering', 'printing'], fx: { gather: .5, speed: .2 } },
     { id: 'railways', name: 'Railways', era: 4, req: ['steam'], fx: { speed: .4, range: 25 } },
     { id: 'industry', name: 'Industry', era: 4, req: ['steam', 'banking'], fx: { cap: 4, gather: .3 } },
     { id: 'medicine', name: 'Medicine', era: 4, req: ['printing'], fx: { life: 15 } },
+    { id: 'telegraph', name: 'Telegraph', era: 4, req: ['steam'], fx: { spread: .3, range: 15 } },
+    { id: 'rifles', name: 'Rifling', era: 4, req: ['gunpowder', 'industry'], fx: { combat: .6 }, war: 1 },
+    { id: 'sanitation', name: 'Sanitation', era: 4, req: ['medicine'], fx: { life: 8, cap: 2 } },
     { id: 'electricity', name: 'Electricity', era: 5, req: ['industry'], fx: { research: .8 } },
     { id: 'combustion', name: 'Combustion Engine', era: 5, req: ['railways', 'industry'], fx: { speed: .5, range: 30 } },
     { id: 'mechwar', name: 'Mechanized Warfare', era: 5, req: ['combustion', 'gunpowder'], fx: { combat: 1.2 }, war: 1 },
     { id: 'vaccines', name: 'Vaccines', era: 5, req: ['medicine', 'electricity'], fx: { life: 10 } },
+    { id: 'flight', name: 'Flight', era: 5, req: ['combustion'], fx: { range: 40, speed: .3 } },
+    { id: 'radio', name: 'Radio', era: 5, req: ['electricity'], fx: { spread: .3, research: .3 } },
+    { id: 'fertilizer', name: 'Fertilizer', era: 5, req: ['industry'], fx: { farmYield: .8 } },
     { id: 'computers', name: 'Computers', era: 6, req: ['electricity'], fx: { research: 1 } },
     { id: 'internet', name: 'Internet', era: 6, req: ['computers'], fx: { spread: .4, range: 60 } },
     { id: 'renewables', name: 'Renewable Energy', era: 6, req: ['electricity', 'industry'], fx: { gather: .5, farmYield: .5 } },
+    { id: 'robotics', name: 'Robotics', era: 6, req: ['computers'], fx: { gather: .6, combat: .5 } },
+    { id: 'genetics', name: 'Genetics', era: 6, req: ['vaccines', 'computers'], fx: { life: 15, farmYield: .5 } },
+    { id: 'satellites', name: 'Satellites', era: 6, req: ['computers', 'flight'], fx: { range: 40, research: .4 } },
+    { id: 'drones', name: 'Drones', era: 6, req: ['robotics'], fx: { combat: 1, siege: 1 }, war: 1 },
   ];
   const TECH = Object.fromEntries(TECHS.map(t => [t.id, t]));
   const techCost = id => Math.round(220 * Math.pow(2, TECH[id].era));
   const ERA_SIZE = ERAS.map((_, e) => TECHS.filter(t => t.era === e).length);
 
   function computeFx(techs) {
-    const f = { gather: 1, combat: 1, speed: 1, research: 1, cap: 4, life: 0, range: 40, tradeYield: 1, farmYield: 1, wallStr: 1, spread: .15, hunger: .4, noSpoil: 0, farms: 0, trade: 0, walls: 0 };
+    const f = { gather: 1, combat: 1, speed: 1, research: 1, cap: 4, life: 0, range: 40, tradeYield: 1, farmYield: 1, wallStr: 1, siege: 1, spread: .15, hunger: .4, noSpoil: 0, farms: 0, trade: 0, walls: 0 };
     for (const id of techs) for (const [k, v] of Object.entries(TECH[id].fx)) {
       if (k === 'noSpoil' || k === 'farms' || k === 'trade' || k === 'walls') f[k] = 1; else f[k] += v;
     }
@@ -290,13 +320,21 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   const WONDERS = { steppe: ["Khan's Great Tent", 'Stone Fortress'], nordic: ['Great Mead Hall', 'Stave Cathedral'], desert: ['Great Pyramid', 'Domed Palace'], eastern: ['Great Pagoda', 'Imperial Palace'], med: ['Temple of the Sky', 'Colosseum'], meso: ['Step Pyramid', 'Star Observatory'] };
   const WONDER_ERA = [1, 3, 5];
   // the strategies a civilization's council can choose, and how each one steers the people's work
+  const PERSONAS = {
+    warlord: { label: 'the Warlord', mult: { military: 1.5, fortify: 1.15, trade: .8 } },
+    merchant: { label: 'the Merchant', mult: { trade: 1.6, expand: 1.1, military: .8 } },
+    scholar: { label: 'the Wise', mult: { research: 1.6, military: .8 } },
+    builder: { label: 'the Builder', mult: { grow: 1.3, expand: 1.3 } },
+  };
+  const personaOf = l => { const tr = l.traits, c = [['warlord', tr.aggression], ['merchant', tr.sociability], ['scholar', tr.curiosity], ['builder', tr.diligence]]; c.sort((p, q) => q[1] - p[1]); return c[0][0]; };
+  const ARMY_WORDS = ['war band', 'host', 'legion', 'army', 'regiment', 'brigade', 'division'];
   const STRATS = {
-    grow: { label: 'Growing', mult: { gatherFood: 1.4, farm: 1.6, build: 1.4 }, techs: ['agri', 'irrigation', 'pottery', 'fire', 'medicine', 'vaccines', 'renewables', 'shelter', 'industry'] },
+    grow: { label: 'Growing', mult: { gatherFood: 1.4, farm: 1.6, build: 1.4 }, techs: ['agri', 'irrigation', 'pottery', 'fire', 'medicine', 'vaccines', 'renewables', 'shelter', 'industry', 'calendar', 'sanitation', 'fertilizer', 'genetics', 'herbs'] },
     expand: { label: 'Expanding', mult: { gatherWood: 1.4, gatherFood: 1.2, build: 1.3, explore: 1.5 }, techs: ['wheel', 'navigation', 'railways', 'combustion'] },
-    fortify: { label: 'Fortifying', mult: { gatherStone: 1.7, walls: 1.6, hunt: 1.4, raid: .4, explore: .3, trade: .6 }, techs: ['masonry', 'engineering', 'steel', 'bronze'] },
+    fortify: { label: 'Fortifying', mult: { gatherStone: 1.7, walls: 1.6, hunt: 1.4, raid: .4, explore: .3, trade: .6 }, techs: ['masonry', 'engineering', 'steel', 'bronze', 'castles'] },
     military: { label: 'Arming for war', mult: { raid: 1.7, hunt: 1.5, gatherStone: 1.1, think: .7 }, techs: [] },
-    research: { label: 'Pursuing knowledge', mult: { think: 1.9, explore: 1.2 }, techs: ['writing', 'math', 'printing', 'electricity', 'computers', 'internet'] },
-    trade: { label: 'Trading', mult: { trade: 2.1, gatherWood: 1.1, gatherStone: 1.1 }, techs: ['barter', 'currency', 'banking', 'navigation', 'wheel', 'railways'] },
+    research: { label: 'Pursuing knowledge', mult: { think: 1.9, explore: 1.2 }, techs: ['writing', 'math', 'printing', 'electricity', 'computers', 'internet', 'philosophy', 'astronomy', 'university', 'radio', 'satellites'] },
+    trade: { label: 'Trading', mult: { trade: 2.1, gatherWood: 1.1, gatherStone: 1.1 }, techs: ['barter', 'currency', 'banking', 'navigation', 'wheel', 'railways', 'guilds', 'sailing', 'telegraph'] },
   };
   const SHIP_NAMES = ['canoe', 'war galley', 'war galley', 'galleon', 'ironclad', 'battleship', 'destroyer'];
 
@@ -305,7 +343,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       this.seed = seed >>> 0; this.rng = mulberry32(this.seed ^ 0x9e3779b9); this.startEra = era;
       this.tick = 0; this.agents = []; this.byId = new Map(); this.tribes = new Map(); this.nextId = 1; this.tribeCount = 0;
       this.history = []; this.listeners = []; this.effects = []; this.dirty = new Set(); this.deadCount = 0;
-      this.ownerVersion = 0; this.usedNames = new Set(); this.ships = []; this.fires = new Map(); this.popHistory = []; this.religions = new Map();
+      this.ownerVersion = 0; this.usedNames = new Set(); this.ships = []; this.fires = new Map(); this.popHistory = []; this.religions = new Map(); this.armies = [];
       this.genWorld();
       this.owner = new Int32Array(W * H); this.ownerDist = new Float32Array(W * H);
       if (era === 0) this.spawnBands(); else this.spawnCivs(era);
@@ -480,6 +518,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       if (this.tick % 10 === 0) for (const t of [...this.tribes.values()]) this.stepTribe(t);
       if (this.tick % 30 === 0) { this.diplomacy(); this.updateTerritory(); }
       if (this.ships.length) this.stepShips();
+      if (this.armies.length) this.stepArmies();
       if (this.fires.size && this.tick % 2 === 0) this.stepFires();
       if (this.tick % YEAR === 0) {
         this.popHistory.push(this.agents.length); if (this.popHistory.length > 400) this.popHistory.shift();
@@ -525,6 +564,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     }
     urgent(a, t) {
       const g = a.goal.type;
+      if (g === 'army') return false;
       if (a.hunger > 75 && g !== 'gather' && g !== 'eat' && g !== 'deposit') return true;
       if (t && t.wars.size && g !== 'hunt' && g !== 'raid' && a.age >= 14 * YEAR) return true;
       return false;
@@ -662,6 +702,41 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       }
       return false;
     }
+    // breadth-first search over land; rough=true lets a desperate traveller climb over mountains
+    landPath(x0, y0, tx, ty, rough) {
+      if (!this._seen) { this._seen = new Int32Array(W * H); this._prev = new Int32Array(W * H); this._q = new Int32Array(W * H); this._stamp = 0; }
+      const seen = this._seen, prev = this._prev, q = this._q, st = ++this._stamp, goal = ty * W + tx, start = y0 * W + x0;
+      const ok = i => { const t = this.terrain[i]; return t !== T.WATER && (rough || t !== T.MOUNTAIN); };
+      if (!this.inb(tx, ty) || !ok(goal)) return null;
+      let h = 0, n = 0; q[n++] = start; seen[start] = st; prev[start] = -1;
+      while (h < n) {
+        const i = q[h++]; if (i === goal) break;
+        const x = i % W, y = (i / W) | 0;
+        for (const [dx, dy] of DIRS) {
+          const nx = x + dx, ny = y + dy; if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+          const j = ny * W + nx; if (seen[j] === st || !ok(j)) continue;
+          seen[j] = st; prev[j] = i; q[n++] = j;
+        }
+      }
+      if (seen[goal] !== st) return null;
+      const path = []; for (let i = goal; i !== start; i = prev[i]) path.push(i);
+      return path.reverse();
+    }
+    moveStep(a, tx, ty) {
+      if (a._path && a._pi < a._path.length && Math.abs(a._ptx - tx) <= 3 && Math.abs(a._pty - ty) <= 3) {
+        const i = a._path[a._pi], nx = i % W, ny = (i / W) | 0, tt = this.terrain[i];
+        if (tt !== T.WATER && (a._rough || tt !== T.MOUNTAIN) && cheb(a, { x: nx, y: ny }) <= 1) { a.lx = a.x; a.ly = a.y; a.x = nx; a.y = ny; a._pi++; a.stuck = 0; return; }
+      }
+      a._path = null;
+      if (a.stuck >= 3) {
+        let p = this.landPath(a.x, a.y, tx, ty, false), rough = false;
+        if (!p) { p = this.landPath(a.x, a.y, tx, ty, true); rough = true; }
+        if (!p || !p.length) { a.stuck = 15; return; }
+        a._path = p; a._pi = 0; a._ptx = tx; a._pty = ty; a._rough = rough; a.stuck = 0;
+        return this.moveStep(a, tx, ty);
+      }
+      this.moveToward(a, tx, ty);
+    }
     stepsFor(fx) { const s = fx.speed; return Math.floor(s) + (this.r() < s - Math.floor(s) ? 1 : 0); }
     moveToward(a, tx, ty) {
       const cur = Math.max(Math.abs(tx - a.x), Math.abs(ty - a.y)) + .4 * Math.min(Math.abs(tx - a.x), Math.abs(ty - a.y));
@@ -686,8 +761,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       }
       if (a.x !== g.tx || a.y !== g.ty) {
         const n = this.stepsFor(fx);
-        for (let s = 0; s < n && (a.x !== g.tx || a.y !== g.ty); s++) this.moveToward(a, g.tx, g.ty);
-        if (a.stuck > 14) { a.goal = null; a.stuck = 0; a.thought = 'Could not find a way through. Rethinking'; }
+        for (let s = 0; s < n && (a.x !== g.tx || a.y !== g.ty); s++) this.moveStep(a, g.tx, g.ty);
+        if (a.stuck > 14) { a.stuck = 0; if (g.type !== 'army') { a.goal = null; a.thought = 'Could not find a way through. Rethinking'; } }
         return;
       }
       const i = this.idx(a.x, a.y);
@@ -724,6 +799,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
           break;
         case 'trade': this.completeTrade(a, t, g); break;
         case 'raid': this.completeRaid(a, t, g); break;
+        case 'army': break;
         default: a.goal = null;
       }
     }
@@ -787,7 +863,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       b.health -= p;
       this.effects.push({ type: 'battle', x: b.x, y: b.y, ttl: 10 });
       if (b.health <= 0) { a.kills++; a.thought = `Killed ${b.name} in battle`; this.kill(b, 'battle', a); if (a.kills === 8 && this.rateOk(t, 'hero' + a.id, 1e9)) this.emit('hero', `${a.name} of the ${t.name} has slain eight enemies and is feared across the land.`, { tribe: t.id }); }
-      else if (!b.goal || b.goal.type !== 'hunt') this.setGoal(b, { type: 'hunt', target: a.id, tx: a.x, ty: a.y, ttl: 60 }, `Fighting back against ${a.name}`);
+      else if (!b.goal || (b.goal.type !== 'hunt' && b.goal.type !== 'army')) this.setGoal(b, { type: 'hunt', target: a.id, tx: a.x, ty: a.y, ttl: 60 }, `Fighting back against ${a.name}`);
     }
     kill(a, cause, killer) {
       if (!a.alive) return;
@@ -1059,6 +1135,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         research: (t.research ? .32 : .05) + (foodSec > .8 ? .2 : 0) + (threatRatio < .3 ? .15 : 0),
         trade: t.fx.trade ? .3 + Math.min(4, friends) * .12 : 0,
       };
+      const lead = this.byId.get(t.leader), per = lead ? personaOf(lead) : null;
+      if (lead && ai.rulerId !== lead.id) {
+        ai.rulerId = lead.id; ai.persona = per;
+        if (this.rateOk(t, 'ruler', 240)) this.emit('policy', `${lead.name} ${PERSONAS[per].label} now rules the ${t.name}.`, { tribe: t.id });
+      }
+      if (per) for (const k in PERSONAS[per].mult) sc[k] *= PERSONAS[per].mult[k];
       let best = ai.strategy, bs = -1;
       for (const k in sc) { const v = sc[k] * ai.v[k] + (k === ai.strategy ? .15 : 0); if (v > bs) { bs = v; best = k; } }
       const reasons = {
@@ -1081,6 +1163,24 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       if (!t.faith && t.era >= 1 && this.religions.size < 6 && this.r() < .05) this.foundFaith(t);
       for (const o of this.tribes.values()) if (o !== t && o.faith && dist(o.camp, t.camp) < 20) this.spreadFaith(o, t, .03);
       if (best === 'military' && !t.wars.size && prey && preyRatio > 1.4 && this.r() < .35 + ag * .4) this.declareWar(t, prey, 'conquest');
+      if (!t.wars.size && foodSec > 1.2 && t.research && this.r() < .025) {
+        t.progress += techCost(t.research) * .5;
+        this.emit('golden', `A golden age dawned for the ${t.name}. Poets, builders and thinkers flourish${lead ? ` under ${lead.name}` : ''}.`, { tribe: t.id });
+      }
+      if (pop >= 26 && (foodSec < .3 || t.wars.size) && this.r() < .05) {
+        this.emit('rebel', `Rebels rose up against ${lead ? lead.name + ' of the ' : 'the rulers of the '}${t.name}, angry at ${foodSec < .3 ? 'empty granaries' : 'the endless war'}.`, { tribe: t.id });
+        this.split(t, false); if (!this.tribes.has(t.id)) return;
+      }
+      if (this.r() < .012) {
+        t.stock.stone += 40 + t.era * 20;
+        this.emit('discovery', `Prospectors of the ${t.name} struck a rich vein of ${['flint', 'copper', 'iron', 'silver', 'coal', 'oil', 'lithium'][t.era]}.`, { tribe: t.id });
+      }
+      if (t.faith && this.r() < .015) for (const o of this.tribes.values()) {
+        if (o === t || o.faith !== t.faith || t.wars.has(o.id) || dist(o.camp, t.camp) > 28) continue;
+        t.rel.set(o.id, Math.min(100, (t.rel.get(o.id) ?? 0) + 15)); o.rel.set(t.id, Math.min(100, (o.rel.get(t.id) ?? 0) + 15));
+        this.emit('faith', `The ${t.name} and the ${o.name} held a great festival of ${this.religions.get(t.faith).name}.`, { tribe: t.id }); break;
+      }
+      if (t.wars.size && pop >= 8 && !this.armies.some(r => !r.dead && r.tribe === t.id) && this.r() < (best === 'military' ? .75 : .3) * (per === 'warlord' ? 1.3 : 1)) this.raiseArmy(t);
       for (const id of [...t.wars.keys()]) {
         const e = this.tribes.get(id), w = t.wars.get(id); if (!e || !w) continue;
         const ratio = this.power(e) / Math.max(1, mine);
@@ -1096,6 +1196,171 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         }
       }
       for (const id of [...t.allies]) { const o = this.tribes.get(id); if (!o || (t.rel.get(id) ?? 0) < 15) { t.allies.delete(id); if (o) { o.allies.delete(t.id); this.emit('alliance', `The alliance between the ${t.name} and the ${o.name} fell apart.`, { tribe: t.id }); } } }
+    }
+    // ---- armies: soldiers muster, march in formation, fight pitched battles and lay siege
+    raiseArmy(t, vs) {
+      let target = null, bd = 1e9;
+      if (vs) target = this.tribes.get(vs.tribe);
+      else for (const id of t.wars.keys()) { const e = this.tribes.get(id); if (!e) continue; const d = dist(e.camp, t.camp); if (d < bd) { bd = d; target = e; } }
+      if (!target || (!vs && bd > t.fx.range + 30)) return null;
+      const pool = this.members(t).filter(a => a.id !== t.leader && a.age >= 16 * YEAR && a.health > 50 && !(a.goal && a.goal.type === 'army'))
+        .sort((p, q) => (q.traits.aggression + q.kills * .1) - (p.traits.aggression + p.kills * .1));
+      const n = Math.min(40, Math.floor(pool.length * (vs ? .7 : t.ai.strategy === 'military' ? .55 : .4)));
+      if (n < 4) return null;
+      const men = pool.slice(0, n), gen = men[0], food = Math.min(t.stock.food * .4, n * 6);
+      t.stock.food -= food;
+      const r = { id: this.nextId++, tribe: t.id, target: target.id, vs: vs ? vs.id : 0, x: t.camp.x, y: t.camp.y, hx: 0, hy: 1, state: 'muster', since: this.tick, born: this.tick,
+        soldiers: men.map(a => a.id), general: gen.id, size: n, food, loot: { food: 0, wood: 0, stone: 0 }, siege: 0, foe: 0, path: null, pi: 0, battle: '',
+        name: `${gen.name}'s ${ARMY_WORDS[t.era]}` };
+      this.armies.push(r);
+      for (const a of men) this.setGoal(a, { type: 'army', army: r.id, tx: t.camp.x, ty: t.camp.y }, vs ? `Called up to meet the ${target.name} in the field` : `Called to arms against the ${target.name}`);
+      this.emit('army', vs ? `The ${t.name} raised ${r.name}, ${n} strong, to meet the invaders from the ${target.name}.` : `The ${t.name} raised ${r.name}, ${n} strong, to march on the ${target.name}.`, { tribe: t.id, army: r.id });
+      return r;
+    }
+    placeName(x, y) {
+      const st = STYLES[this.cultureAt(Math.round(x), Math.round(y))], i = this.idx(Math.round(x), Math.round(y)), tt = this.terrain[i];
+      const land = tt === T.FOREST ? 'Woods' : tt === T.HILLS ? 'Hills' : tt === T.SAND ? 'Sands' : tt === T.FARM ? 'Fields' : 'Plain';
+      return `${cap1(this.pick(st.syl) + this.pick(st.syl))} ${land}`;
+    }
+    armyDest(r, t, e) {
+      if (r.state === 'home') return t.camp;
+      if (r.vs) { const o = this.armies.find(q => q.id === r.vs && !q.dead); return o ? { x: Math.round(o.x), y: Math.round(o.y) } : null; }
+      return e ? e.camp : null;
+    }
+    moveArmy(r, dest, speed) {
+      const cx = Math.round(r.x), cy = Math.round(r.y);
+      if (!r.path || r.pi >= r.path.length || r.pk !== dest.x * 1000 + dest.y || this.tick % 40 === r.id % 40) {
+        r.path = this.landPath(cx, cy, dest.x, dest.y, false) || this.landPath(cx, cy, dest.x, dest.y, true); r.pi = 0; r.pk = dest.x * 1000 + dest.y;
+        if (!r.path) return false;
+      }
+      let left = speed;
+      while (left > 0 && r.pi < r.path.length) {
+        const i = r.path[r.pi], nx = i % W, ny = (i / W) | 0, dx = nx - r.x, dy = ny - r.y, d = Math.hypot(dx, dy);
+        if (d <= left) { r.x = nx; r.y = ny; r.pi++; left -= d; }
+        else { r.x += dx / d * left; r.y += dy / d * left; left = 0; }
+        if (d > .01) { r.hx = dx / d; r.hy = dy / d; }
+      }
+      return true;
+    }
+    stepArmies() {
+      for (const r of this.armies) {
+        if (r.dead) continue;
+        const t = this.tribes.get(r.tribe);
+        r.soldiers = r.soldiers.filter(id => { const a = this.byId.get(id); return a && a.alive && a.goal && a.goal.army === r.id; });
+        if (!t || r.soldiers.length < 2) { this.disband(r, t, r.state !== 'home'); continue; }
+        if (!r.soldiers.includes(r.general)) { r.general = r.soldiers[0]; const g = this.byId.get(r.general); if (g) r.name = `${g.name}'s ${ARMY_WORDS[t.era]}`; }
+        const e = this.tribes.get(r.target);
+        if (r.state !== 'home' && (!e || !t.wars.has(e.id))) { r.state = 'home'; r.path = null; }
+        // the baggage train feeds the soldiers
+        let starving = 0;
+        for (const id of r.soldiers) {
+          const a = this.byId.get(id); if (a.hunger < 45) continue;
+          if (r.food >= 1) { r.food--; a.hunger = Math.max(0, a.hunger - 35); } else if (r.loot.food >= 1) { r.loot.food--; a.hunger = Math.max(0, a.hunger - 35); } else if (a.hunger > 80) starving++;
+        }
+        const foeArmy = r.foe ? this.armies.find(q => q.id === r.foe && !q.dead) : null;
+        if (r.state !== 'home' && starving > r.soldiers.length / 3) { r.state = 'home'; r.path = null; this.emit('army', `${r.name} of the ${t.name} ran out of food and turned for home.`, { tribe: t.id, army: r.id }); }
+        if (r.state !== 'home' && r.state !== 'muster' && r.soldiers.length < r.size * .4) {
+          r.state = 'home'; r.path = null;
+          if (foeArmy) { const ft = this.tribes.get(foeArmy.tribe); this.emit('battle', `The ${ft ? ft.name : 'enemy'} won the Battle of ${r.battle || foeArmy.battle}. ${r.name} of the ${t.name} broke and fled with ${r.soldiers.length} of ${r.size} left.`, { tribe: ft ? ft.id : t.id, other: t.id, army: r.id }); foeArmy.foe = 0; if (foeArmy.state === 'battle') foeArmy.state = 'march'; }
+          else this.emit('army', `${r.name} of the ${t.name} lost heart and retreated with ${r.soldiers.length} of ${r.size} left.`, { tribe: t.id, army: r.id });
+          r.foe = 0;
+        }
+        // find an enemy army in the field
+        if (r.state === 'march' || r.state === 'siege' || r.state === 'battle') {
+          let foe = null, fd = 5;
+          for (const o of this.armies) { if (o.dead || o === r || o.state === 'home' || o.state === 'muster' || !t.wars.has(o.tribe)) continue; const d = Math.hypot(o.x - r.x, o.y - r.y); if (d < fd) { fd = d; foe = o; } }
+          if (foe && r.state !== 'battle') {
+            r.state = 'battle'; r.foe = foe.id;
+            if (foe.state !== 'battle') { foe.state = 'battle'; foe.foe = r.id; }
+            if (!foe.battle || foe.foe !== r.id) { r.battle = this.placeName((r.x + foe.x) / 2, (r.y + foe.y) / 2); foe.battle = r.battle; }
+            else r.battle = foe.battle;
+            const ft = this.tribes.get(foe.tribe);
+            if (this.rateOk(t, 'bt' + foe.tribe, 100)) this.emit('battle', `Battle of ${r.battle}: ${r.name} of the ${t.name} (${r.soldiers.length}) clashed with ${foe.name} of the ${ft ? ft.name : 'enemy'} (${foe.soldiers.length}).`, { tribe: t.id, other: foe.tribe, army: r.id, x: Math.round(r.x), y: Math.round(r.y) });
+          } else if (!foe && r.state === 'battle') {
+            r.state = 'march'; r.foe = 0;
+            if (r.battle && this.rateOk(t, 'bw' + r.id, 200)) this.emit('battle', `${r.name} of the ${t.name} held the field at ${r.battle}.`, { tribe: t.id, army: r.id });
+            if (r.vs) { r.state = 'home'; r.path = null; }
+          }
+        }
+        // the defenders answer an invasion with their own army
+        if (r.state === 'march' && !r.vs && !r.answered && e && this.tick % 10 === 0 && Math.hypot(e.camp.x - r.x, e.camp.y - r.y) < 26) {
+          r.answered = true;
+          if (!this.armies.some(q => !q.dead && q.tribe === e.id)) this.raiseArmy(e, r);
+        }
+        if (r.state === 'muster' && this.tick - r.since > 24) { r.state = 'march'; r.since = this.tick; }
+        let dest = this.armyDest(r, t, e);
+        if ((r.state === 'march' || r.state === 'home') && !dest) { if (r.state === 'march' && r.vs) { r.state = 'home'; r.path = null; dest = t.camp; } else { this.disband(r, t, false); continue; } }
+        if (r.state === 'march' || r.state === 'home') {
+          const d = Math.hypot(dest.x - r.x, dest.y - r.y);
+          if (r.state === 'home' && d < 2) { this.disband(r, t, false); continue; }
+          if (r.state === 'march' && !r.vs && d < 3.2) {
+            r.state = 'siege'; r.since = this.tick; r.siege = 0;
+            this.emit('army', `${r.name} of the ${t.name} laid siege to the ${e.name}${e.walls ? ', whose walls still stand' : ''}.`, { tribe: t.id, other: e.id, army: r.id });
+          } else if (!this.moveArmy(r, dest, .32 * Math.min(1.6, t.fx.speed))) { r.state = 'home'; r.path = null; }
+        }
+        if (r.state === 'siege') this.stepSiege(r, t, e);
+        if (r.dead) continue;
+        this.orderSoldiers(r, t, e, foeArmy);
+      }
+      if (this.tick % 60 === 0) this.armies = this.armies.filter(r => !r.dead);
+    }
+    orderSoldiers(r, t, e, foeArmy) {
+      const n = r.soldiers.length, w = Math.max(2, Math.ceil(Math.sqrt(n * 1.6))), px = -r.hy, py = r.hx;
+      const foes = r.state === 'battle' && foeArmy ? foeArmy.soldiers.map(id => this.byId.get(id)).filter(Boolean) : r.state === 'siege' && e ? this.members(e).filter(b => cheb(b, e.camp) <= 5) : null;
+      for (let k = 0; k < n; k++) {
+        const a = this.byId.get(r.soldiers[k]); if (!a || !a.alive || !a.goal || a.goal.army !== r.id) continue;
+        const g = a.goal;
+        if (foes && foes.length) {
+          let b = null, bd = 9; for (const o of foes) { const d = cheb(a, o); if (d < bd) { bd = d; b = o; } }
+          if (b) { if (bd <= 1) { if ((this.tick + a.id) % 3 === 0) this.attack(a, b, t); g.tx = a.x; g.ty = a.y; } else { g.tx = b.x; g.ty = b.y; } continue; }
+        }
+        let sx, sy;
+        if (r.state === 'siege' && e) { const ang = k / n * Math.PI * 2 + r.id, rad = 2.6 + (k % 2); sx = e.camp.x + Math.cos(ang) * rad; sy = e.camp.y + Math.sin(ang) * rad; }
+        else { const row = Math.floor(k / w), col = k % w - (w - 1) / 2; sx = r.x - r.hx * row * 1.1 + px * col * 1.1; sy = r.y - r.hy * row * 1.1 + py * col * 1.1; }
+        let tx = Math.round(sx), ty = Math.round(sy);
+        if (!this.passable(tx, ty)) { tx = Math.round(r.x); ty = Math.round(r.y); }
+        g.tx = tx; g.ty = ty;
+      }
+    }
+    stepSiege(r, t, e) {
+      if (!e) return;
+      const n = r.soldiers.length;
+      if (e.walls) {
+        r.siege += n * t.fx.combat * .006 * t.fx.siege;
+        if (this.r() < .02 * e.fx.wallStr) { const a = this.byId.get(this.pick(r.soldiers)); if (a) { a.health -= 25; if (a.health <= 0) this.kill(a, 'battle', { tribe: e.id }); } }
+        if (r.siege > 30 * e.fx.wallStr) {
+          e.walls = false; r.siege = 0;
+          this.effects.push({ type: 'blast', x: e.camp.x, y: e.camp.y, r: 1.2, ttl: 40 });
+          this.emit('battle', `${r.name} of the ${t.name} ${t.era >= 3 ? 'blasted' : 'broke'} through the walls of the ${e.name}.`, { tribe: t.id, other: e.id, army: r.id });
+        }
+        return;
+      }
+      const defenders = this.members(e).filter(b => cheb(b, e.camp) <= 5).length;
+      if (defenders > 2 && this.tick - r.since < 420) return;
+      if (defenders > 2) { r.state = 'home'; r.path = null; this.emit('army', `${r.name} of the ${t.name} gave up the siege of the ${e.name}.`, { tribe: t.id, army: r.id }); return; }
+      // the town falls: loot, burn, and maybe conquest
+      let took = 0;
+      for (const k of ['food', 'wood', 'stone']) { const v = Math.min(e.stock[k] * .5, n * 8); e.stock[k] -= v; r.loot[k] += v; took += v; }
+      e.huts = Math.max(1, Math.floor(e.huts * .7));
+      this.effects.push({ type: 'blast', x: e.camp.x, y: e.camp.y, r: 1.5, ttl: 50 });
+      const w = e.wars.get(t.id);
+      if (e.members.size <= 4) {
+        for (const a of this.members(e)) { e.members.delete(a.id); a.tribe = t.id; a.style = t.style; t.members.add(a.id); a.goal = null; a.thought = `Now lives under the rule of the ${t.name}`; }
+        this.emit('fall', `${r.name} of the ${t.name} conquered the ${e.name}. The last of their people now live under ${t.name} rule.`, { tribe: t.id, other: e.id, army: r.id });
+        this.removeTribe(e);
+      } else {
+        this.emit('battle', `${r.name} of the ${t.name} sacked the ${e.name}, carrying off ${Math.round(took)} goods and burning part of the town.`, { tribe: t.id, other: e.id, army: r.id });
+        if (w) this.surrender(e, t, w);
+      }
+      r.state = 'home'; r.path = null;
+    }
+    disband(r, t, destroyed) {
+      r.dead = true;
+      for (const id of r.soldiers) { const a = this.byId.get(id); if (a && a.goal && a.goal.army === r.id) { a.goal = null; a.thought = t ? `Back from war with ${r.name}` : 'The war is over'; } }
+      if (!t) return;
+      let loot = 0; for (const k of ['food', 'wood', 'stone']) { t.stock[k] += r.loot[k]; loot += r.loot[k]; } t.stock.food += r.food;
+      if (destroyed) this.emit('battle', `${r.name} of the ${t.name} was wiped out.`, { tribe: t.id, army: r.id });
+      else if (loot > 10) this.emit('army', `${r.name} came home to the ${t.name} with ${Math.round(loot)} goods of plunder.`, { tribe: t.id, army: r.id });
     }
     foundFaith(t) {
       const st = STYLES[t.style], d = cap1(this.pick(st.syl) + this.pick(st.syl));
@@ -1125,7 +1390,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const agents = this.agents.filter(a => a.alive).map(a => { const o = {}; for (const k in a) if (k[0] !== '_') o[k] = a[k]; return o; });
       return JSON.stringify({ v: 1, seed: this.seed, startEra: this.startEra, tick: this.tick, nextId: this.nextId, tribeCount: this.tribeCount,
         terrain: arr(this.terrain), elev: arr(this.elev), food: arr(this.food), wood: arr(this.wood), stone: arr(this.stone), jit: arr(this.jit), waterRegion: arr(this.waterRegion),
-        regionSize: this.regionSize, cultureSeeds: this.cultureSeeds, usedNames: [...this.usedNames], agents, tribes, wars, ships: this.ships.filter(x => x.alive),
+        regionSize: this.regionSize, cultureSeeds: this.cultureSeeds, usedNames: [...this.usedNames], agents, tribes, wars, ships: this.ships.filter(x => x.alive), armies: this.armies.filter(r => !r.dead),
         fires: [...this.fires], popHistory: this.popHistory, religions: [...this.religions.values()], history: this.history.slice(-300) });
     }
     static load(json) {
@@ -1133,7 +1398,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       Object.assign(s, { seed: d.seed, startEra: d.startEra, tick: d.tick, nextId: d.nextId, tribeCount: d.tribeCount, rng: mulberry32((d.seed ^ d.tick) >>> 0),
         terrain: Uint8Array.from(d.terrain), elev: Float32Array.from(d.elev), food: Float32Array.from(d.food), wood: Float32Array.from(d.wood), stone: Float32Array.from(d.stone),
         jit: Float32Array.from(d.jit), waterRegion: Int32Array.from(d.waterRegion), regionSize: d.regionSize, cultureSeeds: d.cultureSeeds, usedNames: new Set(d.usedNames),
-        listeners: [], effects: [], dirty: new Set(), deadCount: 0, ownerVersion: 0, ships: d.ships, fires: new Map(d.fires), popHistory: d.popHistory,
+        listeners: [], effects: [], dirty: new Set(), deadCount: 0, ownerVersion: 0, ships: d.ships, armies: d.armies || [], fires: new Map(d.fires), popHistory: d.popHistory,
         religions: new Map(d.religions.map(r => [r.id, r])), history: d.history, agents: d.agents, byId: new Map(), tribes: new Map() });
       for (const a of s.agents) s.byId.set(a.id, a);
       for (const t of d.tribes) {
@@ -1242,7 +1507,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       return { pop, tribes: this.tribes.size, era, loners: this.agents.filter(a => !a.tribe).length };
     }
   }
-  Sim.STRATS = STRATS; Sim.STYLES = STYLES; Sim.SHIP_NAMES = SHIP_NAMES; Sim.W = W; Sim.H = H; Sim.YEAR = YEAR; Sim.T = T; Sim.ERAS = ERAS; Sim.TECHS = TECHS; Sim.TECH = TECH; Sim.techCost = techCost;
+  Sim.STRATS = STRATS; Sim.PERSONAS = PERSONAS; Sim.STYLES = STYLES; Sim.SHIP_NAMES = SHIP_NAMES; Sim.W = W; Sim.H = H; Sim.YEAR = YEAR; Sim.T = T; Sim.ERAS = ERAS; Sim.TECHS = TECHS; Sim.TECH = TECH; Sim.techCost = techCost;
   root.Sim = Sim;
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
@@ -1389,6 +1654,94 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   function endSet(set) { for (const k in set.n) { const m = set.meshes[k]; m.count = set.n[k]; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; } }
 
   // ---------- architecture by culture and era
+  function wallSeg(S, B, style, e, tower) {
+    const h = .3 + Math.min(e, 4) * .06;
+    if (e >= 5) {
+      if (tower) { part(S, 'box', B, 0, 0, 0, .3, .62, .3, '#86888a'); part(S, 'box', B, 0, .62, 0, .36, .06, .36, '#5a5c5e'); }
+      else { part(S, 'box', B, 0, 0, 0, .56, .26, .2, '#9a9a96'); part(S, 'cyl', B, 0, .26, 0, .04, .56, .04, '#55585a', 0, 0, Math.PI / 2); }
+      return;
+    }
+    switch (style) {
+      case 'steppe':
+        if (tower) { part(S, 'cyl', B, 0, 0, 0, .32, h * 1.5, .32, '#7a5a3a'); part(S, 'cone', B, 0, h * 1.5, 0, .42, .22, .42, '#cdb88f'); break; }
+        part(S, 'box', B, 0, 0, 0, .58, h * .5, .3, '#8a6e4e');
+        for (const x of [-.19, 0, .19]) { part(S, 'cyl', B, x, h * .5, 0, .07, h * .45, .07, '#6b4a2f'); part(S, 'cone', B, x, h * .95, 0, .07, .08, .07, '#6b4a2f'); }
+        break;
+      case 'nordic': {
+        if (tower) { part(S, 'box', B, 0, 0, 0, .32, h * 1.8, .32, '#5d4630'); part(S, 'prism', B, 0, h * 1.8, 0, .38, .24, .38, '#3a3631'); break; }
+        const y0 = e >= 2 ? h * .4 : 0;
+        if (e >= 2) part(S, 'box', B, 0, 0, 0, .58, y0, .22, '#8f8a80');
+        for (const x of [-.21, -.07, .07, .21]) { part(S, 'cyl', B, x, y0, 0, .13, h - y0 * .5, .13, '#5d4630'); part(S, 'cone', B, x, y0 + h - y0 * .5, 0, .13, .1, .13, '#5d4630'); }
+        break;
+      }
+      case 'desert':
+        if (tower) { part(S, 'cyl', B, 0, 0, 0, .34, h * 1.6, .34, '#c9a268'); part(S, 'dome', B, 0, h * 1.6, 0, .3, .26, .3, '#e2cfa4'); break; }
+        part(S, 'box', B, 0, 0, 0, .58, h, .24, '#cfa970');
+        part(S, 'box', B, -.16, h, 0, .12, .08, .24, '#cfa970'); part(S, 'box', B, .16, h, 0, .12, .08, .24, '#cfa970');
+        break;
+      case 'eastern':
+        if (tower) { part(S, 'box', B, 0, 0, 0, .34, h * 1.6, .34, '#8e8b84'); part(S, 'pyr', B, 0, h * 1.6, 0, .52, .26, .52, '#3d5552'); break; }
+        part(S, 'box', B, 0, 0, 0, .58, h, .24, '#8e8b84'); part(S, 'prism', B, 0, h, 0, .62, .1, .3, '#3d5552');
+        break;
+      case 'med':
+        if (tower) { part(S, 'box', B, 0, 0, 0, .34, h * 1.7, .34, '#d9d0bc'); part(S, 'pyr', B, 0, h * 1.7, 0, .42, .26, .42, '#a8442e'); break; }
+        part(S, 'box', B, 0, 0, 0, .58, h, .24, '#e3dccb');
+        part(S, 'box', B, -.17, h, 0, .1, .07, .24, '#e3dccb'); part(S, 'box', B, 0, h, 0, .1, .07, .24, '#e3dccb'); part(S, 'box', B, .17, h, 0, .1, .07, .24, '#e3dccb');
+        break;
+      default: // meso: stepped stone with a painted band
+        if (tower) { part(S, 'box', B, 0, 0, 0, .42, .2, .42, '#b9a888'); part(S, 'box', B, 0, .2, 0, .32, .2, .32, '#b9a888'); part(S, 'box', B, 0, .4, 0, .22, .2, .22, '#b9a888'); part(S, 'box', B, 0, .6, 0, .14, .12, .14, '#a8442e'); break; }
+        part(S, 'box', B, 0, 0, 0, .58, h * .6, .3, '#b9a888'); part(S, 'box', B, 0, h * .6, 0, .58, h * .4, .2, '#c7b694'); part(S, 'box', B, 0, h * .8, 0, .59, .04, .21, '#2f7f73');
+    }
+  }
+  function specialsFor(t) {
+    const l = [];
+    if (t.wars.size || t.ai.strategy === 'military' || t.ai.strategy === 'fortify') l.push('barracks');
+    if (t.farms > 2) l.push('granary');
+    if (t.trades > 3 && t.era >= 1) l.push('market');
+    if (t.era >= 1) l.push('forge');
+    if (t.era >= 2 && t.techs.has('writing')) l.push('library');
+    if (t.farms > 4 && t.era >= 2 && t.era <= 4) l.push('windmill');
+    if (t.era >= 5) l.push('power');
+    if (t.era >= 6) l.push('turbine');
+    return l;
+  }
+  function special(S, B, kind, style, e, col) {
+    const roof = style === 'eastern' ? '#3d5552' : style === 'med' || style === 'meso' ? '#a8442e' : style === 'desert' ? '#cdb38c' : '#5a3a2a';
+    switch (kind) {
+      case 'barracks':
+        part(S, 'box', B, 0, 0, 0, .95, .3, .42, e >= 5 ? '#6f7560' : '#7a6a55'); part(S, 'prism', B, 0, .3, 0, 1, .18, .46, e >= 5 ? '#4f5545' : roof);
+        part(S, 'cyl', B, .4, 0, .3, .03, .85, .03, '#4a3a2a'); part(S, 'box', B, .4, .66, .44, .02, .16, .26, col);
+        break;
+      case 'granary':
+        if (e >= 3) { part(S, 'cyl', B, -.12, 0, 0, .3, .9, .3, '#b8b8b0'); part(S, 'dome', B, -.12, .9, 0, .3, .14, .3, '#a0a09a'); part(S, 'cyl', B, .2, 0, 0, .26, .7, .26, '#c4c4bc'); part(S, 'dome', B, .2, .7, 0, .26, .12, .26, '#a0a09a'); }
+        else { part(S, 'cyl', B, 0, 0, 0, .44, .48, .44, '#c9a46a'); part(S, 'cone', B, 0, .48, 0, .52, .3, .52, '#8a6a3a'); }
+        break;
+      case 'market':
+        part(S, 'box', B, 0, 0, 0, .8, .04, .55, '#8a7a62');
+        [['#c0392b', -.26], ['#e6c35c', 0], ['#2e86ab', .26]].forEach(([c, x]) => { part(S, 'box', B, x, .04, 0, .03, .26, .03, '#5a4630'); part(S, 'prism', B, x, .28, 0, .24, .1, .3, c); part(S, 'box', B, x, .04, .08, .14, .08, .1, '#b48a52'); });
+        break;
+      case 'forge':
+        part(S, 'box', B, 0, 0, 0, .48, .34, .42, '#6e5a48'); part(S, 'prism', B, 0, .34, 0, .5, .14, .44, roof);
+        part(S, 'box', B, .16, .2, -.12, .1, .4, .1, '#4a4a4a'); part(S, 'box', B, 0, .06, .22, .14, .08, .02, '#ff8a2a');
+        break;
+      case 'library':
+        part(S, 'box', B, 0, 0, 0, .64, .06, .5, '#cfc8b6'); part(S, 'box', B, 0, .06, -.04, .6, .34, .38, '#e8e2d2');
+        for (const x of [-.24, -.08, .08, .24]) part(S, 'cyl', B, x, .06, .2, .06, .34, .06, '#f2ede0');
+        part(S, 'prism', B, 0, .4, 0, .66, .14, .52, style === 'eastern' ? '#3d5552' : '#d8d0bc');
+        break;
+      case 'windmill':
+        part(S, 'cyl', B, 0, 0, 0, .3, .62, .3, '#d8cbb0'); part(S, 'cone', B, 0, .62, 0, .34, .2, .34, '#6b4a30');
+        part(S, 'box', B, 0, .58, .18, .04, .74, .02, '#e8e0cc', 0, 0, Math.PI / 4); part(S, 'box', B, 0, .58, .18, .04, .74, .02, '#e8e0cc', 0, 0, -Math.PI / 4);
+        break;
+      case 'power':
+        part(S, 'box', B, .12, 0, 0, .5, .32, .4, '#8d8f93'); part(S, 'cyl', B, -.26, 0, .05, .3, .7, .3, '#c8c8c4'); part(S, 'cyl', B, .26, .32, -.1, .06, .5, .06, '#6a6c70');
+        break;
+      case 'turbine':
+        part(S, 'cyl', B, 0, 0, 0, .05, 1.6, .05, '#eeeeee'); part(S, 'box', B, 0, 1.56, .02, .08, .08, .14, '#dddddd');
+        for (const a of [0, 2.09, 4.19]) part(S, 'box', B, 0, 1.6, .08, .03, .6, .02, '#f4f4f4', 0, 0, a);
+        break;
+    }
+  }
   function house(S, B, style, e, j, k) {
     const st = e === 0 ? 0 : e <= 2 ? 1 : e <= 4 ? 2 : 3;
     if (st === 3 && j > .3) {
@@ -1547,7 +1900,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     world.torsos = instanced(torsoGeo, pm(), MAXA); world.heads = instanced(headGeo, pm(), MAXA); world.hats = instanced(hatGeo, pm(), MAXA);
     for (const m of [world.legs, world.arms, world.torsos, world.heads, world.hats]) { m.setColorAt(0, tmpC.set('#fff')); group.add(m); }
     // buildings, wonders, ships and war machines are assembled from a few primitive parts
-    world.bset = partSet(9000, group);
+    world.bset = partSet(16000, group);
     world.dset = partSet(6000, group);
     const wallGeo = new THREE.BoxGeometry(.6, .36, .2); wallGeo.translate(0, .18, 0);
     const poleGeo = new THREE.CylinderGeometry(.025, .025, 1.7, 5); poleGeo.translate(0, .85, 0);
@@ -1741,13 +2094,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   function updatePeople(alpha) {
     const L = world.legs, A = world.arms, To = world.torsos, He = world.heads, Ha = world.hats, D = world.dset;
     let n = 0, nl = 0, na = 0, ns = 0; world.slots = world.slots || [];
+    const gens = new Map(); for (const r of sim.armies) if (!r.dead) gens.set(r.general, r);
     for (const a of sim.agents) {
       if (!a.alive || ns >= 2500) continue;
       const fx = a.px + (a.x - a.px) * alpha + .5 + ((a.id * 37) % 7 - 3) * .05, fy = a.py + (a.y - a.py) * alpha + .5 + ((a.id * 53) % 7 - 3) * .05;
       const moving = a.x !== a.px || a.y !== a.py, child = a.age < 12 * YEAR, s = child ? .62 : 1;
       const t = a.tribe ? sim.tribes.get(a.tribe) : null, e = t ? t.era : 0, sid = STY(a.style);
-      const g = a.goal && a.goal.type, soldier = !!t && (g === 'hunt' || g === 'raid') && !child;
-      const mounted = soldier && g === 'raid' && e >= 2 && e <= 4, tank = soldier && g === 'raid' && e >= 5;
+      const g = a.goal && a.goal.type, soldier = !!t && (g === 'hunt' || g === 'raid' || g === 'army') && !child, isGen = g === 'army' && gens.has(a.id);
+      const mounted = soldier && (g === 'raid' || (g === 'army' && (a.id % 3 === 0 || isGen))) && e >= 2 && e <= 4, tank = soldier && !isGen && (g === 'raid' || (g === 'army' && a.id % 4 === 0)) && e >= 5;
       const rot = moving ? Math.atan2(a.x - a.px, a.y - a.py) : (a._rot || 0); a._rot = rot;
       const gy = heightAt(fx, fy), col = t ? t.color : '#b8ab92';
       world.slots[ns++] = a; a._wx = wx(fx); a._wy = gy; a._wz = wz(fy);
@@ -1775,6 +2129,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       L.setMatrixAt(nl, local(B, .032, .19, 0, 1, 1, 1, mounted ? -1.2 : -sw)); L.setColorAt(nl++, pantsC);
       A.setMatrixAt(na, local(B, -.085, .35, 0, 1, 1, 1, soldier && e >= 1 && e <= 2 ? -.5 : -sw * .8)); A.setColorAt(na++, clothC);
       A.setMatrixAt(na, local(B, .085, .35, 0, 1, 1, 1, soldier ? -.9 : sw * .8)); A.setColorAt(na++, clothC);
+      if (isGen) { part(D, 'cyl', B, -.13, .1, -.02, .03, 1.15, .03, '#4a3a2a'); part(D, 'box', B, -.13, .96, -.19, .02, .24, .34, col, 0, Math.sin(clock * 3 + a.id) * .2, 0); }
       if (soldier) {
         if (e <= 2) { part(D, 'cyl', B, .11, .08, .07, .022, .95, .022, '#6b5236'); part(D, 'cone', B, .11, 1.03, .07, .045, .12, .045, '#a0a0a0'); if (e >= 1) part(D, 'cyl', B, -.105, .22, .03, .2, .025, .2, col, 0, 0, Math.PI / 2); }
         else part(D, 'box', B, .09, .3, .02, .024, .024, e >= 5 ? .42 : .5, e >= 5 ? '#2b2b2b' : '#4a3626', -.25, 0, 0);
@@ -1804,7 +2159,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   }
   function campY(t) { return heightAt(t.camp.x + .5, t.camp.y + .5); }
   function updateBuildings() {
-    let key = ''; for (const t of sim.tribes.values()) key += t.id + ':' + t.huts + ':' + t.era + ':' + (t.walls ? 1 : 0) + ':' + t.wonders.length + ':' + t.faith + ';';
+    let key = ''; for (const t of sim.tribes.values()) key += t.id + ':' + t.huts + ':' + t.era + ':' + (t.walls ? 1 : 0) + ':' + t.wonders.length + ':' + t.faith + ':' + specialsFor(t).join(',') + ';';
     if (key === world.buildKey) return; world.buildKey = key;
     const S = world.bset; beginSet(S);
     const M = { walls: 0, poles: 0, flags: 0 };
@@ -1816,13 +2171,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         wonder(S, base(wx(px), heightAt(px, py) - .05, wz(py), t.id * .7, .85), style, w);
       }
       let extent = 1;
-      const nb = Math.max(t.huts, Math.ceil(sim.capacity(t) / 3)), start = wn ? 1.9 : 1.1;
+      const nb = Math.max(t.huts, Math.ceil(sim.capacity(t) / 3), 4), start = wn ? 1.9 : 1.1, sp = specialsFor(t);
       for (let k = 0; k < nb; k++) {
         const ang = k * 2.399 + t.id, rad = start + Math.sqrt(k) * .62;
         const bx = cx + Math.cos(ang) * rad, by = cy + Math.sin(ang) * rad, tx = Math.floor(bx), ty = Math.floor(by);
         if (!sim.passable(tx, ty) || sim.terrain[ty * W + tx] === T.FARM) continue;
         extent = Math.max(extent, rad);
-        const jj = ((k * 7919 + t.id * 31) % 100) / 100;
+        const jj = ((k * 7919 + t.id * 31) % 100) / 100, si = (k - 2) / 3;
+        if (k >= 2 && Number.isInteger(si) && si < sp.length) { special(S, base(wx(bx), heightAt(bx, by) - .02, wz(by), Math.atan2(cx - bx, cy - by)), sp[si], style, t.era, t.color); continue; }
         house(S, base(wx(bx), heightAt(bx, by) - .02, wz(by), Math.atan2(cx - bx, cy - by)), style, t.era, jj, k);
       }
       const rel = t.faith && sim.religions.get(t.faith);
@@ -1843,7 +2199,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         for (let s2 = 0; s2 < segs; s2++) {
           const ang = s2 / segs * Math.PI * 2, bx = cx + Math.cos(ang) * R, by = cy + Math.sin(ang) * R;
           if (!sim.passable(Math.floor(bx), Math.floor(by)) || heightAt(bx, by) < .08) continue;
-          setInst(world.walls, M.walls++, wx(bx), heightAt(bx, by) - .03, wz(by), 1, 1 + Math.min(t.era, 4) * .15, 1, -ang + Math.PI / 2);
+          wallSeg(S, base(wx(bx), heightAt(bx, by) - .03, wz(by), Math.atan2(cx - bx, cy - by)), style, t.era, s2 % 6 === 0);
         }
       }
     }
@@ -1900,8 +2256,29 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       if (el._h !== html) { el.innerHTML = html; el._h = html; }
       el.classList.toggle('war', t.wars.size > 0);
     }
+    for (const r of sim.armies) {
+      if (r.dead) continue; const g = sim.byId.get(r.general), t = sim.tribes.get(r.tribe); if (!g || !t || g._wx === undefined) continue;
+      const key = 'a' + r.id; seen.add(key);
+      let el = world.labels.get(key);
+      if (!el) { el = document.createElement('div'); el.className = 'tlabel alabel'; el.addEventListener('click', () => { const a = sim.armies.find(q => q.id === r.id); if (a) { select({ kind: 'agent', id: a.general }, false); follow = a.general; renderInspector(); } }); $('#labels').appendChild(el); world.labels.set(key, el); }
+      tmpP.set(g._wx, g._wy + 1.5, g._wz).project(camera);
+      if (tmpP.z > 1) { el.hidden = true; continue; }
+      el.hidden = false; el.style.left = ((tmpP.x + 1) / 2 * box.width) + 'px'; el.style.top = ((1 - tmpP.y) / 2 * box.height) + 'px'; el.style.setProperty('--c', t.color);
+      const html = `${esc(r.name)}<small>${r.soldiers.length}</small>`;
+      if (el._h !== html) { el.innerHTML = html; el._h = html; }
+    }
     for (const [id, el] of world.labels) if (!seen.has(id)) { el.remove(); world.labels.delete(id); }
   }
+  function armyState(r) {
+    const e = sim.tribes.get(r.target), f = r.foe && sim.armies.find(q => q.id === r.foe), ft = f && sim.tribes.get(f.tribe);
+    return r.state === 'muster' ? 'Mustering' : r.state === 'battle' ? `Fighting ${ft ? 'the ' + ft.name : 'the enemy'}${r.battle ? ' at ' + r.battle : ''}` : r.state === 'siege' ? `Besieging the ${e ? e.name : 'enemy'}` : r.state === 'home' ? 'Marching home' : r.vs ? `Marching to meet the ${e ? e.name : 'enemy'}` : `Marching on the ${e ? e.name : 'enemy'}`;
+  }
+  function renderArmies() {
+    const rs = sim.armies.filter(r => !r.dead && sim.tribes.has(r.tribe));
+    $('#armyCount').textContent = rs.length ? String(rs.length) : '';
+    setHTML($('#armies'), rs.length ? rs.map(r => { const t = sim.tribes.get(r.tribe); return `<button type="button" class="trow" data-gen="${r.general}" style="--c:${t.color}"><i></i><span class="nm">${esc(r.name)}<em>${esc(t.name)} · ${esc(armyState(r))}</em></span><span class="st">${r.soldiers.length}<small>/${r.size}</small></span></button>`; }).join('') : '<div class="empty">No armies in the field. Nations raise them when they go to war.</div>');
+  }
+  $('#armies').addEventListener('click', e => { const b = e.target.closest('[data-gen]'); if (!b) return; const id = +b.dataset.gen; select({ kind: 'agent', id }, false); follow = id; renderInspector(); });
 
   // ---------- picking and camera focus
   let down = null, focus = null, follow = 0, tool = 'inspect';
@@ -1967,7 +2344,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         const t = a.tribe ? sim.tribes.get(a.tribe) : null, age = Math.floor(a.age / YEAR);
         const chief = t && t.leader === a.id;
         const carry = Object.entries(a.carry).filter(([, v]) => v >= .5).map(([k, v]) => `${Math.round(v)} ${k}`).join(', ') || 'nothing';
-        const role = a.goal && (a.goal.type === 'hunt' || a.goal.type === 'raid') ? ' · <span class="badge war">soldier</span>' : '';
+        const army = a.goal && a.goal.type === 'army' && sim.armies.find(r => r.id === a.goal.army && !r.dead);
+        const role = army ? ` · <span class="badge war">${army.general === a.id ? 'general' : 'soldier'}</span> in ${esc(army.name)}` : a.goal && (a.goal.type === 'hunt' || a.goal.type === 'raid') ? ' · <span class="badge war">soldier</span>' : '';
         html += `<div><div class="who">${esc(a.name)}</div><div class="sub">${chief ? 'Chief of the ' : t ? 'Of the ' : ''}${t ? `<span style="color:${t.color}">${esc(t.name)}</span>` : 'A wanderer with no tribe'} · ${Sim.STYLES[a.style || 0].name} · ${age} years old${role}</div></div>
         <div class="row"><button class="btn" type="button" data-follow="${a.id}" aria-pressed="${follow === a.id}">${follow === a.id ? 'Stop following' : 'Follow with camera'}</button></div>
         <div class="thought">${esc(a.thought)}</div>
@@ -1986,12 +2364,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         const res = t.research ? `${TECH[t.research].name} <span class="sub">${pct(t.progress / Sim.techCost(t.research) * 100)}%</span>` : 'Nothing left to discover';
         const known = TECHS.filter(x => t.techs.has(x.id));
         html += `<div><div class="who" style="color:${t.color}">The ${esc(t.name)}</div><div class="sub">${ERAS[t.era].name} · founded in year ${Math.floor(t.founded / YEAR) + 1}${l ? ` · Chief ${esc(l.name)}` : ''}</div></div>
-        <div class="plan"><div class="plan-h">Council's plan · <b>${Sim.STRATS[t.ai.strategy].label}</b></div><div class="thought">Because ${esc(t.ai.reason)}.</div></div>
+        <div class="plan"><div class="plan-h">Council's plan · <b>${Sim.STRATS[t.ai.strategy].label}</b>${l && t.ai.persona ? ` · ruled by ${esc(l.name)} ${Sim.PERSONAS[t.ai.persona].label}` : ''}</div><div class="thought">Because ${esc(t.ai.reason)}.</div></div>
         <dl class="kv"><dt>People</dt><dd>${t.members.size} of ${cap} housed</dd><dt>Buildings</dt><dd>${t.huts}${t.walls ? ', walled' : ''}${t.farms ? `, ${t.farms} fields` : ''}</dd>
         <dt>Stores</dt><dd>${Math.round(t.stock.food)} food · ${Math.round(t.stock.wood)} wood · ${Math.round(t.stock.stone)} stone</dd>
         <dt>Culture</dt><dd>${Sim.STYLES[t.style].name}</dd>
         <dt>Faith</dt><dd>${t.faith && sim.religions.get(t.faith) ? `<span style="color:${sim.religions.get(t.faith).color}">${esc(capFirst(sim.religions.get(t.faith).name))}</span>` : 'None yet'}</dd>
         <dt>Wonders</dt><dd>${t.wonders.length ? esc(t.wonders.join(', ')) : 'None yet'}</dd>
+        ${sim.armies.some(r => !r.dead && r.tribe === t.id) ? sim.armies.filter(r => !r.dead && r.tribe === t.id).map(r => `<dt>Army</dt><dd>${esc(r.name)}, ${r.soldiers.length} strong · ${esc(armyState(r))}</dd>`).join('') : ''}
         ${sim.ships.some(x => x.alive && x.tribe === t.id) ? `<dt>Navy</dt><dd>${sim.ships.filter(x => x.alive && x.tribe === t.id).length} ${Sim.SHIP_NAMES[t.era]}s</dd>` : ''}
         ${t.plague ? '<dt>Plague</dt><dd><span class="badge war">outbreak</span></dd>' : ''}
         <dt>Researching</dt><dd>${res}</dd><dt>Trades</dt><dd>${t.trades}</dd><dt>Deaths</dt><dd>${t.deaths}</dd></dl>
@@ -2115,7 +2494,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     if (world.shake) { tmpN.set(Math.random() - .5, Math.random() - .5, Math.random() - .5).multiplyScalar(world.shake * .9); camera.position.add(tmpN); renderer.render(scene, camera); camera.position.sub(tmpN); }
     else renderer.render(scene, camera);
     updateLabels();
-    if (now - lastUI > 300) { lastUI = now; renderClock(); drawPop(); drawNations(); renderFaiths(); renderTribes(); if (selected) renderInspector(); if (logDirty) renderLog(); }
+    if (now - lastUI > 300) { lastUI = now; renderClock(); drawPop(); drawNations(); renderFaiths(); renderArmies(); renderTribes(); if (selected) renderInspector(); if (logDirty) renderLog(); }
     requestAnimationFrame(frame);
   }
   setSpeed(2);
