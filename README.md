@@ -1,26 +1,86 @@
 # Firstlight
 
-A 3D sandbox where you watch AI nations grow their own civilization. People gather, farm and build; tribes form, trade, found faiths, invent technology, raise wonders and go to war on land and sea. Each nation has its own council AI that picks a strategy every year and learns from how it went.
+**Watch AI nations grow their own civilization on a living 3D map.**
+
+You don't play a nation in Firstlight. You watch the world. Hundreds of people gather food, farm, build and have children. They form tribes that grow into nations, and every nation has a council AI and a ruler of its own. Nations trade, found religions, invent technology, raise wonders, sign alliances and go to war on land and sea. You can speed up time, read the history as it happens, and step in with earthquakes, plagues or a good harvest.
+
+![A world in the 1700s, with nations, forests, lakes and clouds](docs/world.png)
 
 ## Play
 
-Open `index.html` in a browser. Three.js loads from a CDN, so there's no build step.
+Firstlight is one HTML file with no build step.
 
-- Choose a starting era from the Stone Age up to the 2000s
-- Speed controls, a Chronicle history log, and population and nations charts
-- World tools: meteor, quake, plague, wildfire, drought, harvest, newcomers
-- Armies that muster, march in formation, fight named battles and besiege towns
-- Each culture builds its own walls, plus granaries, markets, barracks, libraries and more
-- Save your world in the browser and load it later
+- **Locally:** open `index.html` in a modern browser.
+- **Hosted:** put the repo on any static host, such as Vercel, Netlify or GitHub Pages. `vercel.json` is already set up.
+
+Pick a starting era from the **Stone Age** to the **2000s**. You can also enter a world seed to replay the same map.
+
+## What happens in a world
+
+### People
+Every person has a name, an age, hunger, health and four personality traits: aggression, sociability, curiosity and diligence. Each person decides what to do next by weighing their needs against their tribe's plan: forage, hunt, farm, quarry stone, build, trade, think up new ideas, raid, or march to war. Click anyone to see what they're thinking.
+
+### Nations and their AI
+- **Council AI:** every year each nation sizes up its food, housing, neighbors and threats, then picks a plan: *grow, expand, fortify, arm for war, pursue knowledge* or *trade*. It learns from how well its last plan worked.
+- **Rulers with personalities:** a ruler can be a Warlord, a Merchant, the Wise, or a Builder, and that tilts the nation's choices.
+- **Six cultures:** Steppe, Nordic, Desert, Eastern, Mediterranean and Jungle. Each has its own names, homes, walls, wonders, dress and temperament.
+- **Diplomacy:** relations rise and fall with borders, trade and faith. Nations form alliances, declare wars, surrender and pay tribute.
+- **Faiths:** nations found religions that spread along trade routes. A shared faith brings nations closer, and a rival faith can start a holy war.
+
+### War
+![A general and his cavalry marching under a banner](docs/army.png)
+
+- **Armies** muster, march in formation behind a general with a banner, and route around mountains and lakes.
+- **Battles** are named after the land they're fought on, for example *"Battle of Batu Plain"*. An army that loses enough soldiers breaks and flees.
+- **Sieges** wear down walls, then sack the town or conquer it outright. Defenders raise their own army to meet invaders.
+- **Navies** of canoes, galleys, galleons, ironclads and destroyers fight at sea and bombard harbors.
+- Weapons change with the era: spears and bronze, then cavalry, muskets, rifles and finally tanks.
+
+### Towns that grow with the ages
+![A Nordic town with a palisade, barracks, a market and grain silos](docs/town.png)
+
+Towns grow from huts to cities, and each culture builds its own style of home and wall. Over time they add **barracks, granaries, markets, forges, libraries, windmills, temples, power plants and wind turbines**, plus three wonders per nation. Roads link trading partners and get paved as the eras pass.
+
+![Eastern walls with tiled towers beside a pagoda town](docs/wall.png)
+
+### Technology
+There are **53 technologies** across seven eras. They run from Stone Tools, Fire and Agriculture through Bronze, Writing, Castles, Gunpowder, Printing, Steam, Railways, Electricity, Flight and Radio, up to Computers, Robotics, Satellites and Drones. Ideas spread between neighbors and trading partners.
+
+### A living world
+- Seasons change every year: green summers, autumn colors and snowy winters.
+- Wild herds of deer and boar graze the wilderness and disappear as towns claim the land.
+- Sheep, goats, cattle and llamas graze around farming towns, depending on the culture.
+- Birds circle overhead, chimneys smoke (factory smoke is darker), and clouds drift past with their shadows.
+
+### History
+Everything that happens goes into the **Chronicle**: wars, battles, sieges, golden ages, rebellions, new faiths, discoveries, wonders and the fall of nations. Charts track the world's population and each nation's rise and fall.
+
+## Controls
+
+| Action | How |
+| --- | --- |
+| Orbit, pan or zoom | Drag, right-drag, or scroll |
+| Inspect a person or town | Click it on the map |
+| Follow someone | Select them, then **Follow with camera** |
+| Follow an army | Click it in the **Armies** panel or its map label |
+| Speed | Pause, Slow, Normal, Fast or Max |
+| Reshape the world | Meteor, Earthquake, Plague, Wildfire, Drought, Harvest or Newcomers, then click the map |
+| Save or load | **Save world** and **Load saved** store your world in this browser |
+
+## How it's built
+
+- **One file:** `index.html` holds both the simulation and the 3D view. [three.js](https://threejs.org) r147 loads from a CDN.
+- **Simulation:** the code inside `<script id="sim-core">` is pure logic with no DOM, so it runs headless in Node. Everything that happens goes through `sim.emit()`, which feeds the Chronicle.
+- **Rendering:** models are built from instanced primitive parts, so thousands of people, buildings and animals draw in a handful of draw calls.
 
 ## Tests
 
-The simulation lives in `<script id="sim-core">` and has no DOM dependency, so it runs headless in Node:
+The simulation runs headless in Node:
 
-```
-node tests/run.js [era] [seed] [years]   # run a world and print stats
+```bash
+node tests/run.js [era] [seed] [years]   # run a world and print stats and history
 node tests/ai.js                         # council AI strategies
-node tests/nudge.js                      # world tools
-node tests/save.js                       # save/load round trip
+node tests/nudge.js                      # world tools (meteor, plague, ...)
+node tests/save.js                       # save and load round trip
 node tests/army.js                       # armies, battles and sieges in four eras
 ```

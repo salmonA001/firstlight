@@ -200,7 +200,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 <script id="sim-core">
 /* ===== Simulation core: pure logic, no DOM or rendering. ===== */
 (function (root) {
-  const W = 96, H = 64, YEAR = 60;
+  const W = 144, H = 96, YEAR = 60;
   const T = { WATER: 0, SAND: 1, GRASS: 2, FOREST: 3, HILLS: 4, MOUNTAIN: 5, FARM: 6 };
   const FOOD_CAP = [0, 0.4, 2.5, 1.2, 0.3, 0, 6];
   const FOOD_REGEN = [0, 0.001, 0.005, 0.003, 0.001, 0, 0.04];
@@ -388,7 +388,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         if (t === T.HILLS) this.stone[i] = 20 + r() * 15;
       }
       const order = [0, 1, 2, 3, 4, 5]; for (let k = 5; k > 0; k--) { const j = Math.floor(r() * (k + 1)); [order[k], order[j]] = [order[j], order[k]]; }
-      this.cultureSeeds = []; for (let k = 0; k < 8; k++) this.cultureSeeds.push({ x: r() * W, y: r() * H, s: order[k % 6] });
+      this.cultureSeeds = []; for (let k = 0; k < 12; k++) this.cultureSeeds.push({ x: r() * W, y: r() * H, s: order[k % 6] });
       // connected bodies of water, so ships only sail where they can reach
       this.waterRegion = new Int32Array(n).fill(-1); this.regionSize = [];
       for (let i = 0; i < n; i++) {
@@ -429,7 +429,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
     spawnBands() {
       const spots = [];
-      for (let g = 0; g < 9; g++) {
+      for (let g = 0; g < 15; g++) {
         const s = this.findLand((x, y) => { const t = this.terrain[this.idx(x, y)]; return (t === T.GRASS || t === T.FOREST) && spots.every(p => dist(p, { x, y }) > 12); });
         if (!s) continue; spots.push(s);
         const n = this.ri(3, 6);
@@ -438,7 +438,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     }
     spawnCivs(era) {
       const cur = TECHS.filter(t => t.era === era), techs = TECHS.filter(t => t.era < era).concat(cur.slice(0, Math.ceil(cur.length / 2))).map(t => t.id);
-      for (let k = 0; k < 7; k++) {
+      for (let k = 0; k < 12; k++) {
         const s = this.findLand((x, y) => this.terrain[this.idx(x, y)] === T.GRASS && this.farFromCamps(x, y, 17) && this.openAround(x, y, 3));
         if (!s) continue;
         const pop = 7 + era * 2 + this.ri(0, 4), people = [];
@@ -1395,6 +1395,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     }
     static load(json) {
       const d = JSON.parse(json), s = Object.create(Sim.prototype);
+      if (d.terrain.length !== W * H) throw new Error('This save is from a different map size.');
       Object.assign(s, { seed: d.seed, startEra: d.startEra, tick: d.tick, nextId: d.nextId, tribeCount: d.tribeCount, rng: mulberry32((d.seed ^ d.tick) >>> 0),
         terrain: Uint8Array.from(d.terrain), elev: Float32Array.from(d.elev), food: Float32Array.from(d.food), wood: Float32Array.from(d.wood), stone: Float32Array.from(d.stone),
         jit: Float32Array.from(d.jit), waterRegion: Int32Array.from(d.waterRegion), regionSize: d.regionSize, cultureSeeds: d.cultureSeeds, usedNames: new Set(d.usedNames),
@@ -1507,7 +1508,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       return { pop, tribes: this.tribes.size, era, loners: this.agents.filter(a => !a.tribe).length };
     }
   }
-  Sim.STRATS = STRATS; Sim.PERSONAS = PERSONAS; Sim.STYLES = STYLES; Sim.SHIP_NAMES = SHIP_NAMES; Sim.W = W; Sim.H = H; Sim.YEAR = YEAR; Sim.T = T; Sim.ERAS = ERAS; Sim.TECHS = TECHS; Sim.TECH = TECH; Sim.techCost = techCost;
+  Sim.STRATS = STRATS; Sim.PERSONAS = PERSONAS; Sim.STYLES = STYLES; Sim.SHIP_NAMES = SHIP_NAMES; Sim.W = W; Sim.H = H; Sim.YEAR = YEAR; Sim.T = T; Sim.ERAS = ERAS; Sim.TECHS = TECHS; Sim.TECH = TECH; Sim.techCost = techCost; Sim.rng = mulberry32;
   root.Sim = Sim;
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
@@ -1533,12 +1534,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   const scene = new THREE.Scene();
   const HORIZON = new THREE.Color('#c9d8e2');
   scene.background = HORIZON.clone();
-  scene.fog = new THREE.Fog(HORIZON, 110, 330);
+  scene.fog = new THREE.Fog(HORIZON, 160, 470);
   const camera = new THREE.PerspectiveCamera(40, 1, .1, 1200);
-  const HOME_POS = new THREE.Vector3(0, 50, 64), HOME_TGT = new THREE.Vector3(0, 0, 5);
+  const HOME_POS = new THREE.Vector3(0, 74, 94), HOME_TGT = new THREE.Vector3(0, 0, 7);
   camera.position.copy(HOME_POS);
   const controls = new THREE.OrbitControls(camera, canvas);
-  controls.enableDamping = true; controls.dampingFactor = .08; controls.maxPolarAngle = 1.38; controls.minDistance = 5; controls.maxDistance = 150;
+  controls.enableDamping = true; controls.dampingFactor = .08; controls.maxPolarAngle = 1.38; controls.minDistance = 5; controls.maxDistance = 230;
   controls.target.copy(HOME_TGT);
 
   // sky dome: a vertical gradient that meets the fog at the horizon
@@ -1552,8 +1553,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   scene.add(new THREE.HemisphereLight(0xc4dcf2, 0x4a3c28, .55));
   const sun = new THREE.DirectionalLight(0xfff1dc, 1.7);
   sun.position.set(-55, 75, 38); sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, { left: -62, right: 62, top: 48, bottom: -48, near: 1, far: 260 });
+  sun.shadow.mapSize.set(3072, 3072);
+  Object.assign(sun.shadow.camera, { left: -92, right: 92, top: 70, bottom: -70, near: 1, far: 340 });
   sun.shadow.bias = -.0004; sun.shadow.normalBias = .03;
   scene.add(sun, sun.target);
 
@@ -1889,7 +1890,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     world.fieldsKey = -1;
     group.add(world.trunks, world.pines, world.leaves, world.rocks, world.fields);
     // people: jointed figures (legs and arms swing as they walk)
-    const MAXA = 2500;
+    const MAXA = 4000;
     const legGeo = new THREE.BoxGeometry(.045, .19, .05); legGeo.translate(0, -.095, 0);
     const armGeo = new THREE.BoxGeometry(.032, .16, .034); armGeo.translate(0, -.08, 0);
     const torsoGeo = new THREE.BoxGeometry(.12, .17, .075); torsoGeo.translate(0, .085, 0);
@@ -1901,11 +1902,20 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (const m of [world.legs, world.arms, world.torsos, world.heads, world.hats]) { m.setColorAt(0, tmpC.set('#fff')); group.add(m); }
     // buildings, wonders, ships and war machines are assembled from a few primitive parts
     world.bset = partSet(16000, group);
-    world.dset = partSet(6000, group);
+    world.dset = partSet(12000, group);
     const wallGeo = new THREE.BoxGeometry(.6, .36, .2); wallGeo.translate(0, .18, 0);
     const poleGeo = new THREE.CylinderGeometry(.025, .025, 1.7, 5); poleGeo.translate(0, .85, 0);
     const flagGeo = new THREE.PlaneGeometry(.55, .32); flagGeo.translate(.3, 1.5, 0);
     const std = (o) => new THREE.MeshStandardMaterial(Object.assign({ color: '#ffffff', roughness: .85 }, o));
+    // ambient life: clouds overhead, smoke from chimneys, wild herds and flocks of birds
+    const puffGeo = new THREE.IcosahedronGeometry(1, 1);
+    world.clouds = instanced(puffGeo, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, transparent: true, opacity: .62, flatShading: true, depthWrite: false }), 260, false);
+    world.clouds.castShadow = true; world.clouds.receiveShadow = false;
+    world.smoke = instanced(puffGeo, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, transparent: true, opacity: .55 }), 900, false);
+    world.smoke.setColorAt(0, tmpC.set('#fff')); group.add(world.clouds, world.smoke);
+    world.cloudSet = []; { const cr = Sim.rng(sim.seed ^ 77); for (let c = 0; c < 26; c++) { const n2 = 3 + Math.floor(cr() * 4), puffs = []; for (let k = 0; k < n2; k++) puffs.push([(cr() - .5) * 7, cr() * 1.2, (cr() - .5) * 3.5, 1.4 + cr() * 1.8]); world.cloudSet.push({ x: cr() * (W + 80) - 40, y: cr() * (H + 40) - 20, h: 24 + cr() * 6, puffs }); } }
+    world.herds = []; { const hr = Sim.rng(sim.seed ^ 991); for (let k = 0; k < 90 && world.herds.length < 34; k++) { const x = Math.floor(hr() * W), y = Math.floor(hr() * H), i = y * W + x; if (sim.terrain[i] === T.FOREST || sim.terrain[i] === T.GRASS) world.herds.push({ x, y, n: 3 + Math.floor(hr() * 4), kind: hr() < .7 ? 'deer' : 'boar' }); } }
+    world.flocks = []; { const br = Sim.rng(sim.seed ^ 4242); for (let k = 0; k < 9; k++) world.flocks.push({ cx: br() * W, cy: br() * H, r: 6 + br() * 14, sp: (.04 + br() * .05) * (br() < .5 ? -1 : 1), ph: br() * 6.28, n: 5 + Math.floor(br() * 6), h: 4 + br() * 3 }); }
     world.walls = instanced(wallGeo, std({ color: '#a59d8c', roughness: 1 }), 4000);
     world.poles = instanced(poleGeo, std({ color: '#4a3a2a' }), 200);
     world.flags = instanced(flagGeo, std({ side: THREE.DoubleSide }), 200);
@@ -2096,7 +2106,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     let n = 0, nl = 0, na = 0, ns = 0; world.slots = world.slots || [];
     const gens = new Map(); for (const r of sim.armies) if (!r.dead) gens.set(r.general, r);
     for (const a of sim.agents) {
-      if (!a.alive || ns >= 2500) continue;
+      if (!a.alive || ns >= 4000) continue;
       const fx = a.px + (a.x - a.px) * alpha + .5 + ((a.id * 37) % 7 - 3) * .05, fy = a.py + (a.y - a.py) * alpha + .5 + ((a.id * 53) % 7 - 3) * .05;
       const moving = a.x !== a.px || a.y !== a.py, child = a.age < 12 * YEAR, s = child ? .62 : 1;
       const t = a.tribe ? sim.tribes.get(a.tribe) : null, e = t ? t.era : 0, sid = STY(a.style);
@@ -2139,6 +2149,76 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     world.slots.length = ns;
     To.count = He.count = Ha.count = n; L.count = nl; A.count = na;
     for (const m of [L, A, To, He, Ha]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+  }
+  function updateClouds(dt) {
+    const C = world.clouds; let n = 0;
+    for (const c of world.cloudSet) {
+      c.x += dt * .6; if (c.x > W + 45) c.x = -45;
+      for (const [ox, oy, oz, r] of c.puffs) { if (n >= 260) break; setInst(C, n++, wx(c.x + ox), c.h + oy, wz(c.y + oz), r * 1.1, r * .45, r * .8); }
+    }
+    C.count = n; C.instanceMatrix.needsUpdate = true;
+  }
+  function updateSmoke() {
+    const Sm = world.smoke; let n = 0;
+    for (const t of sim.tribes.values()) {
+      if (t.era < 1 && t.huts < 3) continue;
+      const src = Math.min(t.era >= 4 ? 5 : 3, 1 + Math.floor(t.huts / 4)), dark = t.era >= 4;
+      for (let k = 0; k < src; k++) {
+        const ang = k * 2.399 + t.id, rad = 1.3 + Math.sqrt(k * 2) * .62, bx = t.camp.x + .5 + Math.cos(ang) * rad, by = t.camp.y + .5 + Math.sin(ang) * rad;
+        const y0 = heightAt(bx, by) + (dark && k === 0 ? 1.6 : .55);
+        for (let p = 0; p < 4 && n < 900; p++) {
+          const ph = (clock * .25 + p / 4 + k * .37 + t.id * .13) % 1, sz = (.04 + ph * .13) * (1 - Math.max(0, ph - .75) * 3.2);
+          setInst(Sm, n, wx(bx) + ph * .5 + Math.sin(clock + p) * .08, y0 + ph * 1.9, wz(by) + ph * .2, sz, sz, sz);
+          Sm.setColorAt(n++, tmpC.set(dark ? '#5b5d60' : '#d8d6d0'));
+        }
+      }
+    }
+    Sm.count = n; Sm.instanceMatrix.needsUpdate = true; if (Sm.instanceColor) Sm.instanceColor.needsUpdate = true;
+  }
+  const FLOCK = { steppe: 'sheep', nordic: 'sheep', med: 'sheep', desert: 'goat', eastern: 'cow', meso: 'llama' };
+  function animal(D, x, y, rot, kind, moving, seed) {
+    if (!sim.passable(Math.floor(x), Math.floor(y))) return;
+    const B = base(wx(x), heightAt(x, y), wz(y), rot), sw = moving ? Math.sin(clock * 10 + seed) * .45 : 0;
+    // color, body width, leg height, body length, body height, neck length, leg color
+    const sp = {
+      deer: ['#8a5a34', .1, .14, .26, .1, .14, '#6e4628'], boar: ['#3e3029', .11, .07, .22, .1, .04, '#2e2420'], sheep: ['#efeae0', .13, .07, .2, .11, .05, '#3b3530'],
+      goat: ['#d9c7a6', .08, .09, .18, .08, .08, '#9a8466'], cow: [seed % 2 ? '#3a3330' : '#8a5b3c', .13, .1, .28, .12, .06, '#2a2420'], llama: ['#e4d6bc', .08, .12, .18, .09, .2, '#c8b898'],
+    }[kind];
+    const [col, w, lh, len, bh, nk, lc] = sp;
+    for (const [lx, lz, k] of [[-w * .3, len * .36, 1], [w * .3, len * .36, -1], [-w * .3, -len * .36, -1], [w * .3, -len * .36, 1]]) part(D, 'box', B, lx, lh, lz, .028, lh, .028, lc, Math.PI + sw * k, 0, 0);
+    part(D, kind === 'sheep' ? 'sphere' : 'box', B, 0, lh, 0, w, bh, len, col);
+    const ny = lh + bh * .6, nz = len * .42;
+    part(D, 'box', B, 0, ny, nz, .04, nk, .04, col, .35, 0, 0);
+    const hy = ny + Math.cos(.35) * nk, hz = nz + Math.sin(.35) * nk;
+    part(D, 'box', B, 0, hy - .02, hz + .02, .05, .045, .09, kind === 'sheep' ? '#3b3530' : col);
+    if (kind === 'deer' && seed % 2) { part(D, 'box', B, -.025, hy + .02, hz, .01, .09, .01, '#d9c9a8', 0, 0, .45); part(D, 'box', B, .025, hy + .02, hz, .01, .09, .01, '#d9c9a8', 0, 0, -.45); }
+    if (kind === 'cow') { part(D, 'box', B, -.03, hy + .02, hz - .01, .01, .03, .01, '#e8e0cc', 0, 0, .6); part(D, 'box', B, .03, hy + .02, hz - .01, .01, .03, .01, '#e8e0cc', 0, 0, -.6); }
+  }
+  function updateAnimals() {
+    const D = world.dset;
+    // wild herds graze far from people; they vanish as towns claim their land
+    for (const h of world.herds) {
+      const i = h.y * W + h.x; if (sim.owner[i] || (sim.terrain[i] !== T.FOREST && sim.terrain[i] !== T.GRASS)) continue;
+      for (let k = 0; k < h.n; k++) {
+        const t = clock * .05 + k * 1.9 + h.x, x = h.x + .5 + Math.sin(t) * 1.6 + Math.cos(k * 2.3) * .6, y = h.y + .5 + Math.cos(t * .8) * 1.3 + Math.sin(k * 1.7) * .6;
+        animal(D, x, y, Math.atan2(Math.cos(t) * 1.6, -Math.sin(t * .8) * 1.04), h.kind, true, k + h.x);
+      }
+    }
+    // livestock graze in the fields around farming towns
+    for (const t of sim.tribes.values()) {
+      if (!t.farms) continue;
+      const n = Math.min(10, 2 + Math.floor(t.farms / 2)), kind = FLOCK[STY(t.style)], R = 3.2 + Math.min(4, Math.sqrt(t.members.size) * .5);
+      for (let k = 0; k < n; k++) {
+        const a0 = k * 2.1 + t.id, ang = a0 + Math.sin(clock * .04 + k) * .25, r = R + (k % 3) * .6, x = t.camp.x + .5 + Math.cos(ang) * r, y = t.camp.y + .5 + Math.sin(ang) * r;
+        animal(D, x, y, ang + Math.PI / 2 + Math.sin(clock * .3 + k) * .6, kind, Math.sin(clock * .5 + k * 3) > .6, k + t.id);
+      }
+    }
+    // flocks of birds wheel over the land
+    for (const f of world.flocks) for (let k = 0; k < f.n; k++) {
+      const a = clock * f.sp + f.ph - k * .05 * Math.sign(f.sp), side = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * .35, x = f.cx + Math.cos(a) * (f.r + side), y = f.cy + Math.sin(a) * (f.r + side);
+      const B = base(wx(x), f.h + Math.sin(clock * 2 + k) * .2, wz(y), a + (f.sp > 0 ? 0 : Math.PI)), flap = Math.sin(clock * 9 + k * 1.3) * .5;
+      part(D, 'box', B, 0, 0, 0, .05, .04, .14, '#2b2b2e'); part(D, 'box', B, -.1, .02, 0, .2, .01, .07, '#2b2b2e', 0, 0, flap); part(D, 'box', B, .1, .02, 0, .2, .01, .07, '#2b2b2e', 0, 0, -flap);
+    }
   }
   function updateShips(alpha) {
     for (const s of sim.ships) {
@@ -2428,7 +2508,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   $('#newWorld').addEventListener('click', () => { $('#picker').hidden = false; started = false; });
 
   const capFirst = s => s[0].toUpperCase() + s.slice(1);
-  const SAVE_KEY = 'firstlight-save-v1';
+  const SAVE_KEY = 'firstlight-save-v2';
   $('#saveBtn').addEventListener('click', () => {
     try { localStorage.setItem(SAVE_KEY, sim.serialize()); $('#saveNote').textContent = `Saved year ${sim.year()}`; }
     catch (e) { $('#saveNote').textContent = 'This browser blocked saving here'; }
@@ -2486,7 +2566,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     if (tps) { acc += dt * tps; while (acc >= 1 && steps < 30) { sim.step(); acc -= 1; steps++; } if (steps >= 30) acc = 0; }
     const alpha = tps && tps <= 40 ? Math.min(1, acc) : 1;
     clock += dt; world.waterTex.offset.set(clock * .004, clock * .0025);
-    syncTiles(); updateFields(); updateBorders(); applySeason(); beginSet(world.dset); updatePeople(alpha); updateShips(alpha); endSet(world.dset); updateFires(); updateBuildings(); updateEffects(); updateSelection();
+    syncTiles(); updateFields(); updateBorders(); applySeason(); beginSet(world.dset); updatePeople(alpha); updateShips(alpha); updateAnimals(); endSet(world.dset); updateClouds(dt); updateSmoke(); updateFires(); updateBuildings(); updateEffects(); updateSelection();
     if (follow) { const a = sim.byId.get(follow); if (a && a._wx !== undefined) focus = new THREE.Vector3(a._wx, a._wy, a._wz); else follow = 0; }
     if (focus) { tmpV.copy(focus).sub(controls.target).multiplyScalar(.08); controls.target.add(tmpV); camera.position.add(tmpV); if (tmpV.lengthSq() < 1e-5 && !follow) focus = null; }
     if (!started) { const r = Math.hypot(camera.position.x - controls.target.x, camera.position.z - controls.target.z); const a = Math.atan2(camera.position.z - controls.target.z, camera.position.x - controls.target.x) + dt * .05; camera.position.x = controls.target.x + Math.cos(a) * r; camera.position.z = controls.target.z + Math.sin(a) * r; }
