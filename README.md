@@ -34,17 +34,28 @@ Every person has a name, an age, hunger, health and four personality traits: agg
 - **Battles** are named after the land they're fought on, for example *"Battle of Batu Plain"*. An army that loses enough soldiers breaks and flees.
 - **Sieges** wear down walls, then sack the town or conquer it outright. Defenders raise their own army to meet invaders.
 - **Navies** of canoes, galleys, galleons, ironclads and destroyers fight at sea and bombard harbors.
+- **Air power**: once a nation learns Flight it sends bombers and fighters into the sky. Planes dogfight, get shot down, and strike enemy towns. Biplanes give way to jets.
 - Weapons change with the era: spears and bronze, then cavalry, muskets, rifles and finally tanks.
+
+### Explorers and the sea
+Nations with Sailing send captains and settlers across the sea. When they reach an empty shore, they found an allied colony there. If their ship is sunk, the whole expedition is lost.
 
 ### Towns that grow with the ages
 ![A Nordic town with a palisade, barracks, a market and grain silos](docs/town.png)
 
-Towns grow from huts to cities, and each culture builds its own style of home and wall. Over time they add **barracks, granaries, markets, forges, libraries, windmills, temples, power plants and wind turbines**, plus three wonders per nation. Roads link trading partners and get paved as the eras pass.
+Towns grow from huts to cities, and each culture builds its own style of home and wall. Over time they add **barracks, granaries, markets, forges, temples, castles, libraries, universities, observatories, arenas, windmills, hospitals, railway stations, statues, radio towers, airfields, data centers, power plants, wind turbines and stadiums**, plus three wonders per nation. Port towns build harbors and lighthouses. Roads link trading partners and get paved as the eras pass.
 
 ![Eastern walls with tiled towers beside a pagoda town](docs/wall.png)
 
 ### Technology
-There are **53 technologies** across seven eras. They run from Stone Tools, Fire and Agriculture through Bronze, Writing, Castles, Gunpowder, Printing, Steam, Railways, Electricity, Flight and Radio, up to Computers, Robotics, Satellites and Drones. Ideas spread between neighbors and trading partners.
+There are **53 technologies** across seven eras. They run from Stone Tools, Fire and Agriculture through Bronze, Writing, Castles, Gunpowder, Printing, Steam, Railways, Electricity, Flight and Radio, up to Computers, Robotics, Satellites and Drones. Ideas spread between neighbors and trading partners. You can see what a nation knows on the map:
+
+- **Railways:** trains run between trading towns.
+- **Electricity:** power lines run between towns.
+- **Flight:** airliners fly between friendly nations.
+- **Robotics:** some workers are robots.
+- **Satellites:** satellites circle high above the world.
+- **Drones:** drones buzz over armies.
 
 ### A living world
 - Seasons change every year: green summers, autumn colors and snowy winters.
