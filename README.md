@@ -55,10 +55,15 @@ Nations with Sailing send captains and settlers across the sea. When they reach 
 - **Islands** dot the open sea, and explorers are drawn to settle them.
 - **Merchant ships** sail between harbors, from small trading cogs to container ships stacked with cargo. Each voyage trades goods, spreads ideas and builds friendship, and opens a sea route. Pirates sometimes seize a cargo.
 - **Island communication** improves with the ages. Merchant ships carry the news at first. Then come undersea telegraph cables, radio, satellite links and fiber-optic internet cables. You can see cables on the seabed and messages flying through the sky. Linked nations grow friendlier and share ideas each year, and war cuts the link.
+- **Sea events change with the era.** Early fishers glimpse sea serpents and find beached whales. Later come pirate raids, treasure wrecks and icebergs in the shipping lanes. Industrial nations build offshore oil rigs, and in the 2000s you see cruise ships, oil spills, wind farms out at sea and the odd tsunami. Storms bring dark clouds, rain and lightning.
 - **Sea life:** whales spout, dolphins leap, fish swirl in shoals and fishing boats work the coast near harbor towns.
 
 ### Towns that grow with the ages
 ![A Nordic town with a palisade, barracks, a market and grain silos](docs/town.png)
+
+Stone Age families live in rock shelters and caves with a campfire and a hide rack out front. Towns then grow from huts to cities, and in the 2000s they pack into compact modern cities: a grid of streets with cars, glass towers that rise tallest at the center, rooftop gardens and antennas.
+
+![A 2000s city of glass towers beside fields and forest](docs/city.png)
 
 Towns grow from huts to cities, and each culture builds its own style of home and wall. Over time they add **barracks, granaries, markets, forges, temples, castles, libraries, universities, observatories, arenas, windmills, hospitals, railway stations, statues, radio towers, airfields, data centers, power plants, wind turbines and stadiums**, plus three wonders per nation. Port towns build harbors and lighthouses. Roads link trading partners and get paved as the eras pass.
 
@@ -75,6 +80,7 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 - **Drones:** drones buzz over armies.
 
 ### A living world
+- **Terrain:** low coastal plains, rolling hills, deep sea trenches and tall snowy mountains.
 - **Biomes:** the north is frozen tundra and snowy pine forest, the middle is temperate woodland, and the south turns to savanna, jungle and desert, with swamps along wet coasts. Each biome has its own ground color, trees (palms and cacti, flat-topped acacias, dense jungle, snowy pines, willows), ground cover and wildlife (camels, zebras, elephants, reindeer). Deserts and tundra grow less food, so fewer people live there.
 - Seasons change every year: green summers, autumn colors and snowy winters.
 - Day turns to night: the sun sets in orange, the sky goes dark and lanterns and windows light up in every town. You can turn this off with **Day and night** in the panel.
