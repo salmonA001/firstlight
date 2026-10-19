@@ -387,6 +387,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   const HERD = { steppe: 'Herding horses on the open grass', nordic: 'Herding sheep in the meadow', desert: 'Leading goats to graze', eastern: 'Tending water buffalo in the fields', med: 'Herding goats on the hillside', meso: 'Herding llamas to fresh pasture' };
   const PLAY = ['Playing tag with friends', 'Chasing chickens around the square', 'Playing with a wooden toy', 'Racing the other children', 'Splashing in puddles', 'Playing hide and seek'];
   const FESTS = { steppe: ['Naadam Games', 'Horse Festival'], nordic: ['Midsummer Feast', 'Yule Feast'], desert: ['Festival of the Flood', 'Feast of the Sun God'], eastern: ['Lantern Festival', 'Spring Festival'], med: ['Wine Harvest Festival', 'Festival of the Games'], meso: ['Festival of the Sun', 'Maize Festival'] };
+  const SPACE_STEPS = ['satellite', 'satellite', 'crew', 'resupply', 'moon', 'station', 'resupply', 'probe', 'mars', 'resupply'];
+  const SPACE_TEXT = {
+    satellite: n => `The ${n} launched a rocket and put a satellite into orbit.`,
+    crew: n => `The ${n} sent astronauts into orbit and brought them safely home.`,
+    resupply: n => `A ${n} rocket carried supplies up to their crew in orbit.`,
+    moon: n => `Astronauts of the ${n} landed on the Moon and planted their flag.`,
+    station: n => `The ${n} built a space station in orbit.`,
+    probe: n => `The ${n} sent a probe out past the planets.`,
+    mars: n => `A ${n} crew landed on Mars.`,
+  };
   const LINK_RANK = { sail: 0, cable: 1, radio: 2, satellite: 3, internet: 4 };
   const LINK_WORD = { sail: 'sea route', cable: 'undersea telegraph cable', radio: 'radio', satellite: 'satellite', internet: 'undersea internet cable' };
   const LINK_NEWS = {
@@ -637,6 +647,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       if (this.tick % YEAR === 0) {
         if (this.links.length) this.stepLinks();
         if (this.r() < .3) this.seaEvent();
+        this.spaceRace();
         this.popHistory.push(this.agents.length); if (this.popHistory.length > 400) this.popHistory.shift();
         for (const t of this.tribes.values()) { t.popHist.push(t.members.size); if (t.popHist.length > 300) { t.popHist.shift(); t.histStart++; } }
       }
@@ -1291,6 +1302,20 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       }
       return { x: px, y: py };
     }
+    // nations with satellites launch rockets: satellites first, then crews, the Moon, a space station and probes
+    spaceRace() {
+      this.rockets = (this.rockets || []).filter(r => this.tick - r.t0 < YEAR * 3);
+      for (const t of this.tribes.values()) {
+        if (t.era < 6 || !t.techs.has('flight') || t.members.size < 8 || this.r() > .13) continue;
+        const n = t.space = (t.space || 0) + 1, kind = SPACE_STEPS[Math.min(n - 1, SPACE_STEPS.length - 1)];
+        const r = { id: this.nextId++, tribe: t.id, t0: this.tick + Math.floor(this.r() * YEAR * .6), kind, era: t.era };
+        this.rockets.push(r);
+        const firstEver = kind !== 'satellite' && kind !== 'resupply' && ![...this.tribes.values()].some(o => o !== t && (o.space || 0) >= n);
+        const text = SPACE_TEXT[kind](t.name) + (firstEver ? ' No nation had ever done it before.' : '');
+        if (n === 1 || (kind !== 'satellite' && kind !== 'resupply')) this.emit(firstEver ? 'wonder' : 'tech', text, { tribe: t.id, x: t.camp.x, y: t.camp.y });
+        if (kind === 'moon' || kind === 'mars') { t.progress = (t.progress || 0) + 20; for (const o of this.tribes.values()) if (o !== t) o.rel.set(t.id, Math.min(100, (o.rel.get(t.id) ?? 0) + 4)); }
+      }
+    }
     seaEvent() {
       const ports = [...this.tribes.values()].filter(t => t.port !== null && this.regionSize[this.waterRegion[t.port]] >= 60); if (!ports.length) return;
       const t = this.pick(ports), e = t.era;
@@ -1929,7 +1954,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const agents = this.agents.filter(a => a.alive).map(a => { const o = {}; for (const k in a) if (k[0] !== '_') o[k] = a[k]; return o; });
       return JSON.stringify({ v: 1, seed: this.seed, startEra: this.startEra, tick: this.tick, nextId: this.nextId, tribeCount: this.tribeCount,
         terrain: arr(this.terrain), elev: arr(this.elev), food: arr(this.food), wood: arr(this.wood), stone: arr(this.stone), jit: arr(this.jit), waterRegion: arr(this.waterRegion), biome: arr(this.biome), fert: arr(this.fert),
-        regionSize: this.regionSize, cultureSeeds: this.cultureSeeds, usedNames: [...this.usedNames], agents, tribes, wars, ships: this.ships.filter(x => x.alive), armies: this.armies.filter(r => !r.dead), planes: this.planes.filter(p => p.alive), links: this.links, seaSites: this.seaSites,
+        regionSize: this.regionSize, cultureSeeds: this.cultureSeeds, usedNames: [...this.usedNames], agents, tribes, wars, ships: this.ships.filter(x => x.alive), armies: this.armies.filter(r => !r.dead), planes: this.planes.filter(p => p.alive), links: this.links, seaSites: this.seaSites, rockets: this.rockets || [],
         fires: [...this.fires], popHistory: this.popHistory, religions: [...this.religions.values()], history: this.history.slice(-300) });
     }
     static load(json) {
@@ -1938,7 +1963,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       Object.assign(s, { seed: d.seed, startEra: d.startEra, tick: d.tick, nextId: d.nextId, tribeCount: d.tribeCount, rng: mulberry32((d.seed ^ d.tick) >>> 0),
         terrain: Uint8Array.from(d.terrain), elev: Float32Array.from(d.elev), food: Float32Array.from(d.food), wood: Float32Array.from(d.wood), stone: Float32Array.from(d.stone),
         jit: Float32Array.from(d.jit), waterRegion: Int32Array.from(d.waterRegion), biome: d.biome ? Uint8Array.from(d.biome) : new Uint8Array(W * H), fert: d.fert ? Float32Array.from(d.fert) : new Float32Array(W * H).fill(1), regionSize: d.regionSize, cultureSeeds: d.cultureSeeds, usedNames: new Set(d.usedNames),
-        listeners: [], effects: [], dirty: new Set(), deadCount: 0, ownerVersion: 0, ships: d.ships, armies: d.armies || [], planes: d.planes || [], links: d.links || [], seaSites: d.seaSites || [], fires: new Map(d.fires), popHistory: d.popHistory,
+        listeners: [], effects: [], dirty: new Set(), deadCount: 0, ownerVersion: 0, ships: d.ships, armies: d.armies || [], planes: d.planes || [], links: d.links || [], seaSites: d.seaSites || [], rockets: d.rockets || [], fires: new Map(d.fires), popHistory: d.popHistory,
         religions: new Map(d.religions.map(r => [r.id, r])), history: d.history, agents: d.agents, byId: new Map(), tribes: new Map() });
       s.computeLand();
       for (const a of s.agents) s.byId.set(a.id, a);
@@ -2193,7 +2218,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     const set = { meshes: {}, n: {} };
     for (const k in PART_GEOS) {
       const flat = k === 'pyr' || k === 'prism' || k === 'cone';
-      const m = instanced(PART_GEOS[k], new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .82, flatShading: flat }), cap);
+      const m = instanced(PART_GEOS[k], new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .82, flatShading: flat }), k === 'box' ? cap : Math.ceil(cap / 2.5));
       m.setColorAt(0, tmpC.set('#fff')); set.meshes[k] = m; set.n[k] = 0; group.add(m);
     }
     return set;
@@ -2261,10 +2286,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     if (t.era >= 1 && t.era <= 3 && (STY(t.style) === 'med' || STY(t.style) === 'meso')) l.push('arena');
     if (t.farms > 4 && t.era >= 2 && t.era <= 4) l.push('windmill');
     if (t.techs.has('medicine')) l.push('hospital');
-    if (t.techs.has('railways')) l.push('station');
+
     if (t.wonders.length || t.peak >= 25) l.push('statue');
     if (t.techs.has('radio')) l.push('radio');
-    if (t.techs.has('flight')) l.push('airfield');
+
     if (t.techs.has('computers')) l.push('datacenter');
     if (t.era >= 5) l.push('power');
     if (t.era >= 6) l.push('turbine');
@@ -2519,7 +2544,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       default: part(S, 'box', B, 0, 0, 0, 1.6, .4, 1.6, '#a59c86'); part(S, 'cyl', B, 0, .4, 0, .9, .8, .9, '#e0d6bd'); part(S, 'dome', B, 0, 1.2, 0, .9, .6, .9, '#d9cfb6');
     }
   }
-  function ship(S, B, era, col, style) {
+  function ship(S, B, era, col, style, id = 0) {
+    if (era >= 6 && id % 3 === 0) {
+      // aircraft carrier: a long flat deck, island tower and jets parked on deck
+      part(S, 'box', B, 0, -.08, 0, .5, .22, 2.2, '#6f7780'); part(S, 'box', B, 0, .14, .05, .72, .03, 2.35, '#4f565e');
+      for (let z = -.9; z <= .9; z += .3) part(S, 'box', B, -.05, .156, z, .015, .002, .15, '#e8e8e0');
+      part(S, 'box', B, .28, .17, -.2, .12, .3, .4, '#858d96'); part(S, 'cyl', B, .28, .47, -.2, .015, .25, .015, '#4a5057'); part(S, 'box', B, .28, .5, -.15, .14, .09, .01, col);
+      for (const [x, z] of [[-.15, .7], [.12, .5], [-.18, -.6], [.1, -.85]]) warplane(S, local(B, x, .16, z, .7, .7, .7, 0, 2.6, 0).clone(), 6, 'fighter', col, 0);
+      return;
+    }
     if (era <= 2 && style === 'nordic') {
       // longship: dragon prow, shields along the rail, striped sail
       part(S, 'box', B, 0, -.05, 0, .3, .14, 1.1, '#5e4430'); for (const z of [.6, -.6]) part(S, 'box', B, 0, .05, z, .06, .3, .08, '#5e4430', z > 0 ? -.5 : .5, 0, 0);
@@ -2679,6 +2712,97 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     }
   }
   // cars on the streets of modern cities
+  function updateSites(alpha) {
+    const D = world.dset; if (!world.sites) return;
+    const now = sim.tick + alpha;
+    for (const st of world.sites) {
+      const t = st.t, dx = Math.sin(st.head), dy = Math.cos(st.head);
+      if (st.kind === 'airport') {
+        // an airliner takes off, flies a loop and comes back in to land
+        const cyc = 26, ph = ((clock + t.id * 3.7) % cyc) / cyc, L = st.len;
+        let u, alt, head = st.head;
+        if (ph < .25) { const f = ph / .25; u = -L / 2 + .3 + (L - .6) * f * f; alt = Math.max(0, (f - .7) / .3) * .5; }
+        else if (ph < .45) { const f = (ph - .25) / .2; u = L / 2 + f * 5; alt = .5 + f * 3; }
+        else if (ph < .7) { const f = (ph - .7) / -.25; u = -L / 2 - f * 6; alt = 3.5 * f + .35; }
+        else { const f = (ph - .7) / .3, e = 1 - (1 - f) * (1 - f); u = -L / 2 + .2 + (L - .7) * e; alt = Math.max(0, .35 - f * 1.5); }
+        if (ph >= .45 && ph < .7) continue;
+        const x = st.x + dx * u, y = st.y + dy * u;
+        plane(D, base(wx(x), st.h + .04 + alt, wz(y), head, 1.25), t.era, t.color, true, clock * 40);
+      } else if (st.kind === 'pad') {
+        const flying = (sim.rockets || []).find(r => r.tribe === t.id && now >= r.t0 && now - r.t0 < YEAR * 1.2);
+        const B = base(wx(st.x), st.h, wz(st.y), st.head);
+        if (!flying) { rocket(D, B, t.era, t.color, (t.space || 0) >= 3); continue; }
+        const e = (now - flying.t0) / YEAR * 14, lift = Math.max(0, e - 1), y = lift * lift * .35, tilt = Math.min(.5, lift * .04);
+        const ox = Math.sin(st.head + 1.2) * tilt * y * .6, oz = Math.cos(st.head + 1.2) * tilt * y * .6;
+        if (y > 60) continue;
+        const R = base(wx(st.x) + ox, st.h + y, wz(st.y) + oz, st.head);
+        rocket(D, R, t.era, t.color, flying.kind !== 'satellite');
+        const fl = .7 + Math.sin(clock * 40) * .15;
+        part(D, 'cone', R, 0, .05, 0, .2, .9 * fl + Math.min(1.2, lift * .1), .2, '#ffb347', Math.PI, 0, 0); part(D, 'cone', R, 0, .05, 0, .11, .55 * fl, .11, '#fff3c4', Math.PI, 0, 0);
+        // smoke billows at the pad, then a trail follows the rocket up
+        for (let k = 0; k < 10; k++) {
+          const q = k / 10, yy = y * q, sz = .25 + (1 - q) * .45 + Math.min(.6, e * .05), c = q > .5 ? '#d8d8d4' : '#bcbcb6';
+          if (lift <= 0 && k > 2) break;
+          part(D, 'sphere', base(wx(st.x) + ox * q + Math.sin(k * 2.3) * .15, st.h + yy, wz(st.y) + oz * q + Math.cos(k * 1.7) * .15, 0), 0, 0, 0, sz, sz, sz, c);
+        }
+      } else if (st.kind === 'station') {
+        // a train waits at the platform with its doors open
+        const B = base(wx(st.x), st.h + .03, wz(st.y), Math.atan2(dx, dy));
+        for (let c = 0; c < 4; c++) part(D, 'box', B, -.18, .02, -.75 + c * .45, .19, .18, .4, t.era >= 6 ? (c === 0 ? '#f2f2f0' : '#d8dde2') : t.era >= 5 ? '#b23a2e' : c === 0 ? '#222224' : '#6b4a32');
+      }
+    }
+  }
+  // boats around each harbor: canoes and rowboats, then sailboats, tugs, ferries, yachts and speedboats
+  function harborBoats() {
+    const key = [...sim.tribes.values()].map(t => t.id + ':' + t.port + ':' + t.era).join(',');
+    if (world.boatKey === key) return world.boats; world.boatKey = key; const boats = world.boats = [];
+    const isW = (x, y) => sim.inb(Math.floor(x), Math.floor(y)) && sim.terrain[Math.floor(y) * W + Math.floor(x)] === T.WATER;
+    for (const t of sim.tribes.values()) {
+      if (t.port === null) continue;
+      const px = t.port % W + .5, py = ((t.port / W) | 0) + .5;
+      let c = null;
+      for (let r = 1.5; r <= 4.5 && !c; r += 1) for (let a = 0; a < 12; a++) { const x = px + Math.cos(a * .5236) * r, y = py + Math.sin(a * .5236) * r; let ok = true; for (let k = 0; k < 12 && ok; k++) ok = isW(x + Math.cos(k * .5236) * 1.3, y + Math.sin(k * .5236) * 1.3); if (ok) { c = [x, y]; break; } }
+      if (!c) continue;
+      const n = 2 + Math.min(4, t.era), kinds = t.era <= 1 ? ['canoe', 'raft'] : t.era <= 3 ? ['rowboat', 'sailboat', 'sailboat'] : t.era === 4 ? ['steamer', 'tug', 'sailboat'] : ['ferry', 'yacht', 'speedboat', 'tug', 'sailboat'];
+      for (let k = 0; k < n; k++) boats.push({ t, c, r: .7 + (k % 3) * .25, ph: k * 1.9 + t.id, sp: (kinds[k % kinds.length] === 'speedboat' ? .5 : .15) * (k % 2 ? 1 : -1), kind: kinds[k % kinds.length] });
+    }
+    // ferries cross between linked island harbors when the water between is open
+    for (const L of sim.links || []) {
+      const a = sim.tribes.get(L.a), b = sim.tribes.get(L.b); if (!a || !b || a.port === null || b.port === null || Math.min(a.era, b.era) < 4) continue;
+      const ax = a.port % W + .5, ay = ((a.port / W) | 0) + .5, bx = b.port % W + .5, by = ((b.port / W) | 0) + .5, d = Math.hypot(bx - ax, by - ay);
+      let ok = d > 3 && d < 40; for (let u = .08; u < .92 && ok; u += .5 / d) ok = isW(ax + (bx - ax) * u, ay + (by - ay) * u);
+      if (ok) boats.push({ t: a, ferry: [ax, ay, bx, by, d], kind: 'ferry', ph: L.a * 1.3 });
+    }
+    return boats;
+  }
+  function boat(D, B, kind, col) {
+    switch (kind) {
+      case 'canoe': part(D, 'box', B, 0, -.03, 0, .1, .06, .45, '#6b4a2f'); part(D, 'box', B, .07, .03, .05, .01, .01, .25, '#4a3626', .6, 0, 0); break;
+      case 'raft': part(D, 'box', B, 0, -.03, 0, .3, .04, .35, '#8a6a42'); part(D, 'cyl', B, 0, 0, 0, .015, .3, .015, '#4a3626'); part(D, 'box', B, 0, .18, 0, .2, .14, .01, '#d8c9a0'); break;
+      case 'rowboat': part(D, 'box', B, 0, -.03, 0, .16, .08, .45, '#7a5a3a'); for (const x of [-.14, .14]) part(D, 'box', B, x, .02, 0, .16, .01, .01, '#4a3626', 0, 0, x > 0 ? -.4 : .4); break;
+      case 'sailboat': part(D, 'box', B, 0, -.03, 0, .16, .08, .5, '#f0ece2'); part(D, 'cyl', B, 0, .02, .02, .012, .6, .012, '#8a8f95'); part(D, 'pyr', B, 0, .08, -.02, .01, .48, .3, '#fbfaf5'); part(D, 'pyr', B, 0, .08, .14, .01, .36, .14, col); break;
+      case 'steamer': part(D, 'box', B, 0, -.04, 0, .26, .12, .8, '#2f3338'); part(D, 'box', B, 0, .08, 0, .22, .12, .45, '#e8e2d2'); part(D, 'cyl', B, 0, .2, 0, .05, .2, .05, '#b23a2e'); for (const x of [-.15, .15]) part(D, 'cyl', B, x, .02, 0, .1, .04, .1, '#7a2f22', 0, 0, Math.PI / 2); break;
+      case 'tug': part(D, 'box', B, 0, -.04, 0, .2, .12, .42, '#b23a2e'); part(D, 'box', B, 0, .08, -.04, .14, .14, .16, '#f2f2ee'); part(D, 'cyl', B, 0, .22, -.08, .03, .1, .03, '#2a2a2a'); break;
+      case 'ferry': part(D, 'box', B, 0, -.04, 0, .34, .14, 1.05, '#f2f2ee'); part(D, 'box', B, 0, .1, -.05, .3, .14, .7, '#f8f8f6'); part(D, 'box', B, 0, .12, -.05, .305, .04, .66, '#3b4a57'); part(D, 'box', B, 0, .25, -.1, .2, .08, .3, col); part(D, 'cyl', B, 0, .3, -.3, .05, .12, .05, col); break;
+      case 'yacht': part(D, 'box', B, 0, -.04, 0, .2, .1, .62, '#fbfbf9'); part(D, 'box', B, 0, .06, -.04, .16, .08, .3, '#f2f2f0'); part(D, 'box', B, 0, .08, .08, .162, .03, .12, '#2b3a4a'); part(D, 'cone', B, 0, -.04, .34, .1, .14, .05, '#fbfbf9', Math.PI / 2, 0, 0); break;
+      case 'speedboat': part(D, 'box', B, 0, -.03, 0, .14, .06, .38, col); part(D, 'box', B, 0, .03, .04, .12, .04, .08, '#9fd3ec'); break;
+    }
+  }
+  function updateBoats() {
+    const D = world.dset;
+    for (const b of harborBoats()) {
+      let x, y, h, wake = .15;
+      if (b.ferry) {
+        const [ax, ay, bx, by, d] = b.ferry, raw = (clock * .9 / d + b.ph) % 2, f = raw < 1 ? raw : 2 - raw, e = .05 + .9 * f * f * (3 - 2 * f);
+        x = ax + (bx - ax) * e; y = ay + (by - ay) * e; h = Math.atan2(bx - ax, by - ay) + (raw < 1 ? 0 : Math.PI); wake = .3;
+      } else {
+        const a = b.ph + clock * b.sp; x = b.c[0] + Math.cos(a) * b.r * 1.3; y = b.c[1] + Math.sin(a) * b.r; h = Math.atan2(-Math.sin(a) * 1.3, Math.cos(a)) * Math.sign(b.sp) + (b.sp < 0 ? Math.PI : 0);
+      }
+      const B = base(wx(x), -.02 + Math.sin(clock * 2 + b.ph) * .015, wz(y), h);
+      boat(D, B, b.kind, b.t.color);
+      if (b.kind === 'speedboat' || b.ferry) part(D, 'box', B, 0, -.045, -.45, .2, .01, .4, '#e8f4f8');
+    }
+  }
   function updateCars() {
     const D = world.dset, CL = world.carLights = []; if (!world.streets) return;
     let k = 0;
@@ -2820,8 +2944,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     world.torsos = instanced(torsoGeo, pm(), MAXA); world.heads = instanced(headGeo, pm(), MAXA); world.hats = instanced(hatGeo, pm(), MAXA); world.garb = instanced(new THREE.BoxGeometry(1, 1, 1), pm(), MAXA);
     for (const m of [world.legs, world.arms, world.torsos, world.heads, world.hats, world.garb]) { m.setColorAt(0, tmpC.set('#fff')); group.add(m); }
     // buildings, wonders, ships and war machines are assembled from a few primitive parts
-    world.bset = partSet(16000, group);
-    world.dset = partSet(12000, group);
+    world.bset = partSet(30000, group);
+    world.dset = partSet(16000, group);
     const wallGeo = new THREE.BoxGeometry(.6, .36, .2); wallGeo.translate(0, .18, 0);
     const poleGeo = new THREE.CylinderGeometry(.025, .025, 1.7, 5); poleGeo.translate(0, .85, 0);
     const flagGeo = new THREE.PlaneGeometry(.55, .32); flagGeo.translate(.3, 1.5, 0);
@@ -2959,7 +3083,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     if (!sim.dirty.size) return;
     const VW = W + 1;
     sim.dirty.forEach(i => {
-      showTrees(i, sim.terrain[i] === T.FOREST);
+      showTrees(i, sim.terrain[i] === T.FOREST && !(world.siteClear && world.siteClear.has(i)));
       const r = world.rockAt[i]; if (r >= 0 && sim.stone[i] < 1) { hide(world.rocks, r); world.rocks.instanceMatrix.needsUpdate = true; }
       tileColor(i);
       const x = i % W, y = (i / W) | 0;
@@ -2992,7 +3116,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       let l = world.borders.get(t.id);
       if (!l) {
         const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(97 * 3), 3));
-        l = new THREE.Line(g, new THREE.LineDashedMaterial({ color: t.color, dashSize: .5, gapSize: .35, transparent: true, opacity: .75 }));
+        l = new THREE.Line(g, new THREE.LineDashedMaterial({ color: t.color, dashSize: .5, gapSize: .35, transparent: true, opacity: .75 })); l.visible = false;
         l.frustumCulled = false; world.group.add(l); world.borders.set(t.id, l);
       }
       const p = l.geometry.attributes.position.array, cx = t.camp.x + .5, cy = t.camp.y + .5;
@@ -3362,7 +3486,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         continue;
       }
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
-      if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style));
+      if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
     updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); }
     const D = world.dset;
@@ -3400,7 +3524,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     }
   }
   // a light source: where it is, the pool of light it throws, its bulb and its flame
-  const LAMP_C = { fire: new THREE.Color('#ff7a1e'), torch: new THREE.Color('#ff9a3a'), gas: new THREE.Color('#ffcf7a'), sodium: new THREE.Color('#ffae55'), led: new THREE.Color('#f4f1e2'), window: new THREE.Color('#ffc46a'), ship: new THREE.Color('#ffe2a0'), red: new THREE.Color('#ff3b30') };
+  const LAMP_C = { fire: new THREE.Color('#ff7a1e'), torch: new THREE.Color('#ff9a3a'), gas: new THREE.Color('#ffcf7a'), sodium: new THREE.Color('#ffae55'), led: new THREE.Color('#f4f1e2'), window: new THREE.Color('#ffc46a'), ship: new THREE.Color('#ffe2a0'), red: new THREE.Color('#ff3b30'), green: new THREE.Color('#39d353') };
   const LP = new THREE.Vector3();
   function lamp(list, B, x, y, z, kind, r, bulb = 0, fire = 0, gy = null) {
     LP.set(x, y, z).applyMatrix4(B);
@@ -3463,10 +3587,84 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     world.flames.count = n; world.flames.instanceMatrix.needsUpdate = true;
   }
   function campY(t) { return heightAt(t.camp.x + .5, t.camp.y + .5); }
+  // find room outside town for a long flat site (runway, station, launch pad): a center, a heading and its length
+  function findSite(t, len, wide, rMin, rMax, used, prefer) {
+    const cx = t.camp.x + .5, cy = t.camp.y + .5, ext = world.ext.get(t.id) || 2; let best = null;
+    for (let r = ext + rMin; r <= ext + rMax && !best; r += .75) for (let k = 0; k < 16; k++) {
+      const a = (prefer ?? t.id * .9) + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * Math.PI / 8, x = cx + Math.sin(a) * r, y = cy + Math.cos(a) * r;
+      for (const head of [a + Math.PI / 2, a]) {
+        const dx = Math.sin(head), dy = Math.cos(head); let ok = true, lo = 99, hi = -99;
+        for (let u = -len / 2; u <= len / 2 && ok; u += .4) for (const v of [-wide / 2, 0, wide / 2]) {
+          const px = x + dx * u - dy * v, py = y + dy * u + dx * v, tx = Math.floor(px), ty = Math.floor(py);
+          if (!sim.passable(tx, ty) || sim.terrain[ty * W + tx] === T.MOUNTAIN) { ok = false; break; }
+          const h = heightAt(px, py); lo = Math.min(lo, h); hi = Math.max(hi, h);
+          if (used.some(([ux, uy, ur]) => Math.hypot(ux - px, uy - py) < ur)) { ok = false; break; }
+        }
+        if (ok && hi - lo < .7) { best = { x, y, head, h: hi + .04, lo, hi }; break; }
+      }
+      if (best) break;
+    }
+    if (best) {
+      used.push([best.x, best.y, len / 2 + .4]);
+      const dx = Math.sin(best.head), dy = Math.cos(best.head);
+      for (let u = -len / 2 - .5; u <= len / 2 + .5; u += .35) for (let v = -wide / 2 - .5; v <= wide / 2 + .5; v += .35) { const tx = Math.floor(best.x + dx * u - dy * v), ty = Math.floor(best.y + dy * u + dx * v); if (sim.inb(tx, ty)) world.siteClear.add(ty * W + tx); }
+    }
+    return best;
+  }
+  function airport(S, B, era, col, lamps, len) {
+    const L = len, asph = era >= 6 ? '#3a3d42' : '#4a4c50';
+    part(S, 'box', B, 0, -.06, 0, .5, .1, L, asph); part(S, 'box', B, 0, -.06, 0, .62, .08, L + .1, '#6f7a5a');
+    for (let z = -L / 2 + .45; z < L / 2 - .3; z += .32) part(S, 'box', B, 0, -.005, z, .025, .006, .16, '#f2f2ea');
+    for (const e of [-1, 1]) for (let x = -.18; x <= .19; x += .06) part(S, 'box', B, x, -.005, e * (L / 2 - .15), .03, .006, .2, '#f2f2ea');
+    // taxiway, apron, terminal, control tower and hangars
+    part(S, 'box', B, .55, -.06, 0, .16, .1, L * .7, asph); part(S, 'box', B, .9, -.06, .1, .65, .1, 1.5, asph);
+    if (era >= 6) { part(S, 'box', B, 1.42, 0, .1, .42, .3, 1.5, '#9fb8c8'); part(S, 'prism', B, 1.42, .3, .1, .48, .1, 1.56, '#e6e9ec'); for (const z of [-.45, .1, .65]) part(S, 'box', B, 1.15, .14, z, .2, .04, .06, '#c9cfd4'); }
+    else { part(S, 'box', B, 1.42, 0, .1, .38, .26, 1.1, '#d8d2c4'); part(S, 'box', B, 1.22, .1, .1, .01, .08, 1, '#3b4a57'); }
+    part(S, 'cyl', B, 1.4, 0, -.95, .12, .95, .12, '#d8d8d2'); part(S, 'cyl', B, 1.4, .95, -.95, .24, .16, .24, '#3b5568'); part(S, 'cyl', B, 1.4, 1.11, -.95, .26, .03, .26, '#9aa3ad');
+    for (const z of [L / 2 - .5, L / 2 - 1.15]) { part(S, 'prism', B, 1.3, 0, z, .55, .32, .5, '#8a8f95', 0, Math.PI / 2, 0); part(S, 'box', B, 1.03, 0, z, .01, .26, .4, '#5a5f66'); }
+    part(S, 'cyl', B, -.45, 0, -L / 2 + .3, .015, .4, .015, '#cccccc'); part(S, 'cone', B, -.45, .34, -L / 2 + .4, .06, .14, .06, '#ff7a1e', Math.PI / 2, 0, 0);
+    // parked planes at the gates
+    for (const z of [-.4, .2, .75]) plane(S, local(B, 1, -.03, z, 1, 1, 1, 0, -Math.PI / 2, 0).clone(), era, col, true, 0);
+    for (let z = -L / 2; z <= L / 2; z += .4) for (const x of [-.27, .27]) lamp(lamps, B, x, 0, z, Math.abs(z) > L / 2 - .2 ? 'red' : 'led', .18, .022);
+    lamp(lamps, B, 1.4, 1.03, -.95, 'green', .3, .05);
+  }
+  function station(S, B, era, lamps) {
+    // tracks run along z through the station
+    for (const x of [-.18, .18]) { part(S, 'box', B, x, -.02, 0, .2, .03, 2.6, '#5a524a'); for (const r of [-.06, .06]) part(S, 'box', B, x + r, .01, 0, .015, .02, 2.6, '#8a8f95'); }
+    for (const x of [-.42, 0, .42]) part(S, 'box', B, x, 0, 0, x ? .2 : .14, .07, 2.1, '#b7aea0');
+    if (era >= 6) {
+      part(S, 'box', B, .85, 0, 0, .55, .45, 1.6, '#a9c3d3'); part(S, 'box', B, .05, .55, 0, 1, .04, 2.2, '#e1e6ea'); part(S, 'box', B, .05, .59, 0, .5, .03, 2.1, '#9fd3ec');
+      for (const z of [-1, -.35, .35, 1]) for (const x of [-.42, .42]) part(S, 'cyl', B, x, 0, z, .025, .55, .025, '#9aa3ad');
+    } else {
+      // brick hall with an arched train shed and a clock tower
+      part(S, 'box', B, .85, 0, 0, .5, .5, 1.5, era >= 5 ? '#b09a7c' : '#9a5a42'); part(S, 'prism', B, .85, .5, 0, .52, .22, 1.52, '#4a4f55');
+      for (let z = -.6; z <= .61; z += .3) part(S, 'box', B, .595, .18, z, .01, .2, .12, '#3b4a57');
+      for (const x of [-.55, .55]) for (const z of [-1, -.5, 0, .5, 1]) part(S, 'cyl', B, x, 0, z, .025, .45, .025, '#4a4f55'); part(S, 'prism', B, 0, .45, 0, 1.2, .3, 2.2, '#6d7d88');
+      part(S, 'box', B, .85, 0, -.85, .24, 1.05, .24, era >= 5 ? '#b09a7c' : '#9a5a42'); part(S, 'pyr', B, .85, 1.05, -.85, .3, .3, .3, '#3e4348');
+      part(S, 'box', B, .72, .78, -.85, .01, .13, .13, '#f2efe6');
+    }
+    for (const z of [-.9, -.3, .3, .9]) for (const x of [-.42, .42]) lamp(lamps, B, x, .3, z, era >= 5 ? 'led' : 'gas', .45, .03);
+  }
+  function launchPad(S, B, lamps) {
+    part(S, 'box', B, 0, -.06, 0, 1.3, .12, 1.3, '#9a9a96'); part(S, 'box', B, 0, -.05, .5, .3, .1, .6, '#3a3a3a');
+    // service tower, assembly building, fuel tanks
+    part(S, 'box', B, -.32, 0, 0, .18, 2.3, .18, '#b5332e'); for (let y = .2; y < 2.3; y += .3) part(S, 'box', B, -.22, y, 0, .2, .03, .05, '#b5332e');
+    part(S, 'box', B, 1.6, 0, -.2, .9, 1.6, .7, '#e8e6e0'); part(S, 'box', B, 1.6, .9, .155, .4, .7, .01, '#5a7a9a');
+    for (const z of [.7, 1.1]) part(S, 'sphere', B, .9, .2, z, .3, .3, .3, '#f2f2ee');
+    lamp(lamps, B, -.32, 2.3, 0, 'red', 0, .05); for (const [x, z] of [[.6, .6], [-.6, .6], [.6, -.6], [-.6, -.6]]) { part(S, 'cyl', B, x, 0, z, .02, .8, .02, '#888'); lamp(lamps, B, x, .8, z, 'led', 1, .05); }
+  }
+  function rocket(S, B, era, col, big) {
+    const s = big ? 1.25 : 1;
+    part(S, 'cyl', B, 0, .05, 0, .16 * s, 1.5 * s, .16 * s, '#f4f4f2'); part(S, 'cone', B, 0, .05 + 1.5 * s, 0, .16 * s, .32 * s, .16 * s, '#e9e9e6');
+    part(S, 'cyl', B, 0, .05 + .9 * s, 0, .165 * s, .05, .165 * s, '#202326'); part(S, 'box', B, 0, .05 + 1.1 * s, .081 * s, .05, .14, .01, col);
+    for (const x of [-.13, .13]) { part(S, 'cyl', B, x * s, .05, 0, .07 * s, .8 * s, .07 * s, '#efefec'); part(S, 'cone', B, x * s, .05 + .8 * s, 0, .07 * s, .14 * s, .07 * s, '#efefec'); }
+    for (let a = 0; a < 4; a++) part(S, 'box', B, Math.cos(a * 1.571) * .12, .05, Math.sin(a * 1.571) * .12, .02, .2, .1, '#3a3d42', 0, a * 1.571, 0);
+  }
   function updateBuildings() {
-    let key = ''; for (const t of sim.tribes.values()) key += t.id + ':' + t.port + ':' + t.huts + ':' + t.era + ':' + (t.walls ? 1 : 0) + ':' + t.wonders.length + ':' + t.faith + ':' + (t.grave ? Math.min(16, Math.ceil(t.deaths / 4)) : 0) + ':' + specialsFor(t).join(',') + ';';
+    let key = ''; for (const t of sim.tribes.values()) key += t.id + ':' + t.port + ':' + t.huts + ':' + t.era + ':' + (t.walls ? 1 : 0) + ':' + t.wonders.length + ':' + t.faith + ':' + (t.grave ? Math.min(16, Math.ceil(t.deaths / 4)) : 0) + ':' + specialsFor(t).join(',') + ':' + (t.techs.has('flight') ? 1 : 0) + (t.techs.has('railways') ? 1 : 0) + (t.era >= 6 && t.techs.has('flight') ? 1 : 0) + ';';
     if (key === world.buildKey) return; world.buildKey = key;
     const S = world.bset; beginSet(S);
+    world.ext = new Map();
     const M = { walls: 0, poles: 0, flags: 0 }, G = world.glow, streets = world.streets = [], lamps = world.lamps = []; let gn = 0;
     const glow = (B, x, y, z, sx, sy, sz) => { if (gn < 8000) G.setMatrixAt(gn++, local(B, x, y, z, sx, sy, sz)); };
     for (const t of sim.tribes.values()) {
@@ -3581,6 +3779,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const fx = cx + (wn ? 1.3 : 0), fy = cy - (wn ? 1.3 : 0), y0 = heightAt(fx, fy);
       setInst(world.poles, M.poles++, wx(fx), y0, wz(fy), 1, 1, 1, 0);
       setInst(world.flags, M.flags, wx(fx), y0, wz(fy), 1, 1, 1, .4); world.flags.setColorAt(M.flags++, tc.set(t.color));
+      world.ext.set(t.id, extent);
       if (t.walls) {
         const R = extent + 1, segs = Math.max(12, Math.round(Math.PI * 2 * R / .56));
         for (let s2 = 0; s2 < segs; s2++) {
@@ -3592,6 +3791,27 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         }
       }
     }
+    // big sites out of town: train stations, airports and spaceports
+    const used = [], sites = world.sites = [], oldClear = world.siteClear || new Set(); world.siteClear = new Set();
+    for (const t of sim.tribes.values()) used.push([t.camp.x + .5, t.camp.y + .5, (world.ext.get(t.id) || 2) + (t.walls ? 1.4 : .5)]);
+    for (const t of sim.tribes.values()) {
+      if (t.techs.has('railways')) {
+        const r = (world.routes || []).find(r => r.rail && (r.a === t.id || r.b === t.id));
+        const pref = r ? Math.atan2((r.a === t.id ? r.x2 - r.x1 : r.x1 - r.x2), (r.a === t.id ? r.y2 - r.y1 : r.y1 - r.y2)) : null;
+        const st = findSite(t, 2.6, 1.6, 1.4, 5, used, pref);
+        if (st) { const B = base(wx(st.x), st.h, wz(st.y), pref ?? st.head); station(S, B, t.era, lamps); sites.push({ kind: 'station', t, ...st }); }
+      }
+      if (t.techs.has('flight')) {
+        const len = t.era >= 6 ? 4.4 : 3.4, ap = findSite(t, len, 2.6, 2.2, 8, used);
+        if (ap) { for (let u = -len / 2; u <= len / 2; u += .8) part(S, 'box', base(wx(ap.x + Math.sin(ap.head) * u), ap.lo - .1, wz(ap.y + Math.cos(ap.head) * u), ap.head), .6, 0, 0, 2.5, ap.h - ap.lo + .02, .85, '#7d8a64'); airport(S, base(wx(ap.x), ap.h, wz(ap.y), ap.head).clone(), t.era, t.color, lamps, len); sites.push({ kind: 'airport', t, len, ...ap }); }
+      }
+      if (t.era >= 6 && t.techs.has('flight')) {
+        const lp = findSite(t, 2.4, 2.4, 2, 9, used);
+        if (lp) { const B = base(wx(lp.x), lp.h, wz(lp.y), lp.head); launchPad(S, B, lamps); sites.push({ kind: 'pad', t, ...lp }); }
+      }
+    }
+    for (const i of oldClear) if (!world.siteClear.has(i)) showTrees(i, sim.terrain[i] === T.FOREST);
+    for (const i of world.siteClear) if (!oldClear.has(i)) showTrees(i, false);
     endSet(S); G.count = gn; G.instanceMatrix.needsUpdate = true;
     for (const k in M) { const m = world[k]; m.count = M[k]; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   }
@@ -3800,7 +4020,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     const id = +b.dataset.follow; follow = follow === id ? 0 : id; if (!follow) focus = null; renderInspector();
   });
   // lets tests and future tools point the camera at a tile
-  window.addEventListener('focusTile', e => { const { x, y, h } = e.detail; const tgt = new THREE.Vector3(wx(x), h ?? Math.max(0, heightAt(x, y)), wz(y)); controls.target.copy(tgt); camera.position.copy(tgt).add(new THREE.Vector3(0, 4.5, 6)); focus = null; follow = 0; });
+  // test hook: look at the nth station, airport or launch pad
+  window.addEventListener('focusSite', e => { const { kind, i = 0, h = 0, d = 1 } = e.detail, st = (world.sites || []).filter(q => q.kind === kind)[i]; if (st) window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y, h: st.h + h, d } })); window.__site = st ? st.t.name : 'none'; window.__parts = JSON.stringify(world.bset.n) + ' ' + JSON.stringify(world.dset.n); });
+  window.addEventListener('focusTile', e => { const { x, y, h, d = 1 } = e.detail; const tgt = new THREE.Vector3(wx(x), h ?? Math.max(0, heightAt(x, y)), wz(y)); controls.target.copy(tgt); camera.position.copy(tgt).add(new THREE.Vector3(0, 4.5 * d, 6 * d)); focus = null; follow = 0; });
   function drawPop() {
     const c = $('#popChart'), w = c.clientWidth; if (!w) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1); if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(54 * dpr); }
@@ -3883,7 +4105,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     if (tps) { acc += dt * tps; while (acc >= 1 && steps < 30) { sim.step(); acc -= 1; steps++; } if (steps >= 30) acc = 0; }
     const alpha = tps && tps <= 40 ? Math.min(1, acc) : 1;
     clock += dt; if (started) watchFps(dt); world.waterTex.offset.set(clock * .004, clock * .0025);
-    syncTiles(); updateFields(); updateBorders(); applySeason(); applyDay(dt, tps); beginSet(world.dset); updatePeople(alpha); updateShips(alpha); if (Q.life) updateAnimals(); updatePlanes(alpha); updateClouds(dt); updateSmoke(); updateTech(); endSet(world.dset); world.smoke.instanceMatrix.needsUpdate = true; updateBuildings(); updateFires(); updateNight(); updateEffects(); updateSelection();
+    syncTiles(); updateFields(); updateBorders(); applySeason(); applyDay(dt, tps); beginSet(world.dset); updatePeople(alpha); updateShips(alpha); if (Q.life) { updateAnimals(); updateBoats(); } updatePlanes(alpha); updateSites(alpha); updateClouds(dt); updateSmoke(); updateTech(); endSet(world.dset); world.smoke.instanceMatrix.needsUpdate = true; updateBuildings(); updateFires(); updateNight(); updateEffects(); updateSelection();
     if (follow) { const a = sim.byId.get(follow); if (a && a._wx !== undefined) focus = new THREE.Vector3(a._wx, a._wy, a._wz); else follow = 0; }
     if (focus) { tmpV.copy(focus).sub(controls.target).multiplyScalar(.08); controls.target.add(tmpV); camera.position.add(tmpV); if (tmpV.lengthSq() < 1e-5 && !follow) focus = null; }
     if (!started) { const r = Math.hypot(camera.position.x - controls.target.x, camera.position.z - controls.target.z); const a = Math.atan2(camera.position.z - controls.target.z, camera.position.x - controls.target.x) + dt * .05; camera.position.x = controls.target.x + Math.cos(a) * r; camera.position.z = controls.target.z + Math.sin(a) * r; }

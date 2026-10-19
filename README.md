@@ -55,6 +55,9 @@ Nations with Sailing send captains and settlers across the sea. When they reach 
 - **Islands** dot the open sea, and explorers are drawn to settle them.
 - **Merchant ships** sail between harbors, from small trading cogs to container ships stacked with cargo. Each voyage trades goods, spreads ideas and builds friendship, and opens a sea route. Pirates sometimes seize a cargo.
 - **Island communication** improves with the ages. Merchant ships carry the news at first. Then come undersea telegraph cables, radio, satellite links and fiber-optic internet cables. You can see cables on the seabed and messages flying through the sky. Linked nations grow friendlier and share ideas each year, and war cuts the link.
+- **Harbor boats:** canoes and rafts, then rowboats and sailboats, steamers and tugs, and in modern times ferries, yachts and speedboats work around each harbor. Ferries cross between linked island harbors, and modern navies sail aircraft carriers with jets on deck.
+
+  ![Ferries, a tug, a yacht and a sailboat in a modern harbor](docs/harbor.png)
 - **Sea events change with the era.** Early fishers glimpse sea serpents and find beached whales. Later come pirate raids, treasure wrecks and icebergs in the shipping lanes. Industrial nations build offshore oil rigs, and in the 2000s you see cruise ships, oil spills, wind farms out at sea and the odd tsunami. Storms bring dark clouds, rain and lightning.
 - **Sea life:** whales spout, dolphins leap, fish swirl in shoals and fishing boats work the coast near harbor towns.
 
@@ -64,6 +67,14 @@ Nations with Sailing send captains and settlers across the sea. When they reach 
 Stone Age families live in rock shelters and caves with a campfire and a hide rack out front. Towns then grow from huts to cities, and in the 2000s they pack into compact modern cities: a grid of streets with cars, glass towers that rise tallest at the center, rooftop gardens and antennas.
 
 ![A 2000s city of glass towers beside fields and forest](docs/city.png)
+
+Out past the town edge, nations with railways build a **train station** where the line comes in, with platforms and a waiting train. With flight they build an **airport** with a runway, a terminal, a control tower, hangars and airliners that take off, circle and land.
+
+![An airport with a runway, terminal, control tower and an airliner taking off](docs/airport.png)
+
+**The space race:** modern nations build a launch pad with a service tower and send rockets up in clouds of smoke. They put satellites in orbit, then astronauts, then land on the Moon, build space stations, send probes and reach Mars. The Chronicle notes each first.
+
+![A rocket lifting off from its launch pad](docs/launch.png)
 
 Towns grow from huts to cities, and each culture builds its own style of home and wall. Over time they add **barracks, granaries, markets, forges, temples, castles, libraries, universities, observatories, arenas, windmills, hospitals, railway stations, statues, radio towers, airfields, data centers, power plants, wind turbines and stadiums**, plus three wonders per nation. Port towns build harbors and lighthouses. Roads link trading partners and get paved as the eras pass.
 
