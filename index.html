@@ -2112,7 +2112,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   sun.shadow.bias = -.0004; sun.shadow.normalBias = .03;
   scene.add(sun, sun.target);
 
-  let world = null;
+  let world = null, plights = [], lightFrame = 0, nearLamps = null;
   const C = c => new THREE.Color(c);
   // natural ground palette per terrain type
   const GROUND = [C('#8c7a55'), C('#cdb983'), C('#58802f'), C('#3f5a25'), C('#7a7258'), C('#5f5952'), C('#b59a4e')];
@@ -2680,11 +2680,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   }
   // cars on the streets of modern cities
   function updateCars() {
-    const D = world.dset; if (!world.streets) return;
+    const D = world.dset, CL = world.carLights = []; if (!world.streets) return;
     let k = 0;
     for (const s of world.streets) {
       const u = ((clock * .25 + k * .37) % 2), f = u < 1 ? u : 2 - u, x = s[0] + (s[2] - s[0]) * f, y = s[1] + (s[3] - s[1]) * f, h = Math.atan2(s[2] - s[0], s[3] - s[1]) + (u < 1 ? 0 : Math.PI);
-      const B = base(wx(x), heightAt(x, y) + .02, wz(y), h); part(D, 'box', B, .05, 0, 0, .09, .06, .17, CRATES[k % CRATES.length]); part(D, 'box', B, .05, .06, -.01, .08, .04, .09, '#2b3a4a');
+      const B = base(wx(x), heightAt(x, y) + .02, wz(y), h); part(D, 'box', B, .05, 0, 0, .09, .06, .17, CRATES[k % CRATES.length]); if (world.night > .03) CL.push([wx(x) + Math.cos(h) * .05, wz(y) - Math.sin(h) * .05, heightAt(x, y), h]); part(D, 'box', B, .05, .06, -.01, .08, .04, .09, '#2b3a4a');
       if (++k > 300) break;
     }
   }
@@ -2841,9 +2841,22 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     world.flags.setColorAt(0, tmpC.set('#fff'));
     group.add(world.walls, world.poles, world.flags);
     const flameGeo = new THREE.ConeGeometry(.22, .7, 6); flameGeo.translate(0, .35, 0);
-    world.glow = instanced(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: '#ffd27a', transparent: true, opacity: 0, depthWrite: false }), 4000, false); world.glow.count = 0; group.add(world.glow);
+    world.glow = instanced(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: '#ffd27a', transparent: true, opacity: 0, depthWrite: false }), 8000, false); world.glow.count = 0; group.add(world.glow);
     world.flames = instanced(flameGeo, new THREE.MeshBasicMaterial({ color: '#ff8a2a', transparent: true, opacity: .85 }), 1000, false);
     group.add(world.flames);
+    // night lights: pools of light on the ground, glowing bulbs with a soft aura, lighthouse beams
+    const haloTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.3, 'rgba(255,255,255,.5)'); gr.addColorStop(.65, 'rgba(255,255,255,.14)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
+    const haloGeo = new THREE.PlaneGeometry(1, 1); haloGeo.rotateX(-Math.PI / 2);
+    const addMat = o => new THREE.MeshBasicMaterial(Object.assign({ transparent: true, depthWrite: false, opacity: 0, blending: THREE.AdditiveBlending }, o));
+    world.halo = instanced(haloGeo, addMat({ map: haloTex, polygonOffset: true, polygonOffsetFactor: -4 }), 3000, false); world.halo.receiveShadow = false; world.halo.renderOrder = 2;
+    world.bulbs = instanced(new THREE.SphereGeometry(.5, 8, 6), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }), 2000, false); world.bulbs.receiveShadow = false;
+    world.aura = instanced(new THREE.SphereGeometry(.5, 10, 8), addMat({}), 2000, false); world.aura.receiveShadow = false;
+    const beamGeo = new THREE.CylinderGeometry(.02, .5, 1, 8, 1, true); beamGeo.rotateX(Math.PI / 2); beamGeo.translate(0, 0, .5);
+    world.beams = instanced(beamGeo, addMat({ color: '#fff3c4', side: THREE.DoubleSide }), 100, false); world.beams.receiveShadow = false;
+    world.lampPosts = instanced(new THREE.CylinderGeometry(.018, .025, 1, 5).translate(0, .5, 0), std({ color: '#2d3034', roughness: .6 }), 1500, false);
+    for (const m of [world.halo, world.bulbs, world.aura]) { m.setColorAt(0, tmpC.set('#fff')); m.visible = false; }
+    world.lamps = []; world.roadLamps = []; world.carLights = [];
+    group.add(world.halo, world.bulbs, world.aura, world.beams, world.lampPosts);
     // effects
     world.sparks = instanced(new THREE.OctahedronGeometry(.16), new THREE.MeshBasicMaterial({ color: '#ff6a3c' }), 400, false);
     group.add(world.sparks);
@@ -2997,7 +3010,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   const ROAD_COL = [C('#8a7254'), C('#8a7254'), C('#93836a'), C('#9a9284'), C('#55575b'), C('#3c3f43'), C('#3a3d42')];
   const RAIL_COL = C('#3b302a');
   function updateRoads() {
-    const pos = [], col = [], done = new Set(); world.routes = [];
+    const pos = [], col = [], done = new Set(); world.routes = []; const RL = world.roadLamps = []; let nlp = 0;
     for (const t of sim.tribes.values()) for (const key in t.lastEv) {
       if (!key.startsWith('tr')) continue;
       const o = sim.tribes.get(+key.slice(2)); if (!o) continue;
@@ -3013,6 +3026,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         if (!sim.passable(Math.floor(ax), Math.floor(ay)) || !sim.passable(Math.floor(bx), Math.floor(by))) continue;
         const pts = [[ax + nx, ay + ny], [ax - nx, ay - ny], [bx + nx, by + ny], [bx - nx, by - ny]].map(([px, py]) => [wx(px), heightAt(px, py) + .035, wz(py)]);
         for (const q of [pts[0], pts[1], pts[2], pts[2], pts[1], pts[3]]) { pos.push(q[0], q[1], q[2]); col.push(c.r, c.g, c.b); }
+        const re = Math.min(t.era, o.era);
+        if (re >= 3 && k % 3 === 1 && nlp < 1500) {
+          const lx = ax + nx / w * .3, ly = ay + ny / w * .3, g = heightAt(lx, ly), hh = re >= 5 ? .7 : .55;
+          if (sim.passable(Math.floor(lx), Math.floor(ly))) { setInst(world.lampPosts, nlp++, wx(lx), g, wz(ly), 1, hh, 1); RL.push({ x: wx(lx), y: g + hh, z: wz(ly), g, r: 1.15, c: re <= 4 ? LAMP_C.gas : re === 5 ? LAMP_C.sodium : LAMP_C.led, b: .05 }); }
+        }
         if (rail) {
           const ox = nx / w * .3, oy = ny / w * .3, rw = .07 / w;
           const rp = [[ax + ox + nx * rw, ay + oy + ny * rw], [ax + ox - nx * rw, ay + oy - ny * rw], [bx + ox + nx * rw, by + oy + ny * rw], [bx + ox - nx * rw, by + oy - ny * rw]].map(([px, py]) => [wx(px), heightAt(px, py) + .04, wz(py)]);
@@ -3023,6 +3041,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.computeVertexNormals();
     world.roads.geometry.dispose(); world.roads.geometry = g;
+    world.lampPosts.count = nlp; world.lampPosts.instanceMatrix.needsUpdate = true;
   }
 
   // ---------- seasons
@@ -3380,12 +3399,66 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       }
     }
   }
+  // a light source: where it is, the pool of light it throws, its bulb and its flame
+  const LAMP_C = { fire: new THREE.Color('#ff7a1e'), torch: new THREE.Color('#ff9a3a'), gas: new THREE.Color('#ffcf7a'), sodium: new THREE.Color('#ffae55'), led: new THREE.Color('#f4f1e2'), window: new THREE.Color('#ffc46a'), ship: new THREE.Color('#ffe2a0'), red: new THREE.Color('#ff3b30') };
+  const LP = new THREE.Vector3();
+  function lamp(list, B, x, y, z, kind, r, bulb = 0, fire = 0, gy = null) {
+    LP.set(x, y, z).applyMatrix4(B);
+    list.push({ x: LP.x, y: LP.y, z: LP.z, g: gy ?? (LP.y - y), r, c: LAMP_C[kind], b: bulb, fire, fl: kind === 'fire' || kind === 'torch', torch: kind === 'torch' });
+  }
+  function updateNight() {
+    const night = world.night || 0, Hh = world.halo, Bu = world.bulbs, Au = world.aura, on = night > .03;
+    Hh.visible = Bu.visible = Au.visible = world.beams.visible = on;
+    if (!on) { lightPool(0); return; }
+    Hh.material.opacity = Math.min(.85, night); Bu.material.opacity = Math.min(1, night * 1.4); Au.material.opacity = night * .1; world.beams.material.opacity = night * .16;
+    let nh = 0, nb = 0;
+    const add = (x, z, g, r, c, fl, y, bs) => {
+      const k = fl ? .84 + Math.sin(clock * 9 + x * 7.1 + z * 3.3) * .1 + Math.sin(clock * 23 + x) * .06 : 1;
+      if (r && nh < 3000) { setInst(Hh, nh, x, g + .05, z, r * k * 2, 1, r * k * 2); Hh.setColorAt(nh++, tmpC.copy(c).multiplyScalar(k)); }
+      if (bs && nb < 2000) { setInst(Bu, nb, x, y, z, bs, bs, bs); Bu.setColorAt(nb, c); setInst(Au, nb, x, y, z, bs * 4.5 * k, bs * 4.5 * k, bs * 4.5 * k); Au.setColorAt(nb++, c); }
+    };
+    for (const L of world.lamps) add(L.x, L.z, L.g, L.r, L.c, L.fl, L.y, L.b);
+    for (const L of world.roadLamps) add(L.x, L.z, L.g, L.r, L.c, false, L.y, L.b);
+    for (const [i] of sim.fires) { const x = i % W + .5, y = ((i / W) | 0) + .5; add(wx(x), wz(y), heightAt(x, y), 2.2, LAMP_C.fire, true, 0, 0); }
+    for (const s of sim.ships) {
+      if (!s.alive || (s.sub && !(s.surf > 0))) continue;
+      add(wx(s.x), wz(s.y), -.02, .55, s.era >= 4 ? LAMP_C.led : LAMP_C.ship, s.era < 4, .42, .035);
+    }
+    for (const [x, z, g, h] of world.carLights) add(x + Math.sin(h) * .25, z + Math.cos(h) * .25, g, .3, LAMP_C.led, false, 0, 0);
+    for (const p of sim.planes || []) if (p.alive && p.alt > .2 && Math.sin(clock * 6 + (p.id || 0)) > .6 && nb < 2000) {
+      const x = wx(p.x), z = wz(p.y), y = Math.max(.3, heightAt(p.x, p.y)) + 4.5 * p.alt + .6;
+      setInst(Bu, nb, x, y, z, .07, .07, .07); Bu.setColorAt(nb, LAMP_C.red); setInst(Au, nb, x, y, z, .35, .35, .35); Au.setColorAt(nb++, LAMP_C.red);
+    }
+    Hh.count = nh; Bu.count = nb; Au.count = nb;
+    for (const m of [Hh, Bu, Au]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+    // lighthouses sweep the sea
+    let nbm = 0;
+    for (const L of world.lamps) if (L.beam) for (const a of [0, Math.PI]) if (nbm < 100) { tmpP.set(L.x, L.y, L.z); tmpQ.setFromEuler(tmpE.set(.05, clock * 1.2 + a + L.x, 0, 'YXZ')); tmpS.set(1.4, .7, 7); tmpM.compose(tmpP, tmpQ, tmpS); world.beams.setMatrixAt(nbm++, tmpM); }
+    world.beams.count = nbm; world.beams.instanceMatrix.needsUpdate = true;
+    lightPool(night);
+  }
+  // on High graphics, a few real lights near the camera so fires light up walls and people
+  function lightPool(night) {
+    const pl = plights; if (!pl.length) return;
+    if (night <= .03) { for (const l of pl) l.intensity = 0; return; }
+    if (!(lightFrame++ % 15) || !nearLamps) {
+      const tx = controls.target.x, tz = controls.target.z;
+      nearLamps = world.lamps.filter(L => L.r >= .8).map(L => [L, (L.x - tx) ** 2 + (L.z - tz) ** 2]).sort((a, b) => a[1] - b[1]).slice(0, pl.length).map(a => a[0]);
+    }
+    pl.forEach((l, i) => { const L = nearLamps[i]; if (!L) { l.intensity = 0; return; } l.position.set(L.x, L.y + .15, L.z); l.color.copy(L.c); l.intensity = night * (L.fl ? 1.5 + Math.sin(clock * 11 + i) * .25 : 1.2) * Math.min(2, L.r); l.distance = 1.2 + L.r * 2.2; });
+  }
   function updateFires() {
     let n = 0;
     for (const [i, ttl] of sim.fires) {
       if (n >= 1000) break;
       const x = i % W + .5, y = ((i / W) | 0) + .5, f = .75 + Math.sin(clock * 22 + i * 1.7) * .25;
       setInst(world.flames, n++, wx(x), heightAt(x, y), wz(y), f, f * (.6 + ttl * .08), f, i);
+    }
+    const dark = (world.night || 0) > .15;
+    for (const L of world.lamps) {
+      if (!L.fire || (L.torch && !dark) || n >= 1000) continue;
+      const f = L.fire * (.8 + Math.sin(clock * 19 + L.x * 5.3) * .14 + Math.sin(clock * 31 + L.z * 3) * .08);
+      setInst(world.flames, n++, L.x, L.y, L.z, f, f * 1.25, f, clock * 2 + L.x);
     }
     world.flames.count = n; world.flames.instanceMatrix.needsUpdate = true;
   }
@@ -3394,8 +3467,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     let key = ''; for (const t of sim.tribes.values()) key += t.id + ':' + t.port + ':' + t.huts + ':' + t.era + ':' + (t.walls ? 1 : 0) + ':' + t.wonders.length + ':' + t.faith + ':' + (t.grave ? Math.min(16, Math.ceil(t.deaths / 4)) : 0) + ':' + specialsFor(t).join(',') + ';';
     if (key === world.buildKey) return; world.buildKey = key;
     const S = world.bset; beginSet(S);
-    const M = { walls: 0, poles: 0, flags: 0 }, G = world.glow, streets = world.streets = []; let gn = 0;
-    const glow = (B, x, y, z, sx, sy, sz) => { if (gn < 4000) G.setMatrixAt(gn++, local(B, x, y, z, sx, sy, sz)); };
+    const M = { walls: 0, poles: 0, flags: 0 }, G = world.glow, streets = world.streets = [], lamps = world.lamps = []; let gn = 0;
+    const glow = (B, x, y, z, sx, sy, sz) => { if (gn < 8000) G.setMatrixAt(gn++, local(B, x, y, z, sx, sy, sz)); };
     for (const t of sim.tribes.values()) {
       const cx = t.camp.x + .5, cy = t.camp.y + .5, style = STY(t.style), wn = t.wonders.length;
       for (let w = 0; w < wn; w++) {
@@ -3426,7 +3499,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         if (k >= nbH || city) continue;
         const Bh = base(wx(bx), heightAt(bx, by) - .02, wz(by), Math.atan2(cx - bx, cy - by));
         house(S, Bh, style, t.era, jj, k, t.color);
-        if (t.era >= 5 && jj > .3) { const h = t.era === 5 ? 1.2 + jj * 2.2 : 1.6 + jj * 3.6; for (let y = .3; y < h - .1; y += .28) if (((k * 13 + y * 31) | 0) % 3) { glow(Bh, 0, y, .262, .38, .07, .01); glow(Bh, .262, y, 0, .01, .07, .38); } }
+        // light at night: cave fires, torches by the door, then gas and electric street lamps
+        if (t.era === 0) lamp(lamps, Bh, 0, .01, .52, 'fire', .95, 0, .17);
+        else if (t.era <= 3) {
+          lamp(lamps, Bh, 0, .05, .5, 'window', .55);
+          if (k % 3 === 0) { part(S, 'cyl', Bh, .34, 0, .44, .025, .42, .025, '#4a3626'); part(S, 'cyl', Bh, .34, .41, .44, .04, .05, .04, '#2f2a24'); lamp(lamps, Bh, .34, .45, .44, 'torch', 1, 0, .12); }
+        } else if (k % 2 === 0) {
+          part(S, 'cyl', Bh, .38, 0, .46, .02, .62, .02, '#2d3034'); part(S, 'box', Bh, .38, .62, .46, .07, .07, .07, t.era === 4 ? '#3a3226' : '#4a4e52');
+          lamp(lamps, Bh, .38, .6, .46, t.era === 4 ? 'gas' : 'sodium', 1.25, .06);
+        } else lamp(lamps, Bh, 0, .05, .5, 'window', .6);
+        if (t.era >= 5 && jj > .3) { const h = t.era === 5 ? 1.2 + jj * 2.2 : 1.6 + jj * 3.6; for (let y = .3; y < h - .1; y += .28) if (((k * 13 + y * 31) | 0) % 3) { glow(Bh, 0, y, .266, .38, .07, .01); glow(Bh, .266, y, 0, .01, .07, .38); glow(Bh, 0, y, -.266, .38, .07, .01); glow(Bh, -.266, y, 0, .01, .07, .38); } }
         else if (t.era === 0) glow(Bh, 0, .06, .52, .12, .12, .12);
         else { glow(Bh, .17, .26, .36, .05, .06, .05); glow(Bh, -.12, .2, .3, .1, .08, .01); }
       }
@@ -3442,8 +3524,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
           if (!sim.passable(tx, ty) || sim.terrain[ty * W + tx] === T.FARM || taken.some(([x, y, r]) => Math.hypot(x - bx, y - by) < r)) continue;
           const d = Math.hypot(bx - cx, by - cy), jj = hash(bx * 3.1, by * 1.7), h = Math.max(.45, (5.2 - d * .62)) * (.55 + jj * .8);
           const Bt = base(wx(bx), heightAt(bx, by) - .02, wz(by), 0);
-          tower(S, Bt, h, .62, style, t.color, t.era, placed); placed++; used.add(bi + ',' + bj); extent = Math.max(extent, d + .4);
-          for (let y = .3; y < h - .1; y += .28) if (((placed * 13 + y * 31) | 0) % 3) { glow(Bt, 0, y, .312, .5, .07, .01); glow(Bt, .312, y, 0, .01, .07, .5); }
+          tower(S, Bt, h, .62, style, t.color, t.era, placed); placed++; lamp(lamps, Bt, 0, .05, .45, 'window', .9);
+          if (h > 4.5) lamp(lamps, Bt, -.1, h + .9, -.1, 'red', 0, .05); used.add(bi + ',' + bj); extent = Math.max(extent, d + .4);
+          for (let y = .3; y < h - .1; y += .28) if (((placed * 13 + y * 31) | 0) % 3) { glow(Bt, 0, y, .32, .5, .07, .01); glow(Bt, .32, y, 0, .01, .07, .5); glow(Bt, 0, y, -.32, .5, .07, .01); glow(Bt, -.32, y, 0, .01, .07, .5); }
         }
         // streets between the blocks, with cars on them
         for (const key of used) {
@@ -3453,6 +3536,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
             part(S, 'box', base(wx(mx), heightAt(mx, my) - .015, wz(my), x1 === x2 ? 0 : Math.PI / 2), 0, 0, 0, .26, .03, BS + .26, '#3a3d42');
             part(S, 'box', base(wx(mx), heightAt(mx, my) + .016, wz(my), x1 === x2 ? 0 : Math.PI / 2), 0, 0, 0, .015, .002, BS, '#e8d58a');
             streets.push([x1, y1, x2, y2]);
+            const Lb = base(wx(x1 + .15), heightAt(x1 + .15, y1 + .15), wz(y1 + .15), 0);
+            part(S, 'cyl', Lb, 0, 0, 0, .025, .75, .025, '#2d3034'); part(S, 'box', Lb, .06, .74, 0, .14, .025, .04, '#2d3034'); lamp(lamps, Lb, .12, .72, 0, 'led', 1.35, .05);
           }
         }
       }
@@ -3461,6 +3546,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         const B = base(wx(px), 0, wz(py), ang);
         part(S, 'box', B, 0, .04, -.2, .26, .04, 1.1, '#7a5a3a');
         for (const z of [-.6, -.2, .2]) for (const x of [-.11, .11]) part(S, 'cyl', B, x, -.4, z, .04, .46, .04, '#4a3626');
+        part(S, 'cyl', B, .11, .06, -.72, .02, .32, .02, '#3a2c20'); lamp(lamps, B, .11, .4, -.72, t.era >= 4 ? 'sodium' : 'torch', .8, t.era >= 4 ? .05 : 0, t.era >= 4 ? 0 : .1, 0);
         if (t.era >= 2) {
           let lx = null, ly = null, bd2 = 9;
           for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) { const nx = Math.floor(px) + dx, ny = Math.floor(py) + dy; if (sim.passable(nx, ny)) { const dd = Math.hypot(nx + .5 - cx, ny + .5 - cy); if (dd > 0 && (lx === null || Math.abs(dd - 4) < bd2)) { bd2 = Math.abs(dd - 4); lx = nx + .5; ly = ny + .5; } } }
@@ -3468,6 +3554,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
             const L = base(wx(lx), heightAt(lx, ly) - .02, wz(ly), 0), hh = t.era >= 4 ? 1.6 : 1.2;
             part(S, 'cyl', L, 0, 0, 0, .3, hh, .3, '#f2efe8'); part(S, 'cyl', L, 0, hh * .33, 0, .31, .14, .31, '#c0392b'); part(S, 'cyl', L, 0, hh * .7, 0, .31, .14, .31, '#c0392b');
             part(S, 'cyl', L, 0, hh, 0, .22, .16, .22, '#ffe08a'); part(S, 'cone', L, 0, hh + .16, 0, .28, .16, .28, '#3a3f45');
+            lamp(lamps, L, 0, hh + .08, 0, 'gas', 1.6, .13); lamps[lamps.length - 1].beam = true;
           }
         }
       }
@@ -3479,6 +3566,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
           part(S, 'box', B, 0, 0, 0, .5, .55, .5, e >= 4 ? '#d9d2c4' : '#e8e0cc');
           if (e >= 2) { part(S, 'box', B, 0, .55, 0, .22, .45, .22, '#e8e0cc'); part(S, 'pyr', B, 0, 1, 0, .26, .45, .26, rel.color); }
           else part(S, 'pyr', B, 0, .55, 0, .6, .4, .6, rel.color);
+          for (const x of [-.2, .2]) { part(S, 'cyl', B, x, 0, .38, .03, .3, .03, '#5a4632'); if (e <= 3) lamp(lamps, B, x, .32, .38, 'torch', .7, 0, .08); else lamp(lamps, B, x, .32, .38, 'gas', .7, .04); }
+        }
+      }
+      if (t.era <= 2) {
+        const bx = cx - (wn ? 1.2 : .75), by = cy - (wn ? .2 : .55);
+        if (sim.passable(Math.floor(bx), Math.floor(by))) {
+          const Bf = base(wx(bx), heightAt(bx, by) - .01, wz(by), t.id);
+          for (let a = 0; a < 9; a++) part(S, 'sphere', Bf, Math.cos(a * .7) * .2, 0, Math.sin(a * .7) * .2, .06, .05, .06, '#6f6a63');
+          for (let a = 0; a < 3; a++) part(S, 'cyl', Bf, 0, .04, 0, .03, .3, .03, '#3b2a1c', Math.PI / 2 - .5, a * 2.1, 0);
+          lamp(lamps, Bf, 0, .02, 0, 'fire', 2.1, 0, .36);
         }
       }
       const fx = cx + (wn ? 1.3 : 0), fy = cy - (wn ? 1.3 : 0), y0 = heightAt(fx, fy);
@@ -3489,7 +3586,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         for (let s2 = 0; s2 < segs; s2++) {
           const ang = s2 / segs * Math.PI * 2, bx = cx + Math.cos(ang) * R, by = cy + Math.sin(ang) * R;
           if (!sim.passable(Math.floor(bx), Math.floor(by)) || heightAt(bx, by) < .08) continue;
-          wallSeg(S, base(wx(bx), heightAt(bx, by) - .03, wz(by), Math.atan2(cx - bx, cy - by)), style, t.era, s2 % 6 === 0);
+          const Bw = base(wx(bx), heightAt(bx, by) - .03, wz(by), Math.atan2(cx - bx, cy - by));
+          wallSeg(S, Bw, style, t.era, s2 % 6 === 0);
+          if (s2 % 6 === 3) { part(S, 'cyl', Bw, 0, 0, .3, .022, .7, .022, t.era >= 4 ? '#2d3034' : '#4a3626'); if (t.era >= 4) lamp(lamps, Bw, 0, .72, .3, t.era === 4 ? 'gas' : 'sodium', 1.1, .05); else lamp(lamps, Bw, 0, .72, .3, 'torch', 1.05, 0, .12); }
         }
       }
     }
@@ -3784,7 +3883,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     if (tps) { acc += dt * tps; while (acc >= 1 && steps < 30) { sim.step(); acc -= 1; steps++; } if (steps >= 30) acc = 0; }
     const alpha = tps && tps <= 40 ? Math.min(1, acc) : 1;
     clock += dt; if (started) watchFps(dt); world.waterTex.offset.set(clock * .004, clock * .0025);
-    syncTiles(); updateFields(); updateBorders(); applySeason(); applyDay(dt, tps); beginSet(world.dset); updatePeople(alpha); updateShips(alpha); if (Q.life) updateAnimals(); updatePlanes(alpha); updateClouds(dt); updateSmoke(); updateTech(); endSet(world.dset); world.smoke.instanceMatrix.needsUpdate = true; updateFires(); updateBuildings(); updateEffects(); updateSelection();
+    syncTiles(); updateFields(); updateBorders(); applySeason(); applyDay(dt, tps); beginSet(world.dset); updatePeople(alpha); updateShips(alpha); if (Q.life) updateAnimals(); updatePlanes(alpha); updateClouds(dt); updateSmoke(); updateTech(); endSet(world.dset); world.smoke.instanceMatrix.needsUpdate = true; updateBuildings(); updateFires(); updateNight(); updateEffects(); updateSelection();
     if (follow) { const a = sim.byId.get(follow); if (a && a._wx !== undefined) focus = new THREE.Vector3(a._wx, a._wy, a._wz); else follow = 0; }
     if (focus) { tmpV.copy(focus).sub(controls.target).multiplyScalar(.08); controls.target.add(tmpV); camera.position.add(tmpV); if (tmpV.lengthSq() < 1e-5 && !follow) focus = null; }
     if (!started) { const r = Math.hypot(camera.position.x - controls.target.x, camera.position.z - controls.target.z); const a = Math.atan2(camera.position.z - controls.target.z, camera.position.x - controls.target.x) + dt * .05; camera.position.x = controls.target.x + Math.cos(a) * r; camera.position.z = controls.target.z + Math.sin(a) * r; }
@@ -3798,6 +3897,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   setSpeed(2);
   function applyGfx(level, note) {
     gfxLevel = level; Q = GFX[level];
+    for (const l of plights) scene.remove(l);
+    plights = []; nearLamps = null;
+    if (Q.life >= 2) for (let i = 0; i < 4; i++) { const l = new THREE.PointLight('#ffb060', 0, 4, 2); scene.add(l); plights.push(l); }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, Q.pr)); resize();
     renderer.shadowMap.enabled = Q.shadows; sun.castShadow = Q.shadows;
     if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } sun.shadow.mapSize.set(Q.map, Q.map);

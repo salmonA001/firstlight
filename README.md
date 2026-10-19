@@ -80,6 +80,9 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 - **Drones:** drones buzz over armies.
 
 ### A living world
+- **Night lights:** with day and night on, towns light up after dark. Stone Age caves glow with campfires, early towns have a bonfire and torches by the doors and along the walls, the 1800s bring gas street lamps along roads, and modern cities have lit windows, streetlights, car headlights and red warning lights on tall towers. Lighthouses sweep the sea with beams and ships carry lanterns.
+
+  ![A Middle Ages town at night lit by torches and a bonfire](docs/night.png)
 - **Terrain:** low coastal plains, rolling hills, deep sea trenches and tall snowy mountains.
 - **Biomes:** the north is frozen tundra and snowy pine forest, the middle is temperate woodland, and the south turns to savanna, jungle and desert, with swamps along wet coasts. Each biome has its own ground color, trees (palms and cacti, flat-topped acacias, dense jungle, snowy pines, willows), ground cover and wildlife (camels, zebras, elephants, reindeer). Deserts and tundra grow less food, so fewer people live there.
 - Seasons change every year: green summers, autumn colors and snowy winters.
