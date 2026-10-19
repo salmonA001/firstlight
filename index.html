@@ -221,6 +221,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   const FOOD_CAP = [0, 0.4, 2.5, 1.2, 0.3, 0, 6];
   const FOOD_REGEN = [0, 0.001, 0.005, 0.003, 0.001, 0, 0.04];
   const WOOD_CAP = 16;
+  // climate zones layered over the terrain: they change the ground, the trees, the wildlife and how much food grows
+  const BIO = { TEMPERATE: 0, DESERT: 1, SAVANNA: 2, JUNGLE: 3, TAIGA: 4, TUNDRA: 5, SWAMP: 6 };
+  const BIOMES = [
+    { id: 'temperate', name: 'Temperate woodland', fert: 1 }, { id: 'desert', name: 'Desert', fert: .45 }, { id: 'savanna', name: 'Savanna', fert: .9 },
+    { id: 'jungle', name: 'Jungle', fert: 1.15 }, { id: 'taiga', name: 'Snowy pine forest', fert: .75 }, { id: 'tundra', name: 'Frozen tundra', fert: .45 }, { id: 'swamp', name: 'Swamp', fert: .8 },
+  ];
 
   const ERAS = [
     { name: 'Stone Age', blurb: 'Wandering bands with nothing but each other' },
@@ -459,6 +465,27 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         const x = Math.round(o.x + dx), y = Math.round(o.y + dy), i = y * W + x;
         if (x >= 0 && y >= 0 && x < W && y < H && this.terrain[i] === T.GRASS && r() < .5) { this.terrain[i] = T.FOREST; this.wood[i] = WOOD_CAP * (.6 + r() * .4); this.food[i] = FOOD_CAP[T.FOREST] * (.5 + r() * .5); }
       }
+      // climate: cold in the north, hot in the south, dry or wet by moisture
+      const tn = makeNoise(r), mq = p => landM[Math.min(landM.length - 1, Math.floor(p * landM.length))], m10 = mq(.1), m90 = mq(.9);
+      this.biome = new Uint8Array(n); this.fert = new Float32Array(n).fill(1);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = y * W + x, t0 = this.terrain[i]; if (t0 === T.WATER) continue;
+        const temp = y / (H - 1) * 1.1 - .05 + (fbm(tn, x / 18, y / 18) - .5) * .55 - Math.max(0, this.elev[i] - 1.6) * .07;
+        const m = (mv[i] - m10) / (m90 - m10) + (fbm(tn, x / 8 + 40, y / 8) - .5) * .3;
+        let b = BIO.TEMPERATE;
+        if (temp < .15) b = BIO.TUNDRA; else if (temp < .3) b = BIO.TAIGA;
+        else if (temp > .68) b = m < .4 ? BIO.DESERT : m > .66 ? BIO.JUNGLE : BIO.SAVANNA;
+        else if (m > .72 && this.elev[i] < 1) { let wet = false; for (let dy = -3; dy <= 3 && !wet; dy++) for (let dx = -3; dx <= 3; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < W && yy < H && this.terrain[yy * W + xx] === T.WATER) { wet = true; break; } } if (wet) b = BIO.SWAMP; }
+        this.biome[i] = b; this.fert[i] = BIOMES[b].fert;
+        let t = t0;
+        if (b === BIO.DESERT && (t === T.GRASS || (t === T.FOREST && r() > .08))) t = T.SAND;
+        else if (b === BIO.SAVANNA && t === T.FOREST && r() < .65) t = T.GRASS;
+        else if (b === BIO.JUNGLE && t === T.GRASS && r() < .55) t = T.FOREST;
+        else if ((b === BIO.TAIGA || b === BIO.SWAMP) && t === T.GRASS && r() < .32) t = T.FOREST;
+        else if (b === BIO.TUNDRA && t === T.FOREST && r() < .7) t = T.GRASS;
+        if (t !== t0) { this.terrain[i] = t; this.wood[i] = t === T.FOREST ? WOOD_CAP * (.6 + r() * .4) : 0; }
+        this.food[i] = FOOD_CAP[this.terrain[i]] * this.fert[i] * (.5 + r() * .5);
+      }
       const order = [0, 1, 2, 3, 4, 5]; for (let k = 5; k > 0; k--) { const j = Math.floor(r() * (k + 1)); [order[k], order[j]] = [order[j], order[k]]; }
       this.cultureSeeds = []; for (let k = 0; k < 12; k++) this.cultureSeeds.push({ x: r() * W, y: r() * H, s: order[k % 6] });
       // connected bodies of water, so ships only sail where they can reach
@@ -622,8 +649,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         if (t === T.FARM) {
           const o = this.owner[i] ? this.tribes.get(this.owner[i]) : null;
           if (!o && this.r() < .002) { this.terrain[i] = T.GRASS; this.dirty.add(i); continue; }
-          const y = o ? o.fx.farmYield : 1; this.food[i] = Math.min(FOOD_CAP[t] * y, this.food[i] + FOOD_REGEN[t] * 5 * y);
-        } else if (FOOD_REGEN[t]) this.food[i] = Math.min(FOOD_CAP[t], this.food[i] + FOOD_REGEN[t] * 5);
+          const y = (o ? o.fx.farmYield : 1) * this.fert[i]; this.food[i] = Math.min(FOOD_CAP[t] * y, this.food[i] + FOOD_REGEN[t] * 5 * y);
+        } else if (FOOD_REGEN[t]) this.food[i] = Math.min(FOOD_CAP[t] * this.fert[i], this.food[i] + FOOD_REGEN[t] * 5 * this.fert[i]);
         if (t === T.FOREST && this.wood[i] < WOOD_CAP) this.wood[i] = Math.min(WOOD_CAP, this.wood[i] + .015);
         else if (t === T.GRASS && this.owner[i] === 0 && this.r() < .00012) {
           // untended grassland slowly turns back into forest next to existing woods
@@ -1846,7 +1873,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       });
       const agents = this.agents.filter(a => a.alive).map(a => { const o = {}; for (const k in a) if (k[0] !== '_') o[k] = a[k]; return o; });
       return JSON.stringify({ v: 1, seed: this.seed, startEra: this.startEra, tick: this.tick, nextId: this.nextId, tribeCount: this.tribeCount,
-        terrain: arr(this.terrain), elev: arr(this.elev), food: arr(this.food), wood: arr(this.wood), stone: arr(this.stone), jit: arr(this.jit), waterRegion: arr(this.waterRegion),
+        terrain: arr(this.terrain), elev: arr(this.elev), food: arr(this.food), wood: arr(this.wood), stone: arr(this.stone), jit: arr(this.jit), waterRegion: arr(this.waterRegion), biome: arr(this.biome), fert: arr(this.fert),
         regionSize: this.regionSize, cultureSeeds: this.cultureSeeds, usedNames: [...this.usedNames], agents, tribes, wars, ships: this.ships.filter(x => x.alive), armies: this.armies.filter(r => !r.dead), planes: this.planes.filter(p => p.alive), links: this.links,
         fires: [...this.fires], popHistory: this.popHistory, religions: [...this.religions.values()], history: this.history.slice(-300) });
     }
@@ -1855,7 +1882,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       if (d.terrain.length !== W * H) throw new Error('This save is from a different map size.');
       Object.assign(s, { seed: d.seed, startEra: d.startEra, tick: d.tick, nextId: d.nextId, tribeCount: d.tribeCount, rng: mulberry32((d.seed ^ d.tick) >>> 0),
         terrain: Uint8Array.from(d.terrain), elev: Float32Array.from(d.elev), food: Float32Array.from(d.food), wood: Float32Array.from(d.wood), stone: Float32Array.from(d.stone),
-        jit: Float32Array.from(d.jit), waterRegion: Int32Array.from(d.waterRegion), regionSize: d.regionSize, cultureSeeds: d.cultureSeeds, usedNames: new Set(d.usedNames),
+        jit: Float32Array.from(d.jit), waterRegion: Int32Array.from(d.waterRegion), biome: d.biome ? Uint8Array.from(d.biome) : new Uint8Array(W * H), fert: d.fert ? Float32Array.from(d.fert) : new Float32Array(W * H).fill(1), regionSize: d.regionSize, cultureSeeds: d.cultureSeeds, usedNames: new Set(d.usedNames),
         listeners: [], effects: [], dirty: new Set(), deadCount: 0, ownerVersion: 0, ships: d.ships, armies: d.armies || [], planes: d.planes || [], links: d.links || [], fires: new Map(d.fires), popHistory: d.popHistory,
         religions: new Map(d.religions.map(r => [r.id, r])), history: d.history, agents: d.agents, byId: new Map(), tribes: new Map() });
       s.computeLand();
@@ -1966,7 +1993,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       return { pop, tribes: this.tribes.size, era, loners: this.agents.filter(a => !a.tribe).length };
     }
   }
-  Sim.STRATS = STRATS; Sim.PERSONAS = PERSONAS; Sim.STYLES = STYLES; Sim.SHIP_NAMES = SHIP_NAMES; Sim.JOBS = JOBS; Sim.W = W; Sim.H = H; Sim.YEAR = YEAR; Sim.T = T; Sim.ERAS = ERAS; Sim.TECHS = TECHS; Sim.TECH = TECH; Sim.techCost = techCost; Sim.rng = mulberry32;
+  Sim.STRATS = STRATS; Sim.PERSONAS = PERSONAS; Sim.STYLES = STYLES; Sim.SHIP_NAMES = SHIP_NAMES; Sim.JOBS = JOBS; Sim.BIOMES = BIOMES; Sim.BIO = BIO; Sim.W = W; Sim.H = H; Sim.YEAR = YEAR; Sim.T = T; Sim.ERAS = ERAS; Sim.TECHS = TECHS; Sim.TECH = TECH; Sim.techCost = techCost; Sim.rng = mulberry32;
   root.Sim = Sim;
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
@@ -2570,13 +2597,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     world.terrain.receiveShadow = true; world.terrain.castShadow = true;
     // seasons: autumn turns green ground golden, winter lays snow on flat land
     const season = world.seasonU = { uSnow: { value: 0 }, uAutumn: { value: 0 } };
+    { const clim = new Float32Array(vcount * 2);
+      for (let v = 0; v < vcount; v++) { const x = v % VW, y = (v / VW) | 0; let a = 0, b = 0, k = 0; for (const [dx, dy] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) { const tx = x + dx, ty = y + dy; if (tx < 0 || ty < 0 || tx >= W || ty >= H) continue; const bs = BIOME_SNOW[sim.biome[ty * W + tx]]; a += bs[0]; b += bs[1]; k++; } clim[v * 2] = k ? a / k : 1; clim[v * 2 + 1] = k ? b / k : 0; }
+      world.terrain.geometry.setAttribute('aClim', new THREE.BufferAttribute(clim, 2)); }
     world.terrain.material.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, season);
-      sh.vertexShader = 'varying float vUpY; varying float vH;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vUpY = normal.y; vH = position.y;');
-      sh.fragmentShader = 'uniform float uSnow; uniform float uAutumn; varying float vUpY; varying float vH;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+      sh.vertexShader = 'attribute vec2 aClim; varying vec2 vClim; varying float vUpY; varying float vH;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vUpY = normal.y; vH = position.y; vClim = aClim;');
+      sh.fragmentShader = 'uniform float uSnow; uniform float uAutumn; varying vec2 vClim; varying float vUpY; varying float vH;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
         float green = clamp((diffuseColor.g - max(diffuseColor.r, diffuseColor.b)) * 8.0, 0.0, 1.0);
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.5, 1.02, 0.45), green * uAutumn);
-        float snow = uSnow * smoothstep(0.45, 0.8, vUpY) * clamp((vH - 0.06) * 3.0, 0.0, 1.0);
+        float snow = min(1.0, max(uSnow * vClim.x, vClim.y)) * smoothstep(0.45, 0.8, vUpY) * clamp((vH - 0.06) * 3.0, 0.0, 1.0);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.92, 0.95), snow);`);
     };
     group.add(world.terrain);
@@ -2600,6 +2630,18 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     world.pines.setColorAt(0, tmpC.set('#fff')); world.leaves.setColorAt(0, tmpC.set('#fff'));
     world.treeSlots = new Array(n); world.nT = 0; world.nP = 0; world.nL = 0;
     for (let i = 0; i < n; i++) if (sim.terrain[i] === T.FOREST) placeTrees(i);
+    // ground cover by biome
+    { const cov = []; for (let i = 0; i < n; i++) { const b = sim.biome[i], t = sim.terrain[i], j = sim.jit[i]; if (t === T.WATER || t === T.MOUNTAIN || sim.owner[i]) continue;
+        if ((b === 1 && t === T.SAND && j < .14) || (b === 2 && t === T.GRASS && j < .05) || (b === 6 && j < .35) || (b === 5 && j < .12)) cov.push(i); }
+      const cg = new THREE.CylinderGeometry(.5, 1, 1, 6); cg.translate(0, .5, 0);
+      world.cover = instanced(cg, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .9, flatShading: true }), cov.length * 3 + 1);
+      let c = 0;
+      for (const i of cov) { const b = sim.biome[i], x = i % W, y = (i / W) | 0, j = sim.jit[i], px = x + .3 + j * 2, py = y + .6 - j, gy = heightAt(px, py) - .02;
+        if (b === 1) { setInst(world.cover, c, wx(px), gy, wz(py), .06, .38, .06); world.cover.setColorAt(c++, tmpC.set('#5d8a3a')); setInst(world.cover, c, wx(px + .07), gy + .12, wz(py), .035, .16, .035); world.cover.setColorAt(c++, tmpC.set('#5d8a3a')); }
+        else if (b === 2) { setInst(world.cover, c, wx(px), gy, wz(py), .14, .3, .14); world.cover.setColorAt(c++, tmpC.set('#a8683a')); }
+        else if (b === 6) for (let k = 0; k < 3; k++) { setInst(world.cover, c, wx(px + k * .12), gy, wz(py + (k % 2) * .1), .015, .22 + k * .04, .015); world.cover.setColorAt(c++, tmpC.set(k ? '#7a8a4a' : '#6b5a3a')); }
+        else { setInst(world.cover, c, wx(px), gy - .03, wz(py), .14, .1, .12, j * 6); world.cover.setColorAt(c++, tmpC.set('#9c9a94')); } }
+      world.cover.count = c; group.add(world.cover); }
     // rocks on the hills
     const rocks = []; for (let i = 0; i < n; i++) if (sim.terrain[i] === T.HILLS && sim.jit[i] < .5) rocks.push(i);
     const rockGeo = new THREE.DodecahedronGeometry(.26, 0); rockGeo.translate(0, .08, 0);
@@ -2638,7 +2680,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     world.smoke = instanced(puffGeo, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, transparent: true, opacity: .55 }), 900, false);
     world.smoke.setColorAt(0, tmpC.set('#fff')); group.add(world.clouds, world.smoke);
     world.cloudSet = []; { const cr = Sim.rng(sim.seed ^ 77); for (let c = 0; c < 26; c++) { const n2 = 3 + Math.floor(cr() * 4), puffs = []; for (let k = 0; k < n2; k++) puffs.push([(cr() - .5) * 7, cr() * 1.2, (cr() - .5) * 3.5, 1.4 + cr() * 1.8]); world.cloudSet.push({ x: cr() * (W + 80) - 40, y: cr() * (H + 40) - 20, h: 24 + cr() * 6, puffs }); } }
-    world.herds = []; { const hr = Sim.rng(sim.seed ^ 991); for (let k = 0; k < 90 && world.herds.length < 34; k++) { const x = Math.floor(hr() * W), y = Math.floor(hr() * H), i = y * W + x; if (sim.terrain[i] === T.FOREST || sim.terrain[i] === T.GRASS) world.herds.push({ x, y, n: 3 + Math.floor(hr() * 4), kind: hr() < .7 ? 'deer' : 'boar' }); } }
+    world.herds = []; { const hr = Sim.rng(sim.seed ^ 991); for (let k = 0; k < 90 && world.herds.length < 34; k++) { const x = Math.floor(hr() * W), y = Math.floor(hr() * H), i = y * W + x; const b = sim.biome[i], kind = b === 1 ? 'camel' : b === 2 ? (hr() < .55 ? 'zebra' : 'elephant') : b === 4 || b === 5 ? 'reindeer' : hr() < .7 ? 'deer' : 'boar'; if (sim.terrain[i] === T.FOREST || sim.terrain[i] === T.GRASS || (b === 1 && sim.terrain[i] === T.SAND)) world.herds.push({ x, y, n: (kind === 'elephant' ? 2 : 3) + Math.floor(hr() * 4), kind }); } }
     world.flocks = []; { const br = Sim.rng(sim.seed ^ 4242); for (let k = 0; k < 9; k++) world.flocks.push({ cx: br() * W, cy: br() * H, r: 6 + br() * 14, sp: (.04 + br() * .05) * (br() < .5 ? -1 : 1), ph: br() * 6.28, n: 5 + Math.floor(br() * 6), h: 4 + br() * 3 }); }
     world.walls = instanced(wallGeo, std({ color: '#a59d8c', roughness: 1 }), 4000);
     world.poles = instanced(poleGeo, std({ color: '#4a3a2a' }), 200);
@@ -2670,19 +2712,33 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     $('#labels').innerHTML = ''; world.labels = new Map();
   }
 
+  // tree shapes per biome: trunk width/height, foliage lift, width, height and HSL color
+  function treeShape(bi, e, h1, h2, h3, s) {
+    const pineHi = e > 1.15 ? h3 > .15 : h3 > .72;
+    switch (bi) {
+      case 1: return h3 > .5 ? { pine: false, tw: 0, th: 0, fy: -.25, sx: .28, sy: 1.25, col: [.28, .45, .28] } // cactus
+                             : { pine: false, tw: .9, th: 2.1, fy: .48, sx: 1.5, sy: .35, col: [.25, .5, .3] }; // palm
+      case 2: return { pine: false, tw: 1, th: 1.5, fy: .2, sx: 1.7, sy: .4, col: [.2 + h1 * .04, .45, .27] }; // acacia
+      case 3: return h3 > .7 ? { pine: false, tw: .9, th: 2.2, fy: .5, sx: 1.4, sy: .4, col: [.3, .6, .25] } : { pine: false, tw: 1.3, th: 1.4, fy: .15, sx: 1.45, sy: 1.25, col: [.3 + h2 * .05, .6, .16 + h1 * .06] };
+      case 4: return { pine: true, tw: 1, th: 1, fy: 0, sx: .85, sy: 1.15, col: [.38, .3, .14 + h1 * .05] };
+      case 5: return { pine: true, tw: .8, th: .7, fy: -.15, sx: .6, sy: .65, col: [.36, .2, .3] };
+      case 6: return { pine: false, tw: 1, th: 1.1, fy: -.05, sx: 1.25, sy: 1.15, col: [.17 + h1 * .04, .3, .22] }; // willow
+      default: return { pine: pineHi, tw: 1, th: 1, fy: 0, sx: 1, sy: 1, col: pineHi ? [.3 + h2 * .05, .38, .17 + h1 * .07] : [.2 + h1 * .1, .45 + h2 * .15, .22 + h3 * .1] };
+    }
+  }
   function placeTrees(i) {
     const x = i % W, y = (i / W) | 0, j = sim.jit[i], e = sim.elev[i], slots = [];
     const count = Math.min(Q.trees, 2 + (j > .55 ? 1 : 0));
     for (let k = 0; k < count; k++) {
       const h1 = hash(i * 3.1 + k, k * 7.7), h2 = hash(k * 1.9, i * .37 + k), h3 = hash(i + k * 13.3, 2.2);
       const px = x + .15 + h1 * .7, py = y + .15 + h2 * .7, s = .75 + h3 * .6;
-      const pine = e > 1.15 ? h3 > .15 : h3 > .72;
+      const bi = sim.biome[i], f = treeShape(bi, e, h1, h2, h3, s), pine = f.pine;
       const ti = world.nT++, fi = pine ? world.nP++ : world.nL++, fm = pine ? world.pines : world.leaves;
       const gy = heightAt(px, py) - .03;
-      setInst(world.trunks, ti, wx(px), gy, wz(py), s, s, s, h1 * 6);
-      fm.setMatrixAt(fi, tmpM);
-      fm.setColorAt(fi, pine ? tmpC.setHSL(.3 + h2 * .05, .38, .17 + h1 * .07) : tmpC.setHSL(.2 + h1 * .1, .45 + h2 * .15, .22 + h3 * .1));
-      slots.push([ti, pine ? 1 : 0, fi, px, py, s, h1]);
+      setInst(world.trunks, ti, wx(px), gy, wz(py), s * f.tw, s * f.th, s * f.tw, h1 * 6);
+      setInst(fm, fi, wx(px), gy + f.fy * s, wz(py), s * f.sx, s * f.sy, s * f.sx, h1 * 6);
+      fm.setColorAt(fi, tmpC.setHSL(f.col[0], f.col[1], f.col[2]));
+      slots.push([ti, pine ? 1 : 0, fi, px, py, s, h1, f]);
     }
     world.treeSlots[i] = slots;
     world.trunks.count = world.nT; world.pines.count = world.nP; world.leaves.count = world.nL;
@@ -2696,14 +2752,18 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   function showTrees(i, on) {
     const slots = world.treeSlots[i];
     if (!slots) { if (on) placeTrees(i); return; }
-    for (const [ti, pine, fi, px, py, s, h1] of slots) {
+    for (const [ti, pine, fi, px, py, s, h1, f] of slots) {
       const fm = pine ? world.pines : world.leaves;
-      if (on) { setInst(world.trunks, ti, wx(px), heightAt(px, py) - .03, wz(py), s, s, s, h1 * 6); fm.setMatrixAt(fi, tmpM); }
+      if (on) { const gy = heightAt(px, py) - .03; setInst(world.trunks, ti, wx(px), gy, wz(py), s * f.tw, s * f.th, s * f.tw, h1 * 6); setInst(fm, fi, wx(px), gy + f.fy * s, wz(py), s * f.sx, s * f.sy, s * f.sx, h1 * 6); }
       else { hide(world.trunks, ti); hide(fm, fi); }
     }
     flagTrees();
   }
 
+  // ground tint per biome: plain, hills, strength
+  const BIOME_TINT = [null, ['#d8b675', '#b98f5a', .8], ['#b9a24e', '#9c8a5a', .6], ['#2e7a2c', '#4a6a3a', .45], ['#5f7a52', '#7d8478', .35], ['#d4d9d4', '#b4b8b4', .7], ['#55663a', '#5a5a44', .6]];
+  // how much winter snow each biome gets, and its year-round snow
+  const BIOME_SNOW = [[1, 0], [0, 0], [0, 0], [0, 0], [1.2, .15], [1, .5], [.6, 0]];
   function tileColor(i) {
     const t = sim.terrain[i], j = sim.jit[i], e = sim.elev[i], x = i % W, y = (i / W) | 0;
     if (t === T.WATER) tc.copy(GROUND[0]).lerp(SEABED_DEEP, Math.min(1, -e));
@@ -2713,7 +2773,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       if (t === T.GRASS || t === T.FARM) tc.lerp(tmpCol.set('#7d8c3c'), nz * .4);
       if (t === T.HILLS) tc.lerp(GROUND[T.GRASS], (1 - nz) * .3 * (sim.stone[i] < 1 ? 1.5 : 1));
       if (t === T.MOUNTAIN) tc.lerp(SNOW, Math.min(1, Math.max(0, (e - 5.3) * 1.2)));
-      if (t === T.SAND && e > .2) tc.lerp(GROUND[T.GRASS], .25);
+      const bi = sim.biome[i];
+      if (t === T.SAND && e > .2 && bi !== 1) tc.lerp(GROUND[T.GRASS], .25);
+      if (bi && t !== T.MOUNTAIN) { const bt = BIOME_TINT[bi]; tc.lerp(tmpCol.set(t === T.HILLS ? bt[1] : bt[0]), bt[2] * (t === T.FOREST ? .6 : 1)); }
       tc.offsetHSL(0, 0, (j - .5) * .03);
     }
     world.tileCol[i * 3] = tc.r; world.tileCol[i * 3 + 1] = tc.g; world.tileCol[i * 3 + 2] = tc.b;
@@ -2959,7 +3021,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     // color, body width, leg height, body length, body height, neck length, leg color
     const sp = {
       deer: ['#8a5a34', .1, .14, .26, .1, .14, '#6e4628'], boar: ['#3e3029', .11, .07, .22, .1, .04, '#2e2420'], sheep: ['#efeae0', .13, .07, .2, .11, .05, '#3b3530'],
-      goat: ['#d9c7a6', .08, .09, .18, .08, .08, '#9a8466'], cow: [seed % 2 ? '#3a3330' : '#8a5b3c', .13, .1, .28, .12, .06, '#2a2420'], llama: ['#e4d6bc', .08, .12, .18, .09, .2, '#c8b898'],
+      goat: ['#d9c7a6', .08, .09, .18, .08, .08, '#9a8466'], camel: ['#c9a26a', .1, .17, .27, .1, .18, '#a8844f'], zebra: ['#e8e6e0', .1, .12, .25, .1, .12, '#2a2a2a'],
+      elephant: ['#7f7b77', .22, .16, .38, .22, .04, '#6b6764'], reindeer: ['#7a6450', .1, .13, .24, .1, .13, '#5a4a3a'], cow: [seed % 2 ? '#3a3330' : '#8a5b3c', .13, .1, .28, .12, .06, '#2a2420'], llama: ['#e4d6bc', .08, .12, .18, .09, .2, '#c8b898'],
     }[kind];
     const [col, w, lh, len, bh, nk, lc] = sp;
     for (const [lx, lz, k] of [[-w * .3, len * .36, 1], [w * .3, len * .36, -1], [-w * .3, -len * .36, -1], [w * .3, -len * .36, 1]]) part(D, 'box', B, lx, lh, lz, .028, lh, .028, lc, Math.PI + sw * k, 0, 0);
@@ -2969,6 +3032,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     const hy = ny + Math.cos(.35) * nk, hz = nz + Math.sin(.35) * nk;
     part(D, 'box', B, 0, hy - .02, hz + .02, .05, .045, .09, kind === 'sheep' ? '#3b3530' : col);
     if (kind === 'deer' && seed % 2) { part(D, 'box', B, -.025, hy + .02, hz, .01, .09, .01, '#d9c9a8', 0, 0, .45); part(D, 'box', B, .025, hy + .02, hz, .01, .09, .01, '#d9c9a8', 0, 0, -.45); }
+    if (kind === 'camel') part(D, 'sphere', B, 0, lh + bh, -.02, .08, .07, .1, col);
+    if (kind === 'zebra') for (const z of [-.08, 0, .08]) part(D, 'box', B, 0, lh + .01, z, w + .005, bh * .8, .025, '#2a2a2a');
+    if (kind === 'elephant') { part(D, 'box', B, 0, hy - .2, hz + .1, .04, .2, .04, col, .2, 0, 0); for (const x of [-.07, .07]) part(D, 'box', B, x, hy - .03, hz - .02, .02, .1, .08, col); }
+    if (kind === 'reindeer') for (const x of [-1, 1]) { part(D, 'box', B, x * .03, hy + .02, hz, .01, .12, .01, '#d9c9a8', 0, 0, -x * .5); part(D, 'box', B, x * .06, hy + .1, hz, .01, .06, .01, '#d9c9a8', 0, 0, -x * 1.1); }
     if (kind === 'cow') { part(D, 'box', B, -.03, hy + .02, hz - .01, .01, .03, .01, '#e8e0cc', 0, 0, .6); part(D, 'box', B, .03, hy + .02, hz - .01, .01, .03, .01, '#e8e0cc', 0, 0, -.6); }
   }
   function updateAnimals() {
@@ -2976,7 +3043,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     // wild herds graze far from people; they vanish as towns claim their land
     for (const h of world.herds) {
       if (Q.life < 2 && h.x % 2) continue;
-      const i = h.y * W + h.x; if (sim.owner[i] || (sim.terrain[i] !== T.FOREST && sim.terrain[i] !== T.GRASS)) continue;
+      const i = h.y * W + h.x; if (sim.owner[i] || (sim.terrain[i] !== T.FOREST && sim.terrain[i] !== T.GRASS && !(h.kind === 'camel' && sim.terrain[i] === T.SAND))) continue;
       for (let k = 0; k < h.n; k++) {
         const t = clock * .05 + k * 1.9 + h.x, x = h.x + .5 + Math.sin(t) * 1.6 + Math.cos(k * 2.3) * .6, y = h.y + .5 + Math.cos(t * .8) * 1.3 + Math.sin(k * 1.7) * .6;
         animal(D, x, y, Math.atan2(Math.cos(t) * 1.6, -Math.sin(t * .8) * 1.04), h.kind, true, k + h.x);
@@ -3411,7 +3478,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         <div class="plan"><div class="plan-h">Council's plan · <b>${Sim.STRATS[t.ai.strategy].label}</b>${l && t.ai.persona ? ` · ruled by ${esc(l.name)} ${Sim.PERSONAS[t.ai.persona].label}` : ''}</div><div class="thought">Because ${esc(t.ai.reason)}.</div></div>
         <dl class="kv"><dt>People</dt><dd>${t.members.size} of ${cap} housed</dd><dt>Buildings</dt><dd>${t.huts}${t.walls ? ', walled' : ''}${t.farms ? `, ${t.farms} fields` : ''}</dd>
         <dt>Stores</dt><dd>${Math.round(t.stock.food)} food · ${Math.round(t.stock.wood)} wood · ${Math.round(t.stock.stone)} stone</dd>
-        <dt>Culture</dt><dd>${Sim.STYLES[t.style].name}</dd>
+        <dt>Culture</dt><dd>${Sim.STYLES[t.style].name}</dd><dt>Land</dt><dd>${Sim.BIOMES[sim.biome[sim.idx(t.camp.x, t.camp.y)]].name}</dd>
         <dt>Faith</dt><dd>${t.faith && sim.religions.get(t.faith) ? `<span style="color:${sim.religions.get(t.faith).color}">${esc(capFirst(sim.religions.get(t.faith).name))}</span>` : 'None yet'}</dd>
         <dt>Wonders</dt><dd>${t.wonders.length ? esc(t.wonders.join(', ')) : 'None yet'}</dd>
         ${sim.armies.some(r => !r.dead && r.tribe === t.id) ? sim.armies.filter(r => !r.dead && r.tribe === t.id).map(r => `<dt>Army</dt><dd>${esc(r.name)}, ${r.soldiers.length} strong · ${esc(armyState(r))}</dd>`).join('') : ''}

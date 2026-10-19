@@ -75,6 +75,7 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 - **Drones:** drones buzz over armies.
 
 ### A living world
+- **Biomes:** the north is frozen tundra and snowy pine forest, the middle is temperate woodland, and the south turns to savanna, jungle and desert, with swamps along wet coasts. Each biome has its own ground color, trees (palms and cacti, flat-topped acacias, dense jungle, snowy pines, willows), ground cover and wildlife (camels, zebras, elephants, reindeer). Deserts and tundra grow less food, so fewer people live there.
 - Seasons change every year: green summers, autumn colors and snowy winters.
 - Day turns to night: the sun sets in orange, the sky goes dark and lanterns and windows light up in every town. You can turn this off with **Day and night** in the panel.
 - Wild herds of deer and boar graze the wilderness and disappear as towns claim the land.
