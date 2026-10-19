@@ -76,6 +76,7 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 
 ### A living world
 - Seasons change every year: green summers, autumn colors and snowy winters.
+- Day turns to night: the sun sets in orange, the sky goes dark and lanterns and windows light up in every town. You can turn this off with **Day and night** in the panel.
 - Wild herds of deer and boar graze the wilderness and disappear as towns claim the land.
 - Sheep, goats, cattle and llamas graze around farming towns, depending on the culture.
 - Birds circle overhead, chimneys smoke (factory smoke is darker), and clouds drift past with their shadows.

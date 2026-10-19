@@ -198,7 +198,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         <button type="button" data-s="4">Max</button>
       </div>
       <div class="row"><button class="btn" id="newWorld" type="button">New world</button><button class="btn" id="saveBtn" type="button">Save world</button><button class="btn" id="loadBtn" type="button">Load saved</button><span class="note" id="saveNote"></span></div>
-      <div class="row"><label class="note" for="gfx">Graphics</label><select id="gfx"><option value="auto">Auto</option><option value="low">Low (phones, older PCs)</option><option value="medium">Medium</option><option value="high">High (strong GPUs)</option></select><span class="note" id="gfxNote"></span></div>
+      <div class="row"><label class="note" for="gfx">Graphics</label><select id="gfx"><option value="auto">Auto</option><option value="low">Low (phones, older PCs)</option><option value="medium">Medium</option><option value="high">High (strong GPUs)</option></select><span class="note" id="gfxNote"></span><label class="note"><input type="checkbox" id="dayNight"> Day and night</label></div>
       <div class="chart"><div class="chart-h"><span>World population</span><span id="popNow"></span></div><canvas id="popChart" height="54"></canvas></div>
     </div>
     <div class="sec" id="inspect"><h2>Inspector</h2><div class="empty">Click a person or a settlement on the map.</div></div>
@@ -2016,12 +2016,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   // sky dome: a vertical gradient that meets the fog at the horizon
   const sky = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { top: { value: new THREE.Color('#4f86c0') }, mid: { value: new THREE.Color('#a9c6dd') }, bottom: { value: HORIZON } },
+    uniforms: { top: { value: new THREE.Color('#4f86c0') }, mid: { value: new THREE.Color('#a9c6dd') }, bottom: { value: HORIZON.clone() } },
     vertexShader: 'varying vec3 vp; void main(){ vp = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
     fragmentShader: 'uniform vec3 top; uniform vec3 mid; uniform vec3 bottom; varying vec3 vp; void main(){ float h = vp.y; vec3 c = h > 0.0 ? mix(mid, top, pow(clamp(h*1.6,0.0,1.0),0.7)) : bottom; c = mix(bottom, c, smoothstep(-0.02, 0.12, h)); gl_FragColor = vec4(c,1.0); }'
   }));
   scene.add(sky);
-  scene.add(new THREE.HemisphereLight(0xc4dcf2, 0x4a3c28, .55));
+  const hemi = new THREE.HemisphereLight(0xc4dcf2, 0x4a3c28, .55); scene.add(hemi);
+  const moon = new THREE.DirectionalLight(0x9fb4ff, 0); moon.position.set(60, 90, -40); scene.add(moon);
   const sun = new THREE.DirectionalLight(0xfff1dc, 1.7);
   sun.position.set(-55, 75, 38); sun.castShadow = true;
   sun.shadow.mapSize.set(Q.map, Q.map);
@@ -2645,6 +2646,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     world.flags.setColorAt(0, tmpC.set('#fff'));
     group.add(world.walls, world.poles, world.flags);
     const flameGeo = new THREE.ConeGeometry(.22, .7, 6); flameGeo.translate(0, .35, 0);
+    world.glow = instanced(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: '#ffd27a', transparent: true, opacity: 0, depthWrite: false }), 4000, false); world.glow.count = 0; group.add(world.glow);
     world.flames = instanced(flameGeo, new THREE.MeshBasicMaterial({ color: '#ff8a2a', transparent: true, opacity: .85 }), 1000, false);
     group.add(world.flames);
     // effects
@@ -2821,6 +2823,25 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     world.fields.material.color.setRGB(1, 1, 1).lerp(FIELD_SPRING, spring * .8).lerp(FIELD_SNOW, snow * .9);
     world.water.material.color.copy(WATER_SUMMER).lerp(WATER_WINTER, snow * .6);
     sun.intensity = 1.7 - snow * .35; sun.color.setRGB(1, .95 - autumn * .05, .86 - autumn * .1);
+  }
+  // day and night: the sun sets, the sky darkens and lanterns light up in every town
+  const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+  const SKY_DAY = [C('#4f86c0'), C('#a9c6dd'), C('#c9d8e2')], SKY_NIGHT = [C('#050b1c'), C('#122038'), C('#1f2a40')], DUSK = [C('#3d5f93'), C('#e7a06a'), C('#f2b68a')];
+  let dayOn = true, dayT = 40; const DAY_LEN = 100;
+  try { dayOn = localStorage.getItem('firstlight-daynight') !== 'off'; } catch (err) {}
+  window.addEventListener('setDay', e => { dayT = +e.detail || 0; });
+  function applyDay(dt, tps) {
+    if (dayOn) dayT = (dayT + dt * Math.min(3, tps / SPEEDS[2])) % DAY_LEN;
+    const f = dayT / DAY_LEN, el = Math.sin((f - .25) * Math.PI * 2); // sun height: -1 midnight, 1 noon
+    const up = dayOn ? clamp01(el * 2.5 + .8) : 1, dusk = dayOn ? clamp01(1 - Math.abs(el) * 3.5) : 0, night = 1 - up;
+    world.night = night;
+    sun.intensity *= up; sun.color.lerp(tmpC.set('#ff9d5c'), dusk * .7);
+    hemi.intensity = .55 * (.35 + .65 * up); hemi.color.set('#c4dcf2').lerp(tmpC.set('#5a6f9c'), night);
+    moon.intensity = .32 * night;
+    const u = sky.material.uniforms;
+    [u.top.value, u.mid.value, u.bottom.value].forEach((c, k) => c.copy(SKY_DAY[k]).lerp(DUSK[k], dusk * .8).lerp(SKY_NIGHT[k], night));
+    scene.fog.color.copy(u.bottom.value); scene.background.copy(u.bottom.value);
+    const G = world.glow; G.visible = night > .03; G.material.opacity = Math.min(1, night * 1.2) * (.85 + Math.sin(clock * 7) * .04);
   }
   const seasonName = () => SEASONS[Math.min(3, Math.floor(seasonFrac() * 4))];
 
@@ -3153,7 +3174,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     let key = ''; for (const t of sim.tribes.values()) key += t.id + ':' + t.port + ':' + t.huts + ':' + t.era + ':' + (t.walls ? 1 : 0) + ':' + t.wonders.length + ':' + t.faith + ':' + (t.grave ? Math.min(16, Math.ceil(t.deaths / 4)) : 0) + ':' + specialsFor(t).join(',') + ';';
     if (key === world.buildKey) return; world.buildKey = key;
     const S = world.bset; beginSet(S);
-    const M = { walls: 0, poles: 0, flags: 0 };
+    const M = { walls: 0, poles: 0, flags: 0 }, G = world.glow; let gn = 0;
+    const glow = (B, x, y, z, sx, sy, sz) => { if (gn < 4000) G.setMatrixAt(gn++, local(B, x, y, z, sx, sy, sz)); };
     for (const t of sim.tribes.values()) {
       const cx = t.camp.x + .5, cy = t.camp.y + .5, style = STY(t.style), wn = t.wonders.length;
       for (let w = 0; w < wn; w++) {
@@ -3180,7 +3202,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         const jj = ((k * 7919 + t.id * 31) % 100) / 100, si = (k - 2) / 2;
         if (k >= 2 && Number.isInteger(si) && si < sp.length) { special(S, base(wx(bx), heightAt(bx, by) - .02, wz(by), Math.atan2(cx - bx, cy - by)), sp[si], style, t.era, t.color); continue; }
         if (k >= nbH) continue;
-        house(S, base(wx(bx), heightAt(bx, by) - .02, wz(by), Math.atan2(cx - bx, cy - by)), style, t.era, jj, k, t.color);
+        const Bh = base(wx(bx), heightAt(bx, by) - .02, wz(by), Math.atan2(cx - bx, cy - by));
+        house(S, Bh, style, t.era, jj, k, t.color);
+        if (t.era >= 5 && jj > .3) { const h = t.era === 5 ? 1.2 + jj * 2.2 : 1.6 + jj * 3.6; for (let y = .3; y < h - .1; y += .28) if (((k * 13 + y * 31) | 0) % 3) { glow(Bh, 0, y, .262, .38, .07, .01); glow(Bh, .262, y, 0, .01, .07, .38); } }
+        else { glow(Bh, .17, .26, .36, .05, .06, .05); if (t.era >= 1) glow(Bh, -.12, .2, .3, .1, .08, .01); }
       }
       if (t.port !== null && t.era >= 1) {
         const px = t.port % W + .5, py = ((t.port / W) | 0) + .5, ang = Math.atan2(px - cx, py - cy);
@@ -3219,7 +3244,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         }
       }
     }
-    endSet(S);
+    endSet(S); G.count = gn; G.instanceMatrix.needsUpdate = true;
     for (const k in M) { const m = world[k]; m.count = M[k]; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   }
   function updateEffects() {
@@ -3510,7 +3535,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     if (tps) { acc += dt * tps; while (acc >= 1 && steps < 30) { sim.step(); acc -= 1; steps++; } if (steps >= 30) acc = 0; }
     const alpha = tps && tps <= 40 ? Math.min(1, acc) : 1;
     clock += dt; if (started) watchFps(dt); world.waterTex.offset.set(clock * .004, clock * .0025);
-    syncTiles(); updateFields(); updateBorders(); applySeason(); beginSet(world.dset); updatePeople(alpha); updateShips(alpha); if (Q.life) updateAnimals(); updatePlanes(alpha); updateClouds(dt); updateSmoke(); updateTech(); endSet(world.dset); world.smoke.instanceMatrix.needsUpdate = true; updateFires(); updateBuildings(); updateEffects(); updateSelection();
+    syncTiles(); updateFields(); updateBorders(); applySeason(); applyDay(dt, tps); beginSet(world.dset); updatePeople(alpha); updateShips(alpha); if (Q.life) updateAnimals(); updatePlanes(alpha); updateClouds(dt); updateSmoke(); updateTech(); endSet(world.dset); world.smoke.instanceMatrix.needsUpdate = true; updateFires(); updateBuildings(); updateEffects(); updateSelection();
     if (follow) { const a = sim.byId.get(follow); if (a && a._wx !== undefined) focus = new THREE.Vector3(a._wx, a._wy, a._wz); else follow = 0; }
     if (focus) { tmpV.copy(focus).sub(controls.target).multiplyScalar(.08); controls.target.add(tmpV); camera.position.add(tmpV); if (tmpV.lengthSq() < 1e-5 && !follow) focus = null; }
     if (!started) { const r = Math.hypot(camera.position.x - controls.target.x, camera.position.z - controls.target.z); const a = Math.atan2(camera.position.z - controls.target.z, camera.position.x - controls.target.x) + dt * .05; camera.position.x = controls.target.x + Math.cos(a) * r; camera.position.z = controls.target.z + Math.sin(a) * r; }
@@ -3531,6 +3556,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     buildWorld(); world.buildKey = '';
     $('#gfxNote').textContent = note || (gfxPick === 'auto' ? `Using ${Q.label}` : '');
   }
+  $('#dayNight').checked = dayOn;
+  $('#dayNight').addEventListener('change', e => { dayOn = e.target.checked; try { localStorage.setItem('firstlight-daynight', dayOn ? 'on' : 'off'); } catch (err) {} });
   $('#gfx').value = gfxPick; $('#gfxNote').textContent = gfxPick === 'auto' ? `Using ${Q.label}` : '';
   $('#gfx').addEventListener('change', e => {
     gfxPick = e.target.value; try { localStorage.setItem('firstlight-gfx', gfxPick); } catch (err) {}
