@@ -139,6 +139,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .ev.disaster .txt, .ev.naval .txt { border-color: var(--war); }
 .ev.blessing .txt, .ev.arrival .txt { border-color: var(--peace); }
 .ev.sea .txt { border-color: #4fc3f7; }
+.ev.festival .txt, .ev.family .txt { border-color: var(--peace); }
 @media (max-width: 820px) {
   #tools { bottom: 12px; }
   body { overflow: auto; }
@@ -351,6 +352,35 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     research: { label: 'Pursuing knowledge', mult: { think: 1.9, explore: 1.2 }, techs: ['writing', 'math', 'printing', 'electricity', 'computers', 'internet', 'philosophy', 'astronomy', 'university', 'radio', 'satellites'] },
     trade: { label: 'Trading', mult: { trade: 2.1, gatherWood: 1.1, gatherStone: 1.1 }, techs: ['barter', 'currency', 'banking', 'navigation', 'wheel', 'railways', 'guilds', 'sailing', 'telegraph'] },
   };
+  // jobs: each adult picks one; it shapes what they choose to do all day
+  const JOBS = {
+    hunter: { name: 'Hunter', mult: { gatherFood: 1.5, hunt: 1.3 } },
+    farmer: { name: 'Farmer', mult: { farm: 1.8, gatherFood: 1.4 } },
+    fisher: { name: 'Fisher', mult: { gatherFood: 1.1 }, work: 'fish' },
+    herder: { name: 'Herder', mult: { gatherFood: 1.1 }, work: 'herd' },
+    woodcutter: { name: 'Woodcutter', mult: { gatherWood: 1.9 } },
+    miner: { name: 'Stonecutter', mult: { gatherStone: 1.9 } },
+    builder: { name: 'Builder', mult: { build: 1.8, walls: 1.8, gatherWood: 1.2 } },
+    scholar: { name: 'Scholar', mult: { think: 2 } },
+    merchant: { name: 'Merchant', mult: { trade: 2 } },
+    priest: { name: 'Priest', mult: {}, work: 'pray' },
+    healer: { name: 'Healer', mult: {}, work: 'heal' },
+    teacher: { name: 'Teacher', mult: { think: 1.2 }, work: 'teach' },
+    smith: { name: 'Smith', mult: { gatherStone: 1.2 }, work: 'craft' },
+    potter: { name: 'Potter', mult: {}, work: 'craft' },
+    artist: { name: 'Artist', mult: {}, work: 'craft' },
+    worker: { name: 'Factory worker', mult: {}, work: 'craft' },
+    engineer: { name: 'Engineer', mult: { build: 1.4, think: 1.2 }, work: 'craft' },
+    programmer: { name: 'Programmer', mult: { think: 1.4 }, work: 'craft' },
+  };
+  const CRAFT = {
+    smith: t => t.era >= 3 ? 'Forging steel at the smithy' : 'Hammering bronze tools at the forge', potter: () => 'Shaping clay pots on the wheel',
+    artist: t => t.wonders.length ? `Painting a picture of the ${t.wonders[t.wonders.length - 1]}` : 'Carving a statue for the square', worker: () => 'Working a shift at the factory',
+    engineer: t => t.era >= 5 ? 'Designing a new engine' : 'Drawing plans for a bridge', programmer: () => 'Writing code at the data center',
+  };
+  const HERD = { steppe: 'Herding horses on the open grass', nordic: 'Herding sheep in the meadow', desert: 'Leading goats to graze', eastern: 'Tending water buffalo in the fields', med: 'Herding goats on the hillside', meso: 'Herding llamas to fresh pasture' };
+  const PLAY = ['Playing tag with friends', 'Chasing chickens around the square', 'Playing with a wooden toy', 'Racing the other children', 'Splashing in puddles', 'Playing hide and seek'];
+  const FESTS = { steppe: ['Naadam Games', 'Horse Festival'], nordic: ['Midsummer Feast', 'Yule Feast'], desert: ['Festival of the Flood', 'Feast of the Sun God'], eastern: ['Lantern Festival', 'Spring Festival'], med: ['Wine Harvest Festival', 'Festival of the Games'], meso: ['Festival of the Sun', 'Maize Festival'] };
   const LINK_RANK = { sail: 0, cable: 1, radio: 2, satellite: 3, internet: 4 };
   const LINK_WORD = { sail: 'sea route', cable: 'undersea telegraph cable', radio: 'radio', satellite: 'satellite', internet: 'undersea internet cable' };
   const LINK_NEWS = {
@@ -613,6 +643,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       if (a.hunger >= 100) { a.hunger = 100; a.health -= .6; if (a.health <= 0) return this.kill(a, 'starvation'); }
       else if (a.health < 100) a.health = Math.min(100, a.health + .15);
       if (a.age > a.life + fx.life * YEAR) return this.kill(a, 'old age');
+      if (a.grief > 0) a.grief--;
+      a.tired = Math.min(100, (a.tired || 0) + .3); a.lonely = Math.min(100, (a.lonely || 0) + .2 * (.4 + a.traits.sociability));
       if (a.hunger > 40) {
         if (a.carry.food >= 1) { a.carry.food -= 1; a.hunger = Math.max(0, a.hunger - 35); }
         else if (t && cheb(a, t.camp) <= 2 && t.stock.food >= 1) { t.stock.food -= 1; a.hunger = Math.max(0, a.hunger - 35); }
@@ -681,7 +713,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const fx = t.fx, pop = t.members.size, cap = this.capacity(t), d = cheb(a, t.camp), camp = t.camp, r = () => this.r();
       if (a.age < 12 * YEAR) {
         if (a.hunger > 55 && t.stock.food >= 1) return this.setGoal(a, { type: 'eat', tx: camp.x, ty: camp.y }, 'Running home for food');
-        const p = this.nearPassable(camp.x, camp.y, 3); return this.setGoal(a, { type: 'walk', tx: p.x, ty: p.y }, 'Playing near home');
+        const p = this.nearPassable(camp.x, camp.y, 3);
+        if (a.age > 4 * YEAR && r() < .6) return this.setGoal(a, { type: 'play', tx: p.x, ty: p.y, work: 12 }, t.era >= 5 && r() < .4 ? 'Playing football with friends' : this.pick(PLAY));
+        return this.setGoal(a, { type: 'walk', tx: p.x, ty: p.y }, 'Playing near home');
       }
       const carried = a.carry.food + a.carry.wood + a.carry.stone;
       const opts = [];
@@ -701,8 +735,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       if (fx.trade && t.tradeCd <= 0) opts.push([(.3 + a.traits.sociability * .6) * B.trade, 'trade']);
       if (t.wars.size) { const chief = t.leader === a.id; if (!chief) opts.push([a.traits.aggression * 1.3, 'raid']); if (!chief || d < 5) opts.push([.35 + a.traits.aggression * 1.2, 'hunt']); }
       opts.push([a.traits.curiosity * .12, 'explore']);
+      // everyday life: rest, friends, love, a job, festivals
+      if (!a.job || r() < .003) a.job = this.pickJob(a, t);
+      if (a.tired > 70) opts.push([a.tired / 55, 'rest']);
+      if (a.lonely > 55) opts.push([(a.lonely / 80) * (.5 + a.traits.sociability), 'chat']);
+      if (!a.spouse && a.age > 18 * YEAR && a.age < 45 * YEAR) opts.push([.3 + a.traits.sociability * .4, 'court']);
+      if (t.festival > 0) opts.push([1.6, 'dance']);
+      const J = JOBS[a.job]; if (J && J.work) opts.push([.5 + a.traits.diligence * .5, J.work]);
+      if (a.age > 55 * YEAR) opts.push([.5, 'teach'], [.45, 'rest']);
       const work = .85 + a.traits.diligence * .3, sm = STRATS[t.ai.strategy].mult;
-      for (const op of opts) op[0] *= sm[op[1]] || 1;
+      for (const op of opts) op[0] *= (sm[op[1]] || 1) * (J && J.mult[op[1]] || 1);
       opts.sort((p, q) => q[0] * (.75 + r() * .5) - p[0] * (.75 + r() * .5));
       for (const [, o] of opts) if (this.tryOption(a, t, o, work)) return;
       this.explore(a, 'Taking a walk', 6);
@@ -712,6 +754,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       switch (o) {
         case 'eat': return this.setGoal(a, { type: 'eat', tx: camp.x, ty: camp.y }, 'Hungry. Heading home to eat from the stores');
         case 'forage': return this.goForage(a, t, 'Hungry, and the stores are empty. Foraging');
+        case 'rest': { const p = this.spotNear(t, a, 2); return this.setGoal(a, { type: 'rest', tx: p.x, ty: p.y, work: 18 }, a.age > 55 * YEAR ? 'Old bones need rest. Sitting by the fire' : this.pick(['Tired after a long day. Resting at home', 'Taking a nap in the shade', 'Sitting down to rest tired feet'])); }
+        case 'chat': { const b = this.pickMate(a, t, 10, m => m.age >= 12 * YEAR); return b ? this.setGoal(a, { type: 'chat', tx: b.x, ty: b.y, partner: b.id, work: 10, chase: 3 }, `Going over to talk with ${b.name}`) : false; }
+        case 'court': { const b = this.pickMate(a, t, 12, m => !m.spouse && m.age > 18 * YEAR && m.age < 45 * YEAR && !this.related(a, m)); return b ? this.setGoal(a, { type: 'court', tx: b.x, ty: b.y, partner: b.id, work: 8, chase: 3 }, `Hoping to win the heart of ${b.name}`) : false; }
+        case 'dance': { const p = this.nearPassable(camp.x, camp.y, 2); return this.setGoal(a, { type: 'dance', tx: p.x, ty: p.y, work: 20 }, `Dancing at the ${t.festName || 'festival'}`); }
+        case 'fish': { const p = this.findTile(a, i => this.coastal(i) ? 1 : 0, camp, 10); return p ? this.setGoal(a, { type: 'fish', tx: p.x, ty: p.y, work: 16 }, t.era >= 4 ? 'Casting a line off the pier' : 'Fishing from the shore') : false; }
+        case 'herd': { const p = this.findTile(a, i => this.terrain[i] === T.GRASS && this.owner[i] === t.id ? 1 : 0, camp, 8); return p ? this.setGoal(a, { type: 'herd', tx: p.x, ty: p.y, work: 16 }, HERD[STYLES[t.style].id]) : false; }
+        case 'pray': { const p = this.nearPassable(camp.x, camp.y, 1), f = this.religions.get(t.faith); return this.setGoal(a, { type: 'pray', tx: p.x, ty: p.y, work: 14 }, f ? `Praying at the temple of ${f.name}` : 'Praying to the spirits of the land'); }
+        case 'heal': { const b = this.pickMate(a, t, 15, m => m.health < 80); return b ? this.setGoal(a, { type: 'heal', tx: b.x, ty: b.y, partner: b.id, work: 8, chase: 3 }, `Going to look after ${b.name}, who is unwell`) : false; }
+        case 'teach': { const b = this.pickMate(a, t, 10, m => m.age < 12 * YEAR && m.age > 4 * YEAR); return b ? this.setGoal(a, { type: 'teach', tx: b.x, ty: b.y, partner: b.id, work: 12, chase: 3 }, a.age > 55 * YEAR ? `Telling old stories to ${b.name}` : `Teaching ${b.name} ${t.techs.has('writing') ? 'to read and write' : 'the old ways'}`) : false; }
+        case 'craft': { const p = this.spotNear(t, a, 3); return this.setGoal(a, { type: 'craft', tx: p.x, ty: p.y, work: 20 }, CRAFT[a.job] ? CRAFT[a.job](t) : 'Making things to sell at the market'); }
         case 'deposit': return this.setGoal(a, { type: 'deposit', tx: camp.x, ty: camp.y }, 'Carrying goods back home');
         case 'gatherFood': {
           const center = cheb(a, camp) < 22 ? camp : null;
@@ -858,10 +910,78 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
           break;
         case 'trade': this.completeTrade(a, t, g); break;
         case 'raid': this.completeRaid(a, t, g); break;
+        case 'rest': a.tired = Math.max(0, a.tired - 6); if (--g.work <= 0) a.goal = null; break;
+        case 'play': case 'mourn': if (--g.work <= 0) a.goal = null; break;
+        case 'dance': a.lonely = 0; if (--g.work <= 0) a.goal = null; break;
+        case 'chat': case 'court': case 'heal': case 'teach': this.meet(a, t, g, fx); break;
+        case 'fish': case 'herd':
+          if (--g.work <= 0) { a.carry.food += (g.type === 'fish' ? 3 : 2.5) * fx.gather; if (t) this.setGoal(a, { type: 'deposit', tx: t.camp.x, ty: t.camp.y }, g.type === 'fish' ? 'Caught some fish. Bringing them home' : 'Bringing milk and meat home'); else a.goal = null; }
+          break;
+        case 'pray': if (--g.work <= 0) { if (t) t.piety = (t.piety || 0) + 1; a.goal = null; } break;
+        case 'craft': if (--g.work <= 0) { if (t) t.wealth = (t.wealth || 0) + 1 + t.era * .4; a.goal = null; } break;
         case 'army': break;
         case 'voyage': break;
         default: a.goal = null;
       }
+    }
+    // ---- everyday life
+    pickJob(a, t) {
+      const h = id => t.techs.has(id), tr = a.traits, w = {
+        hunter: t.era === 0 ? 1.2 : .15, farmer: t.fx.farms ? 1.6 : 0, fisher: t.port !== null ? .9 : 0, herder: h('agri') ? .6 : 0,
+        woodcutter: .9, miner: h('masonry') ? 1 : .5, builder: .5 + tr.diligence * .6, scholar: tr.curiosity * (h('writing') ? 1.5 : .3),
+        merchant: t.fx.trade ? tr.sociability * 1.2 : 0, priest: t.faith ? .4 : 0, healer: h('herbs') ? .4 : 0, teacher: h('writing') ? .4 : 0,
+        smith: h('bronze') ? .5 : 0, potter: h('pottery') ? .4 : 0, artist: h('philosophy') ? .3 : 0, worker: h('industry') ? 1.2 : 0,
+        engineer: h('engineering') && t.era >= 4 ? .5 : 0, programmer: h('computers') ? .9 : 0 };
+      let sum = 0; for (const k in w) sum += w[k];
+      let x = this.r() * sum; for (const k in w) { x -= w[k]; if (x <= 0) return k; }
+      return 'woodcutter';
+    }
+    pickMate(a, t, R, test) {
+      let best = null, bd = R + 1;
+      for (const m of this.members(t)) { if (m === a || !m.alive) continue; const d = cheb(a, m); if (d < bd && test(m)) { bd = d; best = m; } }
+      return best;
+    }
+    related(a, b) { return !!((a.parents && (a.parents.includes(b.name) || (b.parents && a.parents.some(n => b.parents.includes(n))))) || (b.parents && b.parents.includes(a.name))); }
+    spotNear(t, a, r) { return this.nearPassable(t.camp.x + (a.id * 7) % (r * 2 + 1) - r, t.camp.y + (a.id * 3) % (r * 2 + 1) - r, 2); }
+    coastal(i) { if (this.terrain[i] === T.WATER || this.terrain[i] === T.MOUNTAIN) return false; const x = i % W, y = (i / W) | 0; for (const [dx, dy] of DIRS) if (this.inb(x + dx, y + dy) && this.terrain[this.idx(x + dx, y + dy)] === T.WATER) return true; return false; }
+    topic(t) {
+      const o = ['the weather', 'the harvest', 'their families', 'an old story', 'what to cook tonight', 'the price of bread'];
+      const l = this.byId.get(t.leader); if (l) o.push(`Chief ${l.name}`);
+      for (const id of t.wars.keys()) { const e = this.tribes.get(id); if (e) o.push(`the war with the ${e.name}`, `the war with the ${e.name}`); }
+      if (t.research) o.push(`the new idea of ${TECH[t.research].name}`);
+      const f = this.religions.get(t.faith); if (f) o.push(`the teachings of ${f.name}`);
+      if (t.wonders.length) o.push(`the ${t.wonders[t.wonders.length - 1]}`);
+      if (t.plague) o.push('the sickness going around', 'the sickness going around');
+      if (t.festival > 0) o.push(`the ${t.festName}`);
+      if (t.era >= 4) o.push('the news in the paper'); if (t.era >= 5) o.push('a show on the radio'); if (t.era >= 6) o.push('a video everyone is sharing');
+      const lk = this.links.find(L => L.a === t.id || L.b === t.id); if (lk) { const x = this.tribes.get(lk.a === t.id ? lk.b : lk.a); if (x) o.push(`news from the ${x.name} across the sea`); }
+      return this.pick(o);
+    }
+    meet(a, t, g, fx) {
+      const b = this.byId.get(g.partner);
+      if (!b || !b.alive) { a.goal = null; return; }
+      if (cheb(a, b) > 1) { if (g.chase-- > 0) { g.tx = b.x; g.ty = b.y; } else { a.goal = null; a.thought = `Could not find ${b.name}`; } return; }
+      const first = !g.met; g.met = true;
+      if (g.type === 'chat') {
+        if (first) { a.thought = `Chatting with ${b.name} about ${this.topic(t)}`; if (!b.goal || b.goal.type === 'walk' || b.goal.type === 'rest') b.thought = `Chatting with ${a.name}`; if (!a.friend) a.friend = b.id; if (!b.friend) b.friend = a.id; }
+        a.lonely = 0; b.lonely = Math.max(0, b.lonely - 10);
+      } else if (g.type === 'court' && first) {
+        if (!b.spouse && !a.spouse && this.r() < .45 + b.traits.sociability * .45) {
+          a.spouse = b.id; b.spouse = a.id; a.thought = `Married ${b.name} today. The happiest day of their life`; b.thought = `Just married ${a.name}`;
+          if (t && (t.leader === a.id || t.leader === b.id)) this.emit('family', `Chief ${t.leader === a.id ? a.name : b.name} of the ${t.name} married ${t.leader === a.id ? b.name : a.name}.`, { tribe: t.id });
+        } else { a.thought = `${b.name} said no. Heartbroken, but life goes on`; g.work = 0; }
+      } else if (g.type === 'heal' && first) {
+        b.health = Math.min(100, b.health + 40); a.thought = `Treating ${b.name} with ${t && t.era >= 4 ? 'medicine' : 'herbs and rest'}`; b.thought = `Feeling better thanks to ${a.name}`;
+      } else if (g.type === 'teach') {
+        b.traits.curiosity = Math.min(1, b.traits.curiosity + .004); if (t) t.progress += .3 * fx.research;
+        if (first) b.thought = `Learning from ${a.name}`;
+      }
+      if (--g.work <= 0) a.goal = null;
+    }
+    mourn(m, t, a, rel) {
+      m.thought = `Grieving for ${rel} ${a.name}`; m.grief = 120;
+      if (m.goal && (m.goal.type === 'army' || m.goal.type === 'voyage' || m.goal.type === 'hunt' || m.goal.type === 'raid')) return;
+      this.setGoal(m, { type: 'mourn', tx: t.grave.x, ty: t.grave.y, work: 15 }, `Mourning ${rel} ${a.name} at the graveyard`);
     }
     tradePartner(t) {
       let best = null, bs = -1e9;
@@ -931,6 +1051,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const t = a.tribe ? this.tribes.get(a.tribe) : null;
       if (!t) return;
       t.members.delete(a.id); t.deaths++;
+      if (!t.grave) t.grave = this.nearPassable(t.camp.x - 3, t.camp.y + 3, 3);
+      if (a.age > 2 * YEAR) {
+        const sp = a.spouse && this.byId.get(a.spouse);
+        if (sp && sp.alive) { sp.spouse = 0; this.mourn(sp, t, a, 'their partner'); }
+        let n = 0; for (const m of this.members(t)) if (m.parents && m.parents.includes(a.name) && n++ < 4) this.mourn(m, t, a, 'their parent');
+      }
       const kt = killer ? this.tribes.get(killer.tribe) : null;
       if (kt) { const w = t.wars.get(kt.id); if (w) w.deaths++; t.rel.set(kt.id, Math.max(-100, (t.rel.get(kt.id) ?? 0) - 2)); }
       if (t.leader === a.id) {
@@ -956,9 +1082,20 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       if (pop >= 2 && pop < cap && t.stock.food > pop * 4 + 12 && this.r() < .3) {
         const adults = this.members(t).filter(m => m.age > 16 * YEAR && cheb(m, t.camp) <= 10);
         if (adults.length >= 2) {
-          const p1 = this.pick(adults); let p2 = this.pick(adults); if (p2 === p1) p2 = adults.find(m => m !== p1);
+          const wed = adults.filter(m => m.spouse && m.age < 48 * YEAR && this.byId.get(m.spouse));
+          let p1, p2;
+          if (wed.length && this.r() < .85) { p1 = this.pick(wed); p2 = this.byId.get(p1.spouse); }
+          else { p1 = this.pick(adults); p2 = this.pick(adults); if (p2 === p1) p2 = adults.find(m => m !== p1); }
           const c = this.makeAgent(t.camp.x, t.camp.y, [p1, p2]); this.join(c, t); c.thought = 'Just born'; t.stock.food -= 12;
+          for (const p of [p1, p2]) { p.kids = (p.kids || 0) + 1; if (!p.goal || p.goal.type === 'walk' || p.goal.type === 'rest') p.thought = `Overjoyed at the birth of ${c.name}`; }
         }
+      }
+      if (t.festival > 0) t.festival -= 10;
+      else if ((t.wealth || 0) + (t.piety || 0) >= 25 + pop * .5 && t.stock.food > pop * 8 && !t.wars.size && !t.plague && this.r() < .05 && this.rateOk(t, 'fest', YEAR * 8)) {
+        const pay = 25 + pop * .5, w = Math.min(t.wealth || 0, pay); t.wealth = (t.wealth || 0) - w; t.piety = (t.piety || 0) - (pay - w);
+        const fs = FESTS[STYLES[t.style].id]; t.festName = fs[this.year() % 2]; t.festival = 120; t.festivals = (t.festivals || 0) + 1;
+        for (const mm of this.members(t)) mm.lonely = 0;
+        this.emit('festival', `The ${t.name} held the ${t.festName}. People danced in the town square.`, { tribe: t.id });
       }
       const m = [100, 50, 25, 10].find(v => t.members.size >= v) || 0;
       if (m > t.peak) { t.peak = m; this.emit('growth', `The ${t.name} now number ${m}.`, { tribe: t.id }); }
@@ -1829,7 +1966,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       return { pop, tribes: this.tribes.size, era, loners: this.agents.filter(a => !a.tribe).length };
     }
   }
-  Sim.STRATS = STRATS; Sim.PERSONAS = PERSONAS; Sim.STYLES = STYLES; Sim.SHIP_NAMES = SHIP_NAMES; Sim.W = W; Sim.H = H; Sim.YEAR = YEAR; Sim.T = T; Sim.ERAS = ERAS; Sim.TECHS = TECHS; Sim.TECH = TECH; Sim.techCost = techCost; Sim.rng = mulberry32;
+  Sim.STRATS = STRATS; Sim.PERSONAS = PERSONAS; Sim.STYLES = STYLES; Sim.SHIP_NAMES = SHIP_NAMES; Sim.JOBS = JOBS; Sim.W = W; Sim.H = H; Sim.YEAR = YEAR; Sim.T = T; Sim.ERAS = ERAS; Sim.TECHS = TECHS; Sim.TECH = TECH; Sim.techCost = techCost; Sim.rng = mulberry32;
   root.Sim = Sim;
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
@@ -2134,46 +2271,118 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         break;
     }
   }
-  function house(S, B, style, e, j, k) {
-    const st = e === 0 ? 0 : e <= 2 ? 1 : e <= 4 ? 2 : 3;
+  // small façade details; the house's +z side faces the town center
+  function door(S, B, z, w, h, col) { part(S, 'box', B, 0, 0, z, w, h, .02, col); part(S, 'box', B, 0, h, z + .005, w + .04, .025, .025, '#3a2c20'); }
+  function win(S, B, x, y, z, w, h, col, side) { if (side) part(S, 'box', B, x, y, z, .02, h, w, col); else part(S, 'box', B, x, y, z, w, h, .02, col); }
+  function house(S, B, style, e, j, k, col = '#8a4a3a') {
+    const st = e === 0 ? 0 : e <= 2 ? 1 : e <= 4 ? 2 : 3, dt = Q.life >= 1, glass = e >= 6 ? '#9fd3ec' : '#3b4a57';
     if (st === 3 && j > .3) {
-      const h = e === 5 ? 1.2 + j * 2.2 : 1.6 + j * 3.6, col = e >= 6 ? (j > .6 ? '#86a3b5' : '#a8b8c2') : (j > .6 ? '#b2aa9c' : '#9d8f80');
-      part(S, 'box', B, 0, 0, 0, .5, h, .5, col);
-      if (style === 'eastern') part(S, 'pyr', B, 0, h, 0, .56, .25, .56, '#3d5552');
-      else if (style === 'desert') part(S, 'dome', B, 0, h, 0, .4, .3, .4, '#cdb38c');
-      else part(S, 'box', B, 0, h, 0, .3, .12, .3, '#55595e');
+      // modern towers keep a little of their culture: roofs, colors and balconies
+      const h = e === 5 ? 1.2 + j * 2.2 : 1.6 + j * 3.6, wall = e >= 6 ? (j > .6 ? '#86a3b5' : '#a8b8c2') : (j > .6 ? '#b2aa9c' : '#9d8f80');
+      part(S, 'box', B, 0, 0, 0, .5, h, .5, wall);
+      if (dt) {
+        for (let y = .25; y < h - .1; y += .28) { part(S, 'box', B, 0, y, .251, .42, .1, .01, glass); part(S, 'box', B, .251, y, 0, .01, .1, .42, glass); part(S, 'box', B, 0, y, -.251, .42, .1, .01, glass); part(S, 'box', B, -.251, y, 0, .01, .1, .42, glass); }
+        part(S, 'box', B, 0, 0, .255, .2, .2, .02, '#2a2f35'); part(S, 'box', B, 0, .2, .3, .3, .02, .12, col);
+        if (style === 'med' || style === 'nordic') for (let y = .55; y < h - .2; y += .56) part(S, 'box', B, 0, y - .04, .29, .34, .02, .08, '#e8e8e4');
+      }
+      if (style === 'eastern') { part(S, 'pyr', B, 0, h, 0, .62, .22, .62, '#3d5552'); part(S, 'box', B, 0, h + .22, 0, .2, .14, .2, '#b23a2a'); part(S, 'pyr', B, 0, h + .36, 0, .32, .14, .32, '#3d5552'); }
+      else if (style === 'desert') { part(S, 'dome', B, 0, h, 0, .4, .3, .4, '#cdb38c'); part(S, 'cyl', B, 0, h + .28, 0, .02, .18, .02, '#c9a64a'); }
+      else if (style === 'nordic') part(S, 'prism', B, 0, h, 0, .52, .32, .52, '#3a3d42');
+      else if (style === 'med') part(S, 'pyr', B, 0, h, 0, .56, .16, .56, '#b5583a');
+      else if (style === 'meso') { part(S, 'box', B, 0, h, 0, .4, .1, .4, '#a59c86'); part(S, 'box', B, 0, h + .1, 0, .26, .1, .26, '#988f79'); }
+      else { part(S, 'box', B, 0, h, 0, .3, .12, .3, '#55595e'); if (dt) part(S, 'cyl', B, .12, h + .12, .12, .08, .02, .08, '#d8d8d8', .5, 0, 0); }
+      if (dt && e >= 6) part(S, 'box', B, 0, h + .01, 0, .36, .015, .36, '#2b3540');
       return;
     }
-    if (st === 2 && e === 4 && j < .12) { part(S, 'box', B, 0, 0, 0, .55, .45, .5, '#8c4f3d'); part(S, 'cyl', B, .15, 0, .1, .16, 1.5, .16, '#7d4e3e'); return; }
+    if (st === 2 && e === 4 && j < .12) {
+      part(S, 'box', B, 0, 0, 0, .55, .45, .5, '#8c4f3d'); part(S, 'cyl', B, .15, 0, .1, .16, 1.5, .16, '#7d4e3e');
+      if (dt) { for (const x of [-.18, 0]) win(S, B, x, .2, .251, .12, .16, '#d9b46a'); for (const z of [-.15, .1]) part(S, 'prism', B, 0, .45, z, .56, .12, .25, '#5a3a30'); part(S, 'cyl', B, .15, 1.45, .1, .17, .06, .17, '#2b2b2b'); }
+      return;
+    }
     const s = st >= 2 ? 2 : st;
     switch (style) {
       case 'steppe':
-        if (s < 2) { part(S, 'cyl', B, 0, 0, 0, .62, .32, .62, '#e6dcc6'); part(S, 'cone', B, 0, .32, 0, .68, .26, .68, '#cdb88f'); if (s) part(S, 'cyl', B, 0, .12, 0, .63, .05, .63, '#9b3b2e'); }
-        else { part(S, 'box', B, 0, 0, 0, .6, .42, .48, '#a88a64'); part(S, 'pyr', B, 0, .42, 0, .66, .28, .54, '#7d3326'); }
+        if (s < 2) {
+          part(S, 'cyl', B, 0, 0, 0, .62, .32, .62, '#e6dcc6'); part(S, 'cone', B, 0, .32, 0, .68, .26, .68, '#cdb88f'); if (s) part(S, 'cyl', B, 0, .12, 0, .63, .05, .63, '#9b3b2e');
+          door(S, B, .31, .14, .2, s ? col : '#9b3b2e');
+          if (dt) { part(S, 'cyl', B, 0, .56, 0, .12, .04, .12, '#7a5a3a'); part(S, 'cyl', B, 0, .2, 0, .64, .02, .64, '#7a5a3a'); if (s && j > .5) { part(S, 'cyl', B, .45, 0, .2, .02, .3, .02, '#5a4632'); part(S, 'box', B, .45, .28, .2, .12, .07, .01, col); } }
+        } else {
+          part(S, 'box', B, 0, 0, 0, .6, .42, .48, '#a88a64'); part(S, 'pyr', B, 0, .42, 0, .66, .28, .54, '#7d3326'); door(S, B, .241, .14, .24, '#5a3a24');
+          if (dt) { for (const x of [-.18, .18]) win(S, B, x, .22, .241, .1, .1, glass); part(S, 'box', B, .301, .1, 0, .01, .26, .3, col); }
+        }
         break;
       case 'nordic':
-        if (s === 0) part(S, 'prism', B, 0, 0, 0, .75, .42, .55, '#5d6b3a');
-        else if (s === 1) { part(S, 'box', B, 0, 0, 0, .95, .26, .42, '#6b4f36'); part(S, 'prism', B, 0, .26, 0, 1.02, .34, .5, '#3f3a31'); }
-        else { part(S, 'box', B, 0, 0, 0, .55, .5, .44, '#ebe3d1'); part(S, 'box', B, 0, .24, 0, .57, .03, .46, '#4a3626'); part(S, 'prism', B, 0, .5, 0, .6, .44, .5, '#3a3631'); }
+        if (s === 0) { part(S, 'prism', B, 0, 0, 0, .75, .42, .55, '#5d6b3a'); door(S, B, .2, .12, .18, '#3b2d20'); }
+        else if (s === 1) {
+          part(S, 'box', B, 0, 0, 0, .95, .26, .42, '#6b4f36'); part(S, 'prism', B, 0, .26, 0, 1.02, .34, .5, '#3f3a31'); door(S, B, .211, .14, .2, '#3b2d20');
+          if (dt) {
+            for (const x of [-.32, .32]) part(S, 'cyl', B, x, .14, .216, .07, .015, .07, x < 0 ? col : '#c9a64a', Math.PI / 2, 0, 0);
+            for (const x of [-.51, .51]) { part(S, 'box', B, x, .52, 0, .03, .18, .03, '#3b2d20', 0, 0, x < 0 ? .5 : -.5); }
+            part(S, 'box', B, 0, .58, 0, 1.04, .03, .04, '#4a3a28');
+          }
+        } else {
+          part(S, 'box', B, 0, 0, 0, .55, .5, .44, '#ebe3d1'); part(S, 'box', B, 0, .24, 0, .57, .03, .46, '#4a3626'); part(S, 'prism', B, 0, .5, 0, .6, .44, .5, '#3a3631');
+          door(S, B, .221, .13, .22, col);
+          if (dt) {
+            for (const x of [-.27, -.09, .09, .27]) part(S, 'box', B, x, 0, .222, .025, .5, .01, '#4a3626');
+            for (const x of [-.18, .18]) win(S, B, x, .34, .223, .09, .1, glass);
+            part(S, 'box', B, .18, .6, -.1, .08, .3, .08, '#7d4e3e');
+          }
+        }
         break;
       case 'desert':
-        if (s === 0) { part(S, 'cyl', B, 0, 0, 0, .5, .34, .5, '#cfae7c'); part(S, 'dome', B, 0, .34, 0, .5, .36, .5, '#cfae7c'); }
-        else { const h = .4 + j * (s === 2 ? .45 : .25); part(S, 'box', B, 0, 0, 0, .6, h, .6, '#d6b88a'); part(S, 'box', B, .12, h, .12, .3, .16, .3, '#cba674'); if (s === 2 && j > .6) part(S, 'dome', B, -.12, h, -.12, .25, .2, .25, '#e6d3ae'); }
+        if (s === 0) { part(S, 'cyl', B, 0, 0, 0, .5, .34, .5, '#cfae7c'); part(S, 'dome', B, 0, .34, 0, .5, .36, .5, '#cfae7c'); door(S, B, .25, .12, .2, '#5a4632'); }
+        else {
+          const h = .4 + j * (s === 2 ? .45 : .25);
+          part(S, 'box', B, 0, 0, 0, .6, h, .6, '#d6b88a'); part(S, 'box', B, .12, h, .12, .3, .16, .3, '#cba674'); if (s === 2 && j > .6) part(S, 'dome', B, -.12, h, -.12, .25, .2, .25, '#e6d3ae');
+          door(S, B, .301, .14, .24, '#5a3a24');
+          if (dt) {
+            for (const x of [-.24, -.08, .08, .24]) part(S, 'cyl', B, x, h - .08, .31, .025, .08, .025, '#7a5a3a', Math.PI / 2, 0, 0);
+            win(S, B, .2, h * .62, .302, .07, .08, '#2a2620'); win(S, B, .302, h * .62, 0, .08, .08, '#2a2620', true);
+            part(S, 'box', B, 0, .3, .36, .4, .015, .14, col, -.25, 0, 0); for (const x of [-.18, .18]) part(S, 'cyl', B, x, 0, .42, .015, .3, .015, '#7a5a3a');
+            part(S, 'box', B, 0, h, 0, .62, .04, .62, '#c9a876');
+            if (j > .4) part(S, 'sphere', B, -.24, .06, .38, .06, .08, .06, '#b0653a');
+          }
+        }
         break;
       case 'eastern':
-        if (s === 0) { part(S, 'cyl', B, 0, 0, 0, .5, .25, .5, '#a28a62'); part(S, 'cone', B, 0, .25, 0, .66, .38, .66, '#c2a868'); }
+        if (s === 0) { part(S, 'cyl', B, 0, 0, 0, .5, .25, .5, '#a28a62'); part(S, 'cone', B, 0, .25, 0, .66, .38, .66, '#c2a868'); door(S, B, .25, .12, .18, '#5a4632'); }
         else {
           part(S, 'box', B, 0, 0, 0, .6, .06, .5, '#7a2f22'); part(S, 'box', B, 0, .06, 0, .55, .32, .44, '#efe6d6'); part(S, 'pyr', B, 0, .38, 0, .86, .2, .74, '#3d5552');
           if (j > .55 || s === 2) { part(S, 'box', B, 0, .52, 0, .36, .24, .3, '#efe6d6'); part(S, 'pyr', B, 0, .76, 0, .6, .18, .52, '#3d5552'); }
+          door(S, B, .221, .16, .24, '#6b2a1e');
+          if (dt) {
+            for (const x of [-.26, .26]) part(S, 'cyl', B, x, .06, .24, .03, .32, .03, '#b23a2a');
+            for (const [x, z] of [[-.42, .36], [.42, .36], [-.42, -.36], [.42, -.36]]) part(S, 'box', B, x, .4, z, .1, .025, .04, '#3d5552', 0, Math.atan2(x, z), z > 0 ? .4 : -.4);
+            part(S, 'cyl', B, .18, .22, .222, .06, .01, .06, '#c9b48a', Math.PI / 2, 0, 0);
+            part(S, 'sphere', B, -.36, .3, .3, .045, .06, .045, '#e0402e'); part(S, 'box', B, -.36, .34, .3, .005, .06, .005, '#222222');
+            part(S, 'cyl', B, 0, .58, 0, .015, .1, .015, '#c9a64a');
+          }
         }
         break;
       case 'med':
-        if (s === 0) part(S, 'cone', B, 0, 0, 0, .6, .6, .6, '#a48b5e');
-        else { const h = s === 2 && j > .45 ? .72 : .42; part(S, 'box', B, 0, 0, 0, .58, h, .48, '#efeae0'); part(S, 'pyr', B, 0, h, 0, .68, .2, .58, '#b5583a'); }
+        if (s === 0) { part(S, 'cone', B, 0, 0, 0, .6, .6, .6, '#a48b5e'); door(S, B, .2, .12, .18, '#5a4632'); }
+        else {
+          const h = s === 2 && j > .45 ? .72 : .42;
+          part(S, 'box', B, 0, 0, 0, .58, h, .48, '#efeae0'); part(S, 'pyr', B, 0, h, 0, .68, .2, .58, '#b5583a'); door(S, B, .241, .13, .22, '#6b4a2f');
+          if (dt) {
+            for (const x of [-.18, .18]) { win(S, B, x, h * .55, .241, .08, .11, '#2a2a2a'); part(S, 'box', B, x - .065, h * .55, .245, .04, .12, .01, col); part(S, 'box', B, x + .065, h * .55, .245, .04, .12, .01, col); }
+            if (j > .6) { part(S, 'box', B, 0, 0, .34, .5, .03, .2, '#d8d0c0'); for (const x of [-.2, .2]) part(S, 'cyl', B, x, .03, .42, .03, h - .04, .03, '#f2eee4'); part(S, 'box', B, 0, h - .02, .38, .54, .03, .14, '#e8e2d4'); }
+            else { part(S, 'cone', B, .38, 0, .1, .1, .55, .1, '#2f4a2c'); part(S, 'cyl', B, -.22, 0, .3, .06, .07, .06, '#b0653a'); part(S, 'sphere', B, -.22, .09, .3, .06, .05, .06, '#4f7a3a'); }
+          }
+        }
         break;
       default: // jungle
-        if (s === 0) { part(S, 'cyl', B, 0, 0, 0, .48, .28, .48, '#a59c86'); part(S, 'cone', B, 0, .28, 0, .62, .4, .62, '#a08a55'); }
-        else { part(S, 'box', B, 0, 0, 0, .72, .14, .72, '#9d9480'); part(S, 'box', B, 0, .14, 0, .5, .34, .44, '#e0d6bd'); part(S, 'pyr', B, 0, .48, 0, .62, .3, .56, s === 2 ? '#7f6a4a' : '#9a8550'); }
+        if (s === 0) { part(S, 'cyl', B, 0, 0, 0, .48, .28, .48, '#a59c86'); part(S, 'cone', B, 0, .28, 0, .62, .4, .62, '#a08a55'); door(S, B, .24, .12, .18, '#3b2d20'); }
+        else {
+          part(S, 'box', B, 0, 0, 0, .72, .14, .72, '#9d9480'); part(S, 'box', B, 0, .14, 0, .5, .34, .44, '#e0d6bd'); part(S, 'pyr', B, 0, .48, 0, .62, .3, .56, s === 2 ? '#7f6a4a' : '#9a8550');
+          door(S, B, .221, .14, .22, '#2a221a');
+          if (dt) {
+            part(S, 'box', B, 0, .14, .41, .3, .07, .1, '#8f8673'); part(S, 'box', B, 0, .38, .222, .5, .05, .01, col); part(S, 'box', B, 0, .44, .222, .5, .03, .01, '#3fa39a');
+            for (const x of [-.18, .18]) part(S, 'box', B, x, .25, .223, .06, .06, .01, '#c9452e');
+            if (j > .5) { part(S, 'cyl', B, .42, 0, -.25, .03, .5, .03, '#7a6a4a'); for (const a of [0, 1.6, 3.2, 4.8]) part(S, 'box', B, .42 + Math.cos(a) * .1, .5, -.25 + Math.sin(a) * .1, .22, .01, .06, '#3f7a35', 0, -a, -.3); }
+          }
+        }
     }
   }
   function wonder(S, B, style, lvl) {
@@ -2202,8 +2411,25 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       default: part(S, 'box', B, 0, 0, 0, 1.6, .4, 1.6, '#a59c86'); part(S, 'cyl', B, 0, .4, 0, .9, .8, .9, '#e0d6bd'); part(S, 'dome', B, 0, 1.2, 0, .9, .6, .9, '#d9cfb6');
     }
   }
-  function ship(S, B, era, col) {
-    if (era <= 2) {
+  function ship(S, B, era, col, style) {
+    if (era <= 2 && style === 'nordic') {
+      // longship: dragon prow, shields along the rail, striped sail
+      part(S, 'box', B, 0, -.05, 0, .3, .14, 1.1, '#5e4430'); for (const z of [.6, -.6]) part(S, 'box', B, 0, .05, z, .06, .3, .08, '#5e4430', z > 0 ? -.5 : .5, 0, 0);
+      part(S, 'sphere', B, 0, .22, .7, .05, .05, .08, '#3b2d20');
+      for (let z = -.4; z <= .41; z += .2) for (const x of [-.155, .155]) part(S, 'cyl', B, x, .07, z, .06, .015, .06, Math.round(z * 5) % 2 ? col : '#d8c9a0', 0, 0, Math.PI / 2);
+      part(S, 'cyl', B, 0, .09, 0, .03, .75, .03, '#4a3626');
+      for (let k = 0; k < 4; k++) part(S, 'box', B, 0, .3 + k * .1, 0, .55, .1, .02, k % 2 ? col : '#efe6cf');
+      for (let k = -2; k <= 2; k++) for (const x of [-1, 1]) part(S, 'box', B, x * .25, -.02, k * .17, .2, .012, .012, '#4a3626', 0, 0, x * -.4);
+    } else if (era <= 3 && style === 'eastern') {
+      // junk: high stern and battened sails
+      part(S, 'box', B, 0, -.05, 0, .4, .2, 1.1, '#6b3a24'); part(S, 'box', B, 0, .15, -.45, .38, .18, .25, '#7a2f22');
+      for (const [z, h] of [[.25, .75], [-.1, .9]]) { part(S, 'cyl', B, 0, .12, z, .03, h, .03, '#3e2c1d'); for (let k = 0; k < 5; k++) part(S, 'box', B, 0, .3 + k * .12, z, .5 - k * .04, .1, .02, k % 2 ? '#c9813e' : '#b8702f'); part(S, 'box', B, 0, .12 + h, z, .1, .06, .01, col); }
+    } else if (era <= 2 && style === 'desert') {
+      // felucca with a tall slanted lateen sail
+      part(S, 'box', B, 0, -.05, 0, .3, .14, .95, '#8a6a42'); part(S, 'pyr', B, 0, -.05, .52, .28, .14, .16, '#8a6a42', Math.PI / 2, 0, 0);
+      part(S, 'cyl', B, 0, .09, .1, .025, .55, .025, '#4a3626'); part(S, 'box', B, 0, .5, .05, .02, .02, 1.1, '#4a3626', -.6, 0, 0);
+      part(S, 'pyr', B, 0, .15, .02, .02, .7, .7, '#f2ead6', 0, 0, 0); part(S, 'box', B, 0, .86, -.3, .01, .06, .1, col);
+    } else if (era <= 2) {
       part(S, 'box', B, 0, -.05, 0, .32, .16, 1, '#6b4a2f'); part(S, 'pyr', B, 0, -.05, .55, .3, .16, .2, '#6b4a2f', Math.PI / 2, 0, 0);
       part(S, 'cyl', B, 0, .11, 0, .03, .8, .03, '#4a3626'); part(S, 'box', B, 0, .38, 0, .55, .4, .02, col);
       for (const x of [-.22, .22]) part(S, 'box', B, x, .02, 0, .22, .015, .7, '#4a3626');
@@ -2221,6 +2447,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     }
   }
 
+  function moodOf(a, t) {
+    if (a.grief > 0) return 'Grieving';
+    if (a.hunger > 70) return 'Hungry';
+    if (a.health < 50) return 'Unwell';
+    if (t && t.festival > 0) return 'Joyful';
+    if ((a.tired || 0) > 80) return 'Exhausted';
+    if ((a.lonely || 0) > 75) return 'Lonely';
+    if (t && t.wars.size) return 'Worried';
+    return a.spouse ? 'Happy' : 'Content';
+  }
   const LINK_LABEL = { sail: 'by ship', cable: 'by telegraph', radio: 'by radio', satellite: 'by satellite', internet: 'by internet' };
   const CRATES = ['#b5462f', '#2f6db5', '#e0a526', '#3c8a4a', '#d8d8d8', '#7a3fa0'];
   function merchant(S, B, era, col, full) {
@@ -2385,8 +2621,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     const hatGeo = new THREE.ConeGeometry(.5, 1, 10); hatGeo.translate(0, .5, 0);
     const pm = () => new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .8 });
     world.legs = instanced(legGeo, pm(), MAXA * 2); world.arms = instanced(armGeo, pm(), MAXA * 2);
-    world.torsos = instanced(torsoGeo, pm(), MAXA); world.heads = instanced(headGeo, pm(), MAXA); world.hats = instanced(hatGeo, pm(), MAXA);
-    for (const m of [world.legs, world.arms, world.torsos, world.heads, world.hats]) { m.setColorAt(0, tmpC.set('#fff')); group.add(m); }
+    world.torsos = instanced(torsoGeo, pm(), MAXA); world.heads = instanced(headGeo, pm(), MAXA); world.hats = instanced(hatGeo, pm(), MAXA); world.garb = instanced(new THREE.BoxGeometry(1, 1, 1), pm(), MAXA);
+    for (const m of [world.legs, world.arms, world.torsos, world.heads, world.hats, world.garb]) { m.setColorAt(0, tmpC.set('#fff')); group.add(m); }
     // buildings, wonders, ships and war machines are assembled from a few primitive parts
     world.bset = partSet(16000, group);
     world.dset = partSet(12000, group);
@@ -2593,11 +2829,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   const PANTS = { steppe: '#5b4632', nordic: '#4b5563', desert: '#e8dcc4', eastern: '#2f3b4a', med: '#e2d8c2', meso: '#d8c9a3' };
   const HAT = { steppe: [.13, .1, '#6b4a30'], nordic: [.11, .05, '#d9b26a'], desert: [.13, .09, '#efe8d8'], eastern: [.22, .06, '#d2b56a'], med: [.11, .04, '#3b2a20'], meso: [.04, .16, '#3f8a5a'] };
   const HELMET = [null, [.13, .09, '#b08d57'], [.13, .1, '#9a9a9a'], [.17, .06, '#1f1f22'], [.1, .14, '#1f2a44'], [.14, .07, '#4b5a3a'], [.14, .07, '#4a5040']];
+  // traditional dress worn over the tunic: x, y, z, width, height, depth, tilt, color
+  const GARB = { steppe: [0, .13, 0, .135, .1, .088, 0, '#7a3b2a'], nordic: [0, .21, -.046, .13, .19, .018, .12, '#6b5a44'], desert: [0, .07, 0, .132, .2, .086, 0, '#efe8d8'], eastern: [0, .22, 0, .127, .03, .082, 0, '#c9452e'], med: [0, .28, 0, .13, .035, .082, .6, '#f2eee4'], meso: [0, .345, 0, .16, .03, .095, 0, '#3fa39a'] };
   const MODERN_HAIR = [.11, .04, '#3b2f28'], ROBOT_CAP = [.02, .1, '#4fc3f7'];
   const STY = i => Sim.STYLES[i || 0].id;
   const skinC = new THREE.Color(), pantsC = new THREE.Color(), clothC = new THREE.Color();
   function updatePeople(alpha) {
-    const L = world.legs, A = world.arms, To = world.torsos, He = world.heads, Ha = world.hats, D = world.dset;
+    const L = world.legs, A = world.arms, To = world.torsos, He = world.heads, Ha = world.hats, Gb = world.garb, D = world.dset; let ng = 0;
     let n = 0, nl = 0, na = 0, ns = 0; world.slots = world.slots || [];
     const gens = new Map(); for (const r of sim.armies) if (!r.dead) gens.set(r.general, r);
     for (const a of sim.agents) {
@@ -2623,18 +2861,37 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         part(D, 'box', B, 0, .18, 0, .16, .16, .46, hc); part(D, 'box', B, 0, .26, .2, .08, .2, .08, hc, .55, 0, 0); part(D, 'box', B, 0, .4, .3, .07, .07, .16, hc);
         for (const [x, z, k] of [[-.055, .16, 1], [.055, .16, -1], [-.055, -.16, -1], [.055, -.16, 1]]) part(D, 'cyl', B, x, .19, z, .035, .19, .035, '#4a3324', Math.PI + sw * k * .8, 0, 0);
       }
-      const bob = moving && !mounted ? Math.abs(Math.sin(clock * 12 + a.id)) * .02 : 0;
-      const B = base(wx(fx), gy + (mounted ? .26 : 0) + bob, wz(fy), rot, s);
+      let bob = moving && !mounted ? Math.abs(Math.sin(clock * 12 + a.id)) * .02 : 0;
+      // body language for what they are doing right now
+      const at = !moving && !mounted && a.goal && a.x === a.goal.tx && a.y === a.goal.ty, pose = at ? g : '';
+      let rotP = rot, legR = null, armL = null, armR = null;
+      if (pose === 'rest') { bob = -.1; legR = -1.45; armL = armR = -.3; }
+      else if (pose === 'pray' || pose === 'mourn') { bob = -.07; legR = -1.3; armL = armR = pose === 'pray' ? -2.6 : -.2; }
+      else if (pose === 'dance' || pose === 'play') { rotP = rot + clock * (pose === 'dance' ? 3 : 5) + a.id; bob = Math.abs(Math.sin(clock * 9 + a.id)) * .07; armL = -2.6 + Math.sin(clock * 6 + a.id) * .5; armR = -2.6 - Math.sin(clock * 6 + a.id) * .5; }
+      else if (pose === 'chat' || pose === 'court' || pose === 'teach' || pose === 'heal') { const b = sim.byId.get(a.goal.partner); if (b) rotP = Math.atan2(b.x - a.x, b.y - a.y); armR = -.6 + Math.sin(clock * 5 + a.id) * .4; }
+      else if (pose === 'fish') { armL = armR = -1.1; }
+      else if (pose === 'gather' || pose === 'farm' || pose === 'build' || pose === 'walls' || pose === 'craft' || pose === 'herd') { const w = Math.sin(clock * 8 + a.id); armL = -1 - w * .8; armR = -1 - w * .8; }
+      const B = base(wx(fx), gy + (mounted ? .26 : 0) + bob, wz(fy), rotP, s);
       To.setMatrixAt(n, local(B, 0, .19, 0, 1, 1, 1)); To.setColorAt(n, clothC.set(robot ? '#9aa3ad' : col));
       He.setMatrixAt(n, local(B, 0, .41, 0, 1, 1, 1));
       const sk = SKIN[sid]; if (robot) skinC.set('#cfd6dd'); else skinC.set(sk[0]).lerp(tmpCol.set(sk[1]), a.skin || 0); He.setColorAt(n, skinC);
       const hs = robot ? ROBOT_CAP : soldier && HELMET[e] ? HELMET[e] : e >= 4 ? MODERN_HAIR : HAT[sid];
       Ha.setMatrixAt(n, local(B, 0, .425, 0, hs[0], hs[1], hs[0])); Ha.setColorAt(n, tmpC.set(hs[2]));
+      if (e <= 3 && !soldier && !robot && !tank) { const g = GARB[sid]; Gb.setMatrixAt(ng, local(B, g[0], g[1], g[2], g[3], g[4], g[5], 0, 0, g[6])); Gb.setColorAt(ng++, tmpC.set(g[7])); }
       pantsC.set(robot ? '#6b737c' : e >= 4 ? '#3a3f4a' : PANTS[sid]);
-      L.setMatrixAt(nl, local(B, -.032, .19, 0, 1, 1, 1, mounted ? -1.2 : sw)); L.setColorAt(nl++, pantsC);
-      L.setMatrixAt(nl, local(B, .032, .19, 0, 1, 1, 1, mounted ? -1.2 : -sw)); L.setColorAt(nl++, pantsC);
-      A.setMatrixAt(na, local(B, -.085, .35, 0, 1, 1, 1, soldier && e >= 1 && e <= 2 ? -.5 : -sw * .8)); A.setColorAt(na++, clothC);
-      A.setMatrixAt(na, local(B, .085, .35, 0, 1, 1, 1, soldier ? -.9 : sw * .8)); A.setColorAt(na++, clothC);
+      L.setMatrixAt(nl, local(B, -.032, .19, 0, 1, 1, 1, legR ?? (mounted ? -1.2 : sw))); L.setColorAt(nl++, pantsC);
+      L.setMatrixAt(nl, local(B, .032, .19, 0, 1, 1, 1, legR ?? (mounted ? -1.2 : -sw))); L.setColorAt(nl++, pantsC);
+      A.setMatrixAt(na, local(B, -.085, .35, 0, 1, 1, 1, armL ?? (soldier && e >= 1 && e <= 2 ? -.5 : -sw * .8))); A.setColorAt(na++, clothC);
+      A.setMatrixAt(na, local(B, .085, .35, 0, 1, 1, 1, armR ?? (soldier ? -.9 : sw * .8))); A.setColorAt(na++, clothC);
+      if (Q.life && !child) {
+        // what they carry and hold
+        const c = a.carry, load = c.food + c.wood + c.stone, logs = c.wood >= c.food && c.wood >= c.stone;
+        if (load >= 2 && moving) part(D, logs ? 'cyl' : 'box', B, 0, .27, -.075, .09, logs ? .16 : .1, .07, logs ? '#6b4a2f' : c.stone > c.food ? '#9a9a96' : '#c9a23a', 0, 0, logs ? Math.PI / 2 : 0);
+        if (pose === 'fish') part(D, 'cyl', B, 0, .3, .12, .008, .6, .008, '#5a4632', .9, 0, 0);
+        else if (pose === 'gather' && a.goal.res === 'wood') part(D, 'box', B, .085, .2, .16, .015, .015, .14, '#6b4a2f', .4, 0, 0);
+        else if (pose === 'farm') part(D, 'cyl', B, .085, .05, .12, .01, .3, .01, '#7a5a3a', .5, 0, 0);
+        else if (pose === 'dance' && a.id % 3 === 0) part(D, 'box', B, .085, .5, 0, .005, .12, .08, t ? t.color : '#ffffff');
+      }
       if (isGen) { part(D, 'cyl', B, -.13, .1, -.02, .03, 1.15, .03, '#4a3a2a'); part(D, 'box', B, -.13, .96, -.19, .02, .24, .34, col, 0, Math.sin(clock * 3 + a.id) * .2, 0); }
       if (soldier) {
         if (e <= 2) { part(D, 'cyl', B, .11, .08, .07, .022, .95, .022, '#6b5236'); part(D, 'cone', B, .11, 1.03, .07, .045, .12, .045, '#a0a0a0'); if (e >= 1) part(D, 'cyl', B, -.105, .22, .03, .2, .025, .2, col, 0, 0, Math.PI / 2); }
@@ -2643,8 +2900,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       n++;
     }
     world.slots.length = ns;
-    To.count = He.count = Ha.count = n; L.count = nl; A.count = na;
-    for (const m of [L, A, To, He, Ha]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
+    To.count = He.count = Ha.count = n; L.count = nl; A.count = na; Gb.count = ng;
+    for (const m of [L, A, To, He, Ha, Gb]) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   }
   function updateClouds(dt) {
     const C = world.clouds; let n = 0;
@@ -2845,7 +3102,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         continue;
       }
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
-      if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color);
+      if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style));
     }
     updateLinks(); if (Q.life) updateSea();
     const D = world.dset;
@@ -2893,7 +3150,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   }
   function campY(t) { return heightAt(t.camp.x + .5, t.camp.y + .5); }
   function updateBuildings() {
-    let key = ''; for (const t of sim.tribes.values()) key += t.id + ':' + t.port + ':' + t.huts + ':' + t.era + ':' + (t.walls ? 1 : 0) + ':' + t.wonders.length + ':' + t.faith + ':' + specialsFor(t).join(',') + ';';
+    let key = ''; for (const t of sim.tribes.values()) key += t.id + ':' + t.port + ':' + t.huts + ':' + t.era + ':' + (t.walls ? 1 : 0) + ':' + t.wonders.length + ':' + t.faith + ':' + (t.grave ? Math.min(16, Math.ceil(t.deaths / 4)) : 0) + ':' + specialsFor(t).join(',') + ';';
     if (key === world.buildKey) return; world.buildKey = key;
     const S = world.bset; beginSet(S);
     const M = { walls: 0, poles: 0, flags: 0 };
@@ -2903,6 +3160,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         const ang = t.id * .7 + w * 2.1, rw = w === 0 ? 0 : 2.4, px = cx + Math.cos(ang) * rw, py = cy + Math.sin(ang) * rw;
         if (!sim.passable(Math.floor(px), Math.floor(py))) continue;
         wonder(S, base(wx(px), heightAt(px, py) - .05, wz(py), t.id * .7, .85), style, w);
+      }
+      if (t.grave) {
+        const gx = t.grave.x + .5, gy0 = t.grave.y + .5, n = Math.min(16, Math.ceil(t.deaths / 4));
+        for (let k = 0; k < n; k++) {
+          const x = gx + (k % 4 - 1.5) * .28, y = gy0 + (Math.floor(k / 4) - 1.5) * .3; if (!sim.passable(Math.floor(x), Math.floor(y))) continue;
+          const Bg = base(wx(x), heightAt(x, y) - .02, wz(y), 0);
+          if (t.era === 0) part(S, 'sphere', Bg, 0, 0, 0, .08, .06, .08, '#8a8680');
+          else { part(S, 'box', Bg, 0, 0, 0, .1, .16, .035, '#a7a49c'); part(S, 'box', Bg, 0, 0, .06, .1, .015, .14, '#5b6b3a'); }
+        }
       }
       let extent = 1; const sp0 = specialsFor(t);
       const nbH = Math.max(t.huts, Math.ceil(sim.capacity(t) / 3), 4), nb = Math.max(nbH, 3 + sp0.length * 2), start = wn ? 1.9 : 1.1, sp = sp0;
@@ -2914,7 +3180,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         const jj = ((k * 7919 + t.id * 31) % 100) / 100, si = (k - 2) / 2;
         if (k >= 2 && Number.isInteger(si) && si < sp.length) { special(S, base(wx(bx), heightAt(bx, by) - .02, wz(by), Math.atan2(cx - bx, cy - by)), sp[si], style, t.era, t.color); continue; }
         if (k >= nbH) continue;
-        house(S, base(wx(bx), heightAt(bx, by) - .02, wz(by), Math.atan2(cx - bx, cy - by)), style, t.era, jj, k);
+        house(S, base(wx(bx), heightAt(bx, by) - .02, wz(by), Math.atan2(cx - bx, cy - by)), style, t.era, jj, k, t.color);
       }
       if (t.port !== null && t.era >= 1) {
         const px = t.port % W + .5, py = ((t.port / W) | 0) + .5, ang = Math.atan2(px - cx, py - cy);
@@ -3100,7 +3366,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         html += `<div><div class="who">${esc(a.name)}${isBot ? ' <span class="badge">robot</span>' : ''}</div><div class="sub">${chief ? 'Chief of the ' : t ? 'Of the ' : ''}${t ? `<span style="color:${t.color}">${esc(t.name)}</span>` : 'A wanderer with no tribe'} · ${Sim.STYLES[a.style || 0].name} · ${age} years old${role}</div></div>
         <div class="row"><button class="btn" type="button" data-follow="${a.id}" aria-pressed="${follow === a.id}">${follow === a.id ? 'Stop following' : 'Follow with camera'}</button></div>
         <div class="thought">${esc(a.thought)}</div>
-        <dl class="kv"><dt>Hunger</dt><dd class="bar hu"><b style="width:${pct(a.hunger)}%"></b></dd><dt>Health</dt><dd class="bar hp"><b style="width:${pct(a.health)}%"></b></dd>
+        <dl class="kv">${t && a.job && age >= 12 ? `<dt>Job</dt><dd>${Sim.JOBS[a.job].name}</dd>` : ''}<dt>Mood</dt><dd>${moodOf(a, t)}</dd>
+        ${a.spouse && sim.byId.get(a.spouse) ? `<dt>Partner</dt><dd>${esc(sim.byId.get(a.spouse).name)}</dd>` : ''}${a.kids ? `<dt>Children</dt><dd>${a.kids}</dd>` : ''}${a.friend && sim.byId.get(a.friend) ? `<dt>Best friend</dt><dd>${esc(sim.byId.get(a.friend).name)}</dd>` : ''}
+        <dt>Hunger</dt><dd class="bar hu"><b style="width:${pct(a.hunger)}%"></b></dd><dt>Health</dt><dd class="bar hp"><b style="width:${pct(a.health)}%"></b></dd>
         <dt>Aggression</dt><dd class="bar"><b style="width:${pct(a.traits.aggression * 100)}%"></b></dd><dt>Sociability</dt><dd class="bar"><b style="width:${pct(a.traits.sociability * 100)}%"></b></dd>
         <dt>Curiosity</dt><dd class="bar"><b style="width:${pct(a.traits.curiosity * 100)}%"></b></dd><dt>Diligence</dt><dd class="bar"><b style="width:${pct(a.traits.diligence * 100)}%"></b></dd>
         <dt>Carrying</dt><dd>${carry}</dd>${a.kills ? `<dt>Kills</dt><dd>${a.kills}</dd>` : ''}${a.parents ? `<dt>Parents</dt><dd>${esc(a.parents.join(' and '))}</dd>` : ''}</dl>`;

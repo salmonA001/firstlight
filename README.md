@@ -20,6 +20,16 @@ Pick a starting era from the **Stone Age** to the **2000s**. You can also enter 
 ### People
 Every person has a name, an age, hunger, health and four personality traits: aggression, sociability, curiosity and diligence. Each person decides what to do next by weighing their needs against their tribe's plan: forage, hunt, farm, quarry stone, build, trade, think up new ideas, raid, or march to war. Click anyone to see what they're thinking.
 
+People also live everyday lives:
+- **Jobs:** each adult has a job, from hunter, farmer, fisher and herder to smith, potter, priest, healer, teacher, artist, factory worker, engineer and programmer. A job shapes what they do all day.
+- **Needs:** people get tired and rest at home, and they get lonely and go chat with friends about the harvest, the war, the chief or news from across the sea.
+- **Family:** people court and marry, couples raise children, elders tell stories to the young, and families mourn their dead at the town graveyard.
+- **Festivals:** wealthy, pious towns hold festivals like the Lantern Festival or the Midsummer Feast, and everyone dances in the square.
+- **Body language:** you can see people sit to rest, kneel to pray, dance, chop wood, hoe fields, fish with a rod and carry loads home. The Inspector shows each person's job, mood, partner, children and best friend.
+
+### Each culture looks its own
+Houses have doors, windows, roofs and decorations in their culture's style: Nordic longhouses with shields and carved gables, desert adobe with wooden beams and awnings, Eastern houses with red pillars and lanterns, Mediterranean villas with shutters and cypress trees, jungle houses with painted friezes, and Steppe yurts. Shutters, awnings and banners use each nation's own color. People wear their culture's traditional dress, and early navies sail Viking longships, Chinese junks and Nile feluccas.
+
 ### Nations and their AI
 - **Council AI:** every year each nation sizes up its food, housing, neighbors and threats, then picks a plan: *grow, expand, fortify, arm for war, pursue knowledge* or *trade*. It learns from how well its last plan worked.
 - **Rulers with personalities:** a ruler can be a Warlord, a Merchant, the Wise, or a Builder, and that tilts the nation's choices.
@@ -104,6 +114,7 @@ node tests/nudge.js                      # world tools (meteor, plague, ...)
 node tests/tools.js                      # new tools (volcano, golden age, peace, ...)
 node tests/war2.js                       # jets, submarines and anti-aircraft
 node tests/sea.js                        # islands, merchant ships and sea links
+node tests/life.js                       # jobs, marriage, festivals and everyday life
 node tests/save.js                       # save and load round trip
 node tests/army.js                       # armies, battles and sieges in four eras
 ```
