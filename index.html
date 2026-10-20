@@ -212,6 +212,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/ShaderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/math/SimplexNoise.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/shaders/SSAOShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/postprocessing/SSAOPass.js"></script>
 
 <script id="sim-core">
 /* ===== Simulation core: pure logic, no DOM or rendering. ===== */
@@ -2094,9 +2103,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   // graphics quality: low for phones and older machines, high for strong GPUs
   const GFX = {
-    low: { label: 'Low', pr: 1, shadows: false, map: 1024, life: 0, trees: 1, people: 1200 },
-    medium: { label: 'Medium', pr: 1.5, shadows: true, map: 2048, life: 1, trees: 2, people: 2500 },
-    high: { label: 'High', pr: 2, shadows: true, map: 4096, life: 2, trees: 3, people: 4000 },
+    low: { label: 'Low', pr: 1, shadows: false, map: 1024, life: 0, trees: 1, people: 1200, post: 0 },
+    medium: { label: 'Medium', pr: 1.5, shadows: true, map: 2048, life: 1, trees: 2, people: 2500, post: 1 },
+    high: { label: 'High', pr: 1.75, shadows: true, map: 4096, life: 2, trees: 3, people: 4000, post: 2 },
   };
   function autoGfx() {
     const mobile = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
@@ -2108,7 +2117,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, Q.pr));
   renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .9;
-  renderer.shadowMap.enabled = Q.shadows; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.enabled = Q.shadows; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
   const scene = new THREE.Scene();
   const HORIZON = new THREE.Color('#c9d8e2');
   scene.background = HORIZON.clone();
@@ -2137,6 +2146,44 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   sun.shadow.bias = -.0004; sun.shadow.normalBias = .03;
   scene.add(sun, sun.target);
 
+  // realistic finish: ambient occlusion in creases and under eaves (High), a soft glow on bright lights,
+  // and a filmic grade with a light vignette. Low draws straight to the screen.
+  const FINISH = {
+    uniforms: { tDiffuse: { value: null }, exposure: { value: .9 }, vig: { value: .28 }, sat: { value: 1.08 }, warm: { value: 0 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `uniform sampler2D tDiffuse; uniform float exposure; uniform float vig; uniform float sat; uniform float warm; varying vec2 vUv;
+      vec3 flFit(vec3 v){ vec3 a = v * (v + 0.0245786) - 0.000090537; vec3 b = v * (0.983729 * v + 0.4329510) + 0.238081; return a / b; }
+      vec3 flAces(vec3 c){ const mat3 I = mat3(vec3(0.59719,0.07600,0.02840), vec3(0.35458,0.90834,0.13383), vec3(0.04823,0.01566,0.83777)); const mat3 O = mat3(vec3(1.60475,-0.10208,-0.00327), vec3(-0.53108,1.10813,-0.07276), vec3(-0.07367,-0.00605,1.07602)); c *= exposure / 0.6; c = I * c; c = flFit(c); c = O * c; return clamp(c, 0.0, 1.0); }
+      vec3 flSRGB(vec3 c){ return mix(pow(c, vec3(0.41666)) * 1.055 - vec3(0.055), c * 12.92, vec3(lessThanEqual(c, vec3(0.0031308)))); }
+      void main(){ vec3 c = texture2D(tDiffuse, vUv).rgb; c = flAces(c); float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = mix(vec3(l), c, sat); c *= mix(vec3(1.0), vec3(1.04, 1.0, 0.94), warm);
+        vec2 d = vUv - 0.5; c *= 1.0 - vig * smoothstep(0.25, 0.85, dot(d, d) * 2.2); gl_FragColor = vec4(flSRGB(c), 1.0); }`,
+  };
+  const perf = window.__perf = { sim: 0, upd: 0, draw: 0 }; let frameNo = 0;
+  let composer = null, ssao = null, bloom = null, finish = null;
+  function buildPost() {
+    if (composer) { composer.renderTarget1.dispose(); composer.renderTarget2.dispose(); composer = ssao = bloom = finish = null; }
+    if (!Q.post || !THREE.EffectComposer || !THREE.UnrealBloomPass) return;
+    try {
+      const w = Math.max(1, stage.clientWidth), h = Math.max(1, stage.clientHeight), pr = renderer.getPixelRatio();
+      composer = new THREE.EffectComposer(renderer, new THREE.WebGLRenderTarget(w * pr, h * pr, { type: THREE.HalfFloatType }));
+      composer.setPixelRatio(pr); composer.setSize(w, h);
+      if (Q.post >= 2 && THREE.SSAOPass) {
+        ssao = new THREE.SSAOPass(scene, camera, w, h);
+        ssao.beautyRenderTarget.dispose(); ssao.beautyRenderTarget = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType });
+        ssao.kernelRadius = .6; ssao.minDistance = .00001; ssao.maxDistance = .0012;
+        composer.addPass(ssao);
+      } else composer.addPass(new THREE.RenderPass(scene, camera));
+      bloom = new THREE.UnrealBloomPass(new THREE.Vector2(w / 2, h / 2), .18, .5, .95); composer.addPass(bloom);
+      finish = new THREE.ShaderPass(FINISH); composer.addPass(finish);
+    } catch (e) { console.warn('post-processing off', e); composer = null; }
+  }
+  function postFrame() {
+    // lights bloom more after dark; the grade warms slightly at dusk and dawn
+    if (!composer) return;
+    const night = world ? world.night || 0 : 0;
+    bloom.threshold = .95 - night * .55; bloom.strength = .16 + night * .5; bloom.radius = .45 + night * .2;
+    finish.uniforms.exposure.value = renderer.toneMappingExposure; finish.uniforms.warm.value = world ? world.dusk || 0 : 0;
+  }
   let world = null, plights = [], lightFrame = 0, nearLamps = null;
   const C = c => new THREE.Color(c);
   // natural ground palette per terrain type
@@ -2169,8 +2216,18 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   }
   const wx = x => x - W / 2, wz = y => y - H / 2;
 
+  // every instanced mesh is listed so each frame uploads only the instances in use, not the whole buffer
+  const INST = new Set();
+  function trimUploads() {
+    for (const m of INST) {
+      if (!m.parent) { INST.delete(m); continue; }
+      const n = Math.min(m.count, m.instanceMatrix.count);
+      if (m.instanceMatrix.needsUpdate !== undefined) m.instanceMatrix.updateRange.count = n * 16;
+      if (m.instanceColor) m.instanceColor.updateRange.count = n * 3;
+    }
+  }
   function instanced(geo, mat, count, shadow = true) {
-    const m = new THREE.InstancedMesh(geo, mat, count); m.count = 0; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    const m = new THREE.InstancedMesh(geo, mat, count); m.count = 0; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); INST.add(m);
     m.castShadow = shadow; m.receiveShadow = true; return m;
   }
   function setInst(mesh, i, x, y, z, sx, sy, sz, rot = 0) {
@@ -2183,6 +2240,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
   }
   // ripple normal map for the sea, built from summed sine waves
+  const NOISE_GLSL = `float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+    float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(h21(i), h21(i + vec2(1.0, 0.0)), f.x), mix(h21(i + vec2(0.0, 1.0)), h21(i + vec2(1.0, 1.0)), f.x), f.y); }
+`;
   function waterNormals() {
     return canvasTexture(128, (g, n) => {
       const img = g.createImageData(n, n), hgt = (x, y) => Math.sin((x + y * .3) / n * Math.PI * 8) * .5 + Math.sin((x * .4 - y) / n * Math.PI * 10) * .35 + Math.sin((x * 1.3 + y * .9) / n * Math.PI * 18) * .2;
@@ -2847,12 +2907,21 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       }
     }
   }
+  // a small car: body, glass cabin and roof, wheels, head and tail lights; every fifth is a van
+  function car(D, B, col, k) {
+    const van = k % 5 === 4;
+    part(D, 'box', B, .05, .016, 0, .1, .042, .2, col);
+    if (van) { part(D, 'box', B, .05, .055, -.02, .096, .07, .15, col); part(D, 'box', B, .05, .06, .057, .09, .035, .012, '#2b3a4a'); }
+    else { part(D, 'box', B, .05, .056, -.012, .088, .036, .1, '#2b3a4a'); part(D, 'box', B, .05, .092, -.014, .086, .008, .085, col); }
+    for (const x of [.0, .1]) for (const z of [.062, -.062]) part(D, 'cyl', B, x, .022, z, .044, .018, .044, '#1d1f22', 0, 0, Math.PI / 2);
+    for (const x of [.022, .078]) { part(D, 'box', B, x, .028, .1, .018, .012, .004, '#f4f1e2'); part(D, 'box', B, x, .028, -.1, .018, .01, .004, '#c0392b'); }
+  }
   function updateCars() {
     const D = world.dset, CL = world.carLights = []; if (!world.streets) return;
     let k = 0;
     for (const s of world.streets) {
       const u = ((clock * .25 + k * .37) % 2), f = u < 1 ? u : 2 - u, x = s[0] + (s[2] - s[0]) * f, y = s[1] + (s[3] - s[1]) * f, h = Math.atan2(s[2] - s[0], s[3] - s[1]) + (u < 1 ? 0 : Math.PI);
-      const B = base(wx(x), heightAt(x, y) + .02, wz(y), h); part(D, 'box', B, .05, 0, 0, .09, .06, .17, CRATES[k % CRATES.length]); if (world.night > .03) CL.push([wx(x) + Math.cos(h) * .05, wz(y) - Math.sin(h) * .05, heightAt(x, y), h]); part(D, 'box', B, .05, .06, -.01, .08, .04, .09, '#2b3a4a');
+      const B = base(wx(x), heightAt(x, y) + .02, wz(y), h); car(D, B, CRATES[k % CRATES.length], k); if (world.night > .03) CL.push([wx(x) + Math.cos(h) * .05, wz(y) - Math.sin(h) * .05, heightAt(x, y), h]);
       if (++k > 300) break;
     }
   }
@@ -2923,12 +2992,34 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       world.terrain.geometry.setAttribute('aClim', new THREE.BufferAttribute(clim, 2)); }
     world.terrain.material.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, season);
-      sh.vertexShader = 'attribute vec2 aClim; varying vec2 vClim; varying float vUpY; varying float vH;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vUpY = normal.y; vH = position.y; vClim = aClim;');
-      sh.fragmentShader = 'uniform float uSnow; uniform float uAutumn; varying vec2 vClim; varying float vUpY; varying float vH;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
+      sh.vertexShader = 'attribute vec2 aClim; varying vec2 vClim; varying float vUpY; varying float vH; varying vec2 vWP;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vUpY = normal.y; vH = position.y; vClim = aClim; vWP = (modelMatrix * vec4(position, 1.0)).xz;');
+      sh.fragmentShader = 'uniform float uSnow; uniform float uAutumn; varying vec2 vClim; varying float vUpY; varying float vH; varying vec2 vWP;\n' + NOISE_GLSL + sh.fragmentShader.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        { // fake surface detail: rocky ridges on high ground, gentle lumps below
+          float amp = mix(0.12, 0.9, smoothstep(1.8, 4.5, vH));
+          vec2 e = vec2(0.08, 0.0); vec2 q = vWP * 1.4;
+          float h0 = vnoise(q) + 0.5 * vnoise(q * 2.7), hx = vnoise(q + e.xy) + 0.5 * vnoise((q + e.xy) * 2.7), hz = vnoise(q + e.yx) + 0.5 * vnoise((q + e.yx) * 2.7);
+          vec3 g = (mat3(viewMatrix) * vec3(hx - h0, 0.0, hz - h0)) * amp / e.x * 0.18;
+          normal = normalize(normal - g);
+        }`).replace('#include <color_fragment>', `#include <color_fragment>
+        // patchy ground: large soft blotches, finer mottling, and bare rock on steep slopes
+        float n1 = vnoise(vWP * 0.35), n2 = vnoise(vWP * 2.3 + 17.0), n3 = vnoise(vWP * 9.0 - 5.0);
+        diffuseColor.rgb *= 0.86 + 0.2 * n1 + 0.1 * n2 + 0.05 * n3;
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.08, 1.04, 0.86), smoothstep(0.55, 0.8, n1) * 0.5);
+        float steep = smoothstep(0.82, 0.55, vUpY) * step(0.1, vH);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.15, 0.13, 0.11) * (0.85 + 0.3 * n2), steep * 0.75);
+        float wet = smoothstep(0.12, -0.05, vH) * step(-0.4, vH);
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.72, 0.7, 0.66), wet * 0.6);
         float green = clamp((diffuseColor.g - max(diffuseColor.r, diffuseColor.b)) * 8.0, 0.0, 1.0);
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.5, 1.02, 0.45), green * uAutumn);
-        float snow = min(1.0, max(uSnow * vClim.x, vClim.y)) * smoothstep(0.45, 0.8, vUpY) * clamp((vH - 0.06) * 3.0, 0.0, 1.0);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.92, 0.95), snow);`);
+        float snow = min(1.0, max(uSnow * vClim.x, vClim.y * 2.0 * smoothstep(0.45, 0.85, n1 * 0.7 + n2 * 0.5))) * smoothstep(0.45, 0.8, vUpY) * clamp((vH - 0.06) * 3.0, 0.0, 1.0);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.92, 0.95), snow);
+        // mountains: banded grey-brown rock below a ragged snow line, cliffs stay bare
+        vec3 rock = vec3(0.16, 0.14, 0.12) * (0.78 + 0.32 * vnoise(vec2(vH * 4.0, vWP.x * 0.3 + vWP.y * 0.2)) + 0.14 * n3);
+        float high = smoothstep(2.4, 4.2, vH), snowLine = 6.4 + n1 * 1.8 - vClim.x * 1.5;
+        float cap = smoothstep(snowLine, snowLine + 0.7, vH) * smoothstep(0.45, 0.75, vUpY);
+        float cliff = smoothstep(0.78, 0.55, vUpY) * step(0.4, vH);
+        diffuseColor.rgb = mix(diffuseColor.rgb, rock, max(high * (1.0 - cap), cliff * 0.85));
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.8, 0.83, 0.88), cap * (1.0 - cliff * 0.7));`);
     };
     group.add(world.terrain);
     world.tileCol = new Float32Array(n * 3);
@@ -2938,6 +3029,29 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     world.waterTex = waterNormals(); world.waterTex.repeat.set(140, 140);
     const water = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshStandardMaterial({ color: '#2a6f8c', roughness: .12, metalness: .15, transparent: true, opacity: .8, normalMap: world.waterTex, normalScale: new THREE.Vector2(.35, .35) }));
     water.rotation.x = -Math.PI / 2; water.position.y = -.03; water.receiveShadow = true; group.add(water); world.water = water;
+    { const dd = new Uint8Array(W * H * 4);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const k = (y * W + x) * 4, d = clamp01(-heightAt(x + .5, y + .5) / 2.6); dd[k] = Math.round(d * 255); dd[k + 3] = 255; }
+      const depthTex = new THREE.DataTexture(dd, W, H); depthTex.magFilter = depthTex.minFilter = THREE.LinearFilter; depthTex.needsUpdate = true;
+      const wu = world.waterU = { uDepth: { value: depthTex }, uTime: { value: 0 }, uSkyCol: { value: new THREE.Color('#a9c6dd') }, uMap: { value: new THREE.Vector2(W, H) } };
+      water.material.onBeforeCompile = sh => {
+        Object.assign(sh.uniforms, wu);
+        sh.vertexShader = 'varying vec3 vWPos;\n' + sh.vertexShader.replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\n vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+        sh.fragmentShader = 'uniform sampler2D uDepth; uniform float uTime; uniform vec3 uSkyCol; uniform vec2 uMap; varying vec3 vWPos;\n' + NOISE_GLSL + sh.fragmentShader
+          .replace('#include <color_fragment>', `#include <color_fragment>
+            vec2 wuv = (vWPos.xz + uMap * 0.5) / uMap; float inside = step(0.0, wuv.x) * step(wuv.x, 1.0) * step(0.0, wuv.y) * step(wuv.y, 1.0);
+            float dep = mix(1.0, texture2D(uDepth, clamp(wuv, 0.0, 1.0)).r, inside);
+            vec3 deepC = diffuseColor.rgb * vec3(0.62, 0.78, 0.92), shallowC = diffuseColor.rgb * vec3(0.75, 1.45, 1.3) + vec3(0.02, 0.06, 0.05);
+            diffuseColor.rgb = mix(shallowC, deepC, smoothstep(0.02, 0.45, dep));
+            float wave = vnoise(vWPos.xz * 1.6 + vec2(uTime * 0.35, uTime * 0.22)) * 0.6 + vnoise(vWPos.xz * 4.0 - uTime * 0.5) * 0.4;
+            float band = 0.5 + 0.5 * sin(dep * 60.0 - uTime * 1.6 + wave * 4.0);
+            float foam = smoothstep(0.075, 0.0, dep) * (0.55 + 0.45 * wave) + smoothstep(0.16, 0.05, dep) * band * 0.35 * wave;
+            diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.93, 0.96, 0.97), clamp(foam, 0.0, 1.0) * 0.85);
+            diffuseColor.a = mix(0.6, 0.86, smoothstep(0.0, 0.35, dep)) + foam * 0.15;`)
+          .replace('#include <output_fragment>', `float fres = pow(1.0 - clamp(dot(normalize(cameraPosition - vWPos), vec3(0.0, 1.0, 0.0)), 0.0, 1.0), 4.0);
+            outgoingLight = mix(outgoingLight, uSkyCol, fres * 0.55);
+            #include <output_fragment>`);
+      };
+    }
     world.roads = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, polygonOffset: true, polygonOffsetFactor: -3 }));
     world.roads.receiveShadow = true; world.roads.frustumCulled = false; group.add(world.roads);
     // trees: a mix of conifers on high ground and broadleaf trees lower down, two or three per forest tile
@@ -2978,14 +3092,32 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     group.add(world.trunks, world.pines, world.leaves, world.rocks, world.fields);
     // people: jointed figures (legs and arms swing as they walk)
     const MAXA = 4000;
-    const legGeo = new THREE.BoxGeometry(.045, .19, .05); legGeo.translate(0, -.095, 0);
-    const armGeo = new THREE.BoxGeometry(.032, .16, .034); armGeo.translate(0, -.08, 0);
-    const torsoGeo = new THREE.BoxGeometry(.12, .17, .075); torsoGeo.translate(0, .085, 0);
-    const headGeo = new THREE.SphereGeometry(.052, 10, 8);
+    // body parts are shaped pieces merged into one mesh each; vertex shade marks shoes, belt, eyes and hair
+    const shaped = (g, shade, f) => { g = g.index ? g.toNonIndexed() : g; if (f) f(g); const n = g.attributes.position.count, c = new Float32Array(n * 3).fill(shade); g.setAttribute('color', new THREE.BufferAttribute(c, 3)); g.deleteAttribute('uv'); return g; };
+    const merge = (...gs) => { const pos = [], nor = [], col = []; for (const g of gs) { pos.push(...g.attributes.position.array); nor.push(...g.attributes.normal.array); col.push(...g.attributes.color.array); } const m = new THREE.BufferGeometry(); m.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); m.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); m.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); return m; };
+    const legGeo = merge(
+      shaped(new THREE.CylinderGeometry(.026, .019, .17, 7), 1, g => g.translate(0, -.085, 0)),            // thigh to ankle
+      shaped(new THREE.BoxGeometry(.04, .025, .07), .32, g => g.translate(0, -.178, .014)));               // shoe
+    const armGeo = merge(
+      shaped(new THREE.CylinderGeometry(.019, .014, .14, 6), 1, g => g.translate(0, -.07, 0)),             // sleeve
+      shaped(new THREE.SphereGeometry(.016, 6, 5), .82, g => g.translate(0, -.152, .003)));                // hand
+    const torsoGeo = merge(
+      shaped(new THREE.BoxGeometry(.12, .17, .075, 1, 2, 1), 1, g => { const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i); const k = y > 0 ? 1 : .84 + (y + .085) * 1.9; p.setX(i, p.getX(i) * k); p.setZ(i, p.getZ(i) * (y > .05 ? .92 : 1)); } g.computeVertexNormals(); g.translate(0, .085, 0); }),
+      shaped(new THREE.BoxGeometry(.106, .016, .078), .45, g => g.translate(0, .012, 0)),                  // belt
+      shaped(new THREE.CylinderGeometry(.018, .02, .03, 6), 1, g => g.translate(0, .182, 0)));             // neck
+    const headGeo = merge(
+      shaped(new THREE.SphereGeometry(.05, 12, 10), 1, g => g.scale(.94, 1.1, 1)),                        // skull
+      shaped(new THREE.BoxGeometry(.012, .018, .014), .96, g => g.translate(0, -.004, .05)),              // nose
+      shaped(new THREE.BoxGeometry(.011, .007, .006), .12, g => g.translate(-.017, .01, .046)),           // eyes
+      shaped(new THREE.BoxGeometry(.011, .007, .006), .12, g => g.translate(.017, .01, .046)),
+      shaped(new THREE.BoxGeometry(.008, .018, .012), .95, g => g.translate(-.048, 0, 0)),               // ears
+      shaped(new THREE.BoxGeometry(.008, .018, .012), .95, g => g.translate(.048, 0, 0)),
+      shaped(new THREE.SphereGeometry(.052, 10, 6, 0, Math.PI * 2, 0, 1.25), .28, g => { g.scale(.97, 1.08, 1.02); g.translate(0, .006, -.006); })); // hair
     const hatGeo = new THREE.ConeGeometry(.5, 1, 10); hatGeo.translate(0, .5, 0);
     const pm = () => new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .8 });
-    world.legs = instanced(legGeo, pm(), MAXA * 2); world.arms = instanced(armGeo, pm(), MAXA * 2);
-    world.torsos = instanced(torsoGeo, pm(), MAXA); world.heads = instanced(headGeo, pm(), MAXA); world.hats = instanced(hatGeo, pm(), MAXA); world.garb = instanced(new THREE.BoxGeometry(1, 1, 1), pm(), MAXA);
+    const pmv = () => new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .8, vertexColors: true });
+    world.legs = instanced(legGeo, pmv(), MAXA * 2); world.arms = instanced(armGeo, pmv(), MAXA * 2);
+    world.torsos = instanced(torsoGeo, pmv(), MAXA); world.heads = instanced(headGeo, pmv(), MAXA); world.hats = instanced(hatGeo, pm(), MAXA); world.garb = instanced(new THREE.BoxGeometry(1, 1, 1), pm(), MAXA);
     for (const m of [world.legs, world.arms, world.torsos, world.heads, world.hats, world.garb]) { m.setColorAt(0, tmpC.set('#fff')); group.add(m); }
     // buildings, wonders, ships and war machines are assembled from a few primitive parts
     world.bset = partSet(30000, group);
@@ -3237,7 +3369,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     if (dayOn) dayT = (dayT + dt * Math.min(3, tps / SPEEDS[2])) % DAY_LEN;
     const f = dayT / DAY_LEN, el = Math.sin((f - .25) * Math.PI * 2); // sun height: -1 midnight, 1 noon
     const up = dayOn ? clamp01(el * 2.5 + .8) : 1, dusk = dayOn ? clamp01(1 - Math.abs(el) * 3.5) : 0, night = 1 - up;
-    world.night = night;
+    world.night = night; world.dusk = dusk;
     sun.intensity *= up; sun.color.lerp(tmpC.set('#ff9d5c'), dusk * .7);
     hemi.intensity = .55 * (.35 + .65 * up); hemi.color.set('#c4dcf2').lerp(tmpC.set('#5a6f9c'), night);
     moon.intensity = .32 * night;
@@ -3634,6 +3766,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   function campY(t) { return heightAt(t.camp.x + .5, t.camp.y + .5); }
   // find room outside town for a long flat site (runway, station, launch pad): a center, a heading and its length
   function findSite(t, len, wide, rMin, rMax, used, prefer) {
+    // a site stays where it was built until the town outgrows it
+    const ck = t.id + ':' + len + ':' + Math.round(world.ext.get(t.id) || 2) + ':' + t.camp.x + ':' + t.camp.y, cache = world.siteCache || (world.siteCache = new Map()), hit = cache.get(ck);
+    if (hit !== undefined) {
+      if (hit && !used.some(([ux, uy, ur]) => Math.hypot(ux - hit.x, uy - hit.y) < ur * .6)) { used.push([hit.x, hit.y, len / 2 + .4]); for (const i of hit.tiles) world.siteClear.add(i); return hit; }
+      if (!hit) return null;
+    }
+    const r0 = findSiteNow(t, len, wide, rMin, rMax, used, prefer);
+    cache.set(ck, r0); return r0;
+  }
+  function findSiteNow(t, len, wide, rMin, rMax, used, prefer) {
     const cx = t.camp.x + .5, cy = t.camp.y + .5, ext = world.ext.get(t.id) || 2; let best = null;
     for (let r = ext + rMin; r <= ext + rMax && !best; r += .75) for (let k = 0; k < 16; k++) {
       const a = (prefer ?? t.id * .9) + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * Math.PI / 8, x = cx + Math.sin(a) * r, y = cy + Math.cos(a) * r;
@@ -3652,7 +3794,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     if (best) {
       used.push([best.x, best.y, len / 2 + .4]);
       const dx = Math.sin(best.head), dy = Math.cos(best.head);
-      for (let u = -len / 2 - .5; u <= len / 2 + .5; u += .35) for (let v = -wide / 2 - .5; v <= wide / 2 + .5; v += .35) { const tx = Math.floor(best.x + dx * u - dy * v), ty = Math.floor(best.y + dy * u + dx * v); if (sim.inb(tx, ty)) world.siteClear.add(ty * W + tx); }
+      best.tiles = new Set();
+      for (let u = -len / 2 - .5; u <= len / 2 + .5; u += .35) for (let v = -wide / 2 - .5; v <= wide / 2 + .5; v += .35) { const tx = Math.floor(best.x + dx * u - dy * v), ty = Math.floor(best.y + dy * u + dx * v); if (sim.inb(tx, ty)) { world.siteClear.add(ty * W + tx); best.tiles.add(ty * W + tx); } }
     }
     return best;
   }
@@ -3707,7 +3850,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   }
   function updateBuildings() {
     let key = ''; for (const t of sim.tribes.values()) key += t.id + ':' + t.port + ':' + t.huts + ':' + t.era + ':' + (t.walls ? 1 : 0) + ':' + t.wonders.length + ':' + t.faith + ':' + (t.grave ? Math.min(16, Math.ceil(t.deaths / 4)) : 0) + ':' + specialsFor(t).join(',') + ':' + (t.techs.has('flight') ? 1 : 0) + (t.techs.has('railways') ? 1 : 0) + (t.era >= 6 && t.techs.has('flight') ? 1 : 0) + ';';
-    if (key === world.buildKey) return; world.buildKey = key;
+    if (key === world.buildKey) return;
+    // towns change a little at a time; rebuilding at most twice a second keeps busy eras smooth
+    if (world.buildKey && clock - (world.builtAt || 0) < .5) return; world.buildKey = key; world.builtAt = clock;
     const S = world.bset; beginSet(S);
     world.ext = new Map();
     const M = { walls: 0, poles: 0, flags: 0 }, G = world.glow, streets = world.streets = [], lamps = world.lamps = []; let gn = 0;
@@ -4138,6 +4283,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   function resize() {
     const w = stage.clientWidth, h = stage.clientHeight;
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+    if (composer) { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(w, h); }
   }
   new ResizeObserver(resize).observe(stage);
 
@@ -4146,17 +4292,22 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     const dt = Math.min(.1, (now - last) / 1000); last = now;
     // behind the era picker the world idles slowly as a living backdrop
     const tps = started ? SPEEDS[speed] : 3;
-    let steps = 0;
+    let steps = 0; const p0 = performance.now();
     if (tps) { acc += dt * tps; while (acc >= 1 && steps < 30) { sim.step(); acc -= 1; steps++; } if (steps >= 30) acc = 0; }
-    const alpha = tps && tps <= 40 ? Math.min(1, acc) : 1;
-    clock += dt; if (started) watchFps(dt); world.waterTex.offset.set(clock * .004, clock * .0025);
+    const alpha = tps && tps <= 40 ? Math.min(1, acc) : 1; const p1 = performance.now();
+    clock += dt; if (started) watchFps(dt); world.waterTex.offset.set(clock * .004, clock * .0025); if (world.waterU) { world.waterU.uTime.value = clock; world.waterU.uSkyCol.value.copy(sky.material.uniforms.mid.value); }
     syncTiles(); updateFields(); updateBorders(); applySeason(); applyDay(dt, tps); beginSet(world.dset); updatePeople(alpha); updateShips(alpha); if (Q.life) { updateAnimals(); updateBoats(); } updatePlanes(alpha); updateSites(alpha); updateClouds(dt); updateSmoke(); updateTech(); endSet(world.dset); world.smoke.instanceMatrix.needsUpdate = true; updateBuildings(); updateFires(); updateNight(); updateEffects(); updateSelection();
     if (follow) { const a = sim.byId.get(follow); if (a && a._wx !== undefined) focus = new THREE.Vector3(a._wx, a._wy, a._wz); else follow = 0; }
     if (focus) { tmpV.copy(focus).sub(controls.target).multiplyScalar(.08); controls.target.add(tmpV); camera.position.add(tmpV); if (tmpV.lengthSq() < 1e-5 && !follow) focus = null; }
     if (!started) { const r = Math.hypot(camera.position.x - controls.target.x, camera.position.z - controls.target.z); const a = Math.atan2(camera.position.z - controls.target.z, camera.position.x - controls.target.x) + dt * .05; camera.position.x = controls.target.x + Math.cos(a) * r; camera.position.z = controls.target.z + Math.sin(a) * r; }
     controls.update();
-    if (world.shake) { tmpN.set(Math.random() - .5, Math.random() - .5, Math.random() - .5).multiplyScalar(world.shake * .9); camera.position.add(tmpN); renderer.render(scene, camera); camera.position.sub(tmpN); }
-    else renderer.render(scene, camera);
+    // shadows are redrawn every other frame: half the shadow cost, and slow-moving shadows look the same
+    renderer.shadowMap.needsUpdate = !(frameNo++ & 1) || world.shake > 0;
+    const p2 = performance.now(); postFrame(); trimUploads(); const draw = () => composer ? composer.render() : renderer.render(scene, camera);
+    if (world.shake) { tmpN.set(Math.random() - .5, Math.random() - .5, Math.random() - .5).multiplyScalar(world.shake * .9); camera.position.add(tmpN); draw(); camera.position.sub(tmpN); }
+    else draw();
+    // frame cost in ms (simulation, scene updates, draw submit), smoothed; read by the perf tests
+    const p3 = performance.now(), P = perf; P.sim += (p1 - p0 - P.sim) * .1; P.upd += (p2 - p1 - P.upd) * .1; P.draw += (p3 - p2 - P.draw) * .1;
     updateLabels();
     if (now - lastUI > 300) { lastUI = now; renderClock(); drawPop(); drawNations(); renderFaiths(); renderArmies(); renderTribes(); if (selected) renderInspector(); if (logDirty) renderLog(); }
     requestAnimationFrame(frame);
@@ -4167,7 +4318,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (const l of plights) scene.remove(l);
     plights = []; nearLamps = null;
     if (Q.life >= 2) for (let i = 0; i < 4; i++) { const l = new THREE.PointLight('#ffb060', 0, 4, 2); scene.add(l); plights.push(l); }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, Q.pr)); resize();
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, Q.pr)); buildPost(); resize();
     renderer.shadowMap.enabled = Q.shadows; sun.castShadow = Q.shadows;
     if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } sun.shadow.mapSize.set(Q.map, Q.map);
     scene.traverse(o => { if (o.material) { const ms = Array.isArray(o.material) ? o.material : [o.material]; for (const m of ms) m.needsUpdate = true; } });
@@ -4189,7 +4340,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     if (fpsT >= 2) { const fps = fpsN / fpsT; fpsT = 0; fpsN = 0; slow = fps < 24 ? slow + 1 : 0; if (slow >= 3) { slow = 0; applyGfx(gfxLevel === 'high' ? 'medium' : 'low', 'Lowered to keep things smooth'); } }
   }
   newWorld(+$('#seedIn').value, 0, false);
-  resize();
+  buildPost(); resize();
   requestAnimationFrame(frame);
 })();
 </script>

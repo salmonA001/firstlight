@@ -96,7 +96,10 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 - **Night lights:** with day and night on, towns light up after dark. Stone Age caves glow with campfires, early towns have a bonfire and torches by the doors and along the walls, the 1800s bring gas street lamps along roads, and modern cities have lit windows, streetlights, car headlights and red warning lights on tall towers. Lighthouses sweep the sea with beams and ships carry lanterns.
 
   ![A Middle Ages town at night lit by torches and a bonfire](docs/night.png)
-- **Terrain:** low coastal plains, rolling hills, deep sea trenches and tall snowy mountains.
+- **Terrain:** low coastal plains, rolling hills, deep sea trenches and tall mountains of banded rock with ragged snow caps. The ground is patchy and textured rather than flat color, and the sea turns turquoise in the shallows, with foam where waves meet the shore.
+
+  ![Rocky mountains with snow caps above forests and towns](docs/mountains.png)
+- **Realistic finish:** on Medium and High the picture gets a filmic color grade and a soft glow on bright lights. High also adds ambient occlusion, which shades creases and the ground under buildings.
 - **Biomes:** the north is frozen tundra and snowy pine forest, the middle is temperate woodland, and the south turns to savanna, jungle and desert, with swamps along wet coasts. Each biome has its own ground color, trees (palms and cacti, flat-topped acacias, dense jungle, snowy pines, willows), ground cover and wildlife (camels, zebras, elephants, reindeer). Deserts and tundra grow less food, so fewer people live there.
 - Seasons change every year: green summers, autumn colors and snowy winters.
 - Day turns to night: the sun sets in orange, the sky goes dark and lanterns and windows light up in every town. You can turn this off with **Day and night** in the panel.
