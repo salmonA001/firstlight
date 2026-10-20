@@ -2803,6 +2803,50 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       if (b.kind === 'speedboat' || b.ferry) part(D, 'box', B, 0, -.045, -.45, .2, .01, .4, '#e8f4f8');
     }
   }
+  // caravans carry goods along trade roads: pack animals, ox carts, wagons, then trucks
+  function caravan(D, B, era, desert, col, k) {
+    const crate = CRATES[k % CRATES.length];
+    if (era <= 1) {
+      // a pack animal led by a trader
+      const fur = desert ? '#c9a46a' : '#6b5a48';
+      part(D, 'box', B, 0, .1, 0, .09, .09, .26, fur); part(D, 'box', B, 0, .17, .14, .05, .06, .09, fur);
+      for (const [x, z] of [[-.03, .09], [.03, .09], [-.03, -.09], [.03, -.09]]) part(D, 'box', B, x, 0, z, .025, .1, .025, fur);
+      if (desert) part(D, 'sphere', B, 0, .17, -.02, .08, .07, .1, fur);
+      for (const x of [-.07, .07]) part(D, 'box', B, x, .1, -.02, .05, .08, .12, '#8a6a42');
+      part(D, 'box', B, .03, 0, .32, .05, .14, .04, '#7a3b2a'); part(D, 'sphere', B, .03, .14, .32, .05, .05, .05, '#c99a76');
+    } else if (era <= 4) {
+      // draft animals pull a cart, then a covered wagon
+      const ox = era <= 2;
+      for (const x of [-.06, .06]) { part(D, 'box', B, x, .07, .3, .07, .08, .2, ox ? '#5a4a3a' : '#7a5236'); part(D, 'box', B, x, .14, .42, .04, .05, .06, ox ? '#5a4a3a' : '#7a5236'); for (const z of [.23, .37]) part(D, 'box', B, x, 0, z, .02, .08, .02, '#3a2c20'); }
+      part(D, 'box', B, 0, .08, .15, .02, .02, .2, '#4a3626');
+      part(D, 'box', B, 0, .06, -.05, .2, .06, .3, '#7a5a3a');
+      for (const z of [.06, -.16]) for (const x of [-.11, .11]) part(D, 'cyl', B, x, .02, z, .08, .015, .08, '#3a2c20', 0, 0, Math.PI / 2);
+      if (era >= 3) { part(D, 'box', B, 0, .12, -.05, .18, .08, .28, '#e8dfc8'); part(D, 'cyl', B, 0, .16, -.05, .18, .28, .1, '#efe6d0', Math.PI / 2, 0, 0); }
+      else { part(D, 'box', B, -.04, .12, -.08, .08, .06, .08, crate); part(D, 'box', B, .05, .12, 0, .07, .07, .07, '#a8865a'); }
+    } else {
+      // lorry with a cab and a cargo box in the nation's color
+      part(D, 'box', B, 0, .03, .14, .14, .11, .1, era >= 6 ? '#e8e8e8' : '#5a6a4a'); part(D, 'box', B, 0, .1, .19, .13, .04, .01, '#2b3a4a');
+      part(D, 'box', B, 0, .03, -.08, .15, .16, .32, k % 2 ? col : crate);
+      for (const z of [.12, -.04, -.18]) for (const x of [-.075, .075]) part(D, 'cyl', B, x, 0, z, .05, .02, .05, '#1f2124', 0, 0, Math.PI / 2);
+    }
+  }
+  function updateCaravans() {
+    const D = world.dset; if (!world.tradeRoads) return;
+    let n = 0;
+    for (const r of world.tradeRoads) {
+      if (r.a.wars.has(r.b.id) || r.L < 3) continue;
+      const count = r.era >= 5 ? 3 : r.era >= 2 ? 2 : 1, sp = r.era >= 5 ? .55 : r.era >= 3 ? .3 : .18, desert = STY(r.a.style) === 'desert';
+      for (let k = 0; k < count && n < 220; k++) {
+        const raw = (clock * sp / r.L + k / count + (r.a.id * 7 + r.b.id) * .11) % 2, f = raw < 1 ? raw : 2 - raw, u = .08 + .84 * f, back = raw >= 1;
+        const off = (back ? -1 : 1) * r.w * .5, nx = -(r.y2 - r.y1) / r.L, ny = (r.x2 - r.x1) / r.L;
+        const x = r.x1 + (r.x2 - r.x1) * u + nx * off, y = r.y1 + (r.y2 - r.y1) * u + ny * off;
+        if (!sim.passable(Math.floor(x), Math.floor(y))) continue;
+        const head = Math.atan2(r.x2 - r.x1, r.y2 - r.y1) + (back ? Math.PI : 0), bob = r.era <= 4 ? Math.abs(Math.sin(clock * 6 + k)) * .012 : 0;
+        caravan(D, base(wx(x), heightAt(x, y) + .03 + bob, wz(y), head), r.era, desert, (back ? r.b : r.a).color, k + r.a.id); n++;
+        if (r.era >= 5 && world.night > .03) world.carLights.push([wx(x), wz(y), heightAt(x, y), head]);
+      }
+    }
+  }
   function updateCars() {
     const D = world.dset, CL = world.carLights = []; if (!world.streets) return;
     let k = 0;
@@ -3134,7 +3178,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   const ROAD_COL = [C('#8a7254'), C('#8a7254'), C('#93836a'), C('#9a9284'), C('#55575b'), C('#3c3f43'), C('#3a3d42')];
   const RAIL_COL = C('#3b302a');
   function updateRoads() {
-    const pos = [], col = [], done = new Set(); world.routes = []; const RL = world.roadLamps = []; let nlp = 0;
+    const pos = [], col = [], done = new Set(); world.routes = []; const RL = world.roadLamps = [], TR = world.tradeRoads = []; let nlp = 0;
     for (const t of sim.tribes.values()) for (const key in t.lastEv) {
       if (!key.startsWith('tr')) continue;
       const o = sim.tribes.get(+key.slice(2)); if (!o) continue;
@@ -3144,6 +3188,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const nx = -(y2 - y1) / L * w, ny = (x2 - x1) / L * w;
       const rail = t.techs.has('railways') && o.techs.has('railways'), power = t.techs.has('electricity') && o.techs.has('electricity');
       if (rail || power) world.routes.push({ x1, y1, x2, y2, L, rail, power, era: Math.min(t.era, o.era), a: t.id, b: o.id });
+      TR.push({ x1, y1, x2, y2, L, era: Math.min(t.era, o.era), a: t, b: o, w });
       for (let k = 0; k < steps; k++) {
         const u0 = k / steps, u1 = (k + 1) / steps;
         const ax = x1 + (x2 - x1) * u0, ay = y1 + (y2 - y1) * u0, bx = x1 + (x2 - x1) * u1, by = y1 + (y2 - y1) * u1;
@@ -3488,7 +3533,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); }
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); }
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;

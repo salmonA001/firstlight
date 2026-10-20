@@ -76,7 +76,9 @@ Out past the town edge, nations with railways build a **train station** where th
 
 ![A rocket lifting off from its launch pad](docs/launch.png)
 
-Towns grow from huts to cities, and each culture builds its own style of home and wall. Over time they add **barracks, granaries, markets, forges, temples, castles, libraries, universities, observatories, arenas, windmills, hospitals, railway stations, statues, radio towers, airfields, data centers, power plants, wind turbines and stadiums**, plus three wonders per nation. Port towns build harbors and lighthouses. Roads link trading partners and get paved as the eras pass.
+Towns grow from huts to cities, and each culture builds its own style of home and wall. Over time they add **barracks, granaries, markets, forges, temples, castles, libraries, universities, observatories, arenas, windmills, hospitals, railway stations, statues, radio towers, airfields, data centers, power plants, wind turbines and stadiums**, plus three wonders per nation. Port towns build harbors and lighthouses. Roads link trading partners and get paved as the eras pass. **Caravans** travel the trade roads: pack mules and camels at first, then ox carts, covered wagons and finally trucks with their headlights on at night. They stop when the two nations go to war.
+
+![A covered wagon on the trade road](docs/caravan.png)
 
 ![Eastern walls with tiled towers beside a pagoda town](docs/wall.png)
 
