@@ -101,9 +101,9 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
   ![Rocky mountains with snow caps above forests and towns](docs/mountains.png)
 - **Realistic finish:** on Medium and High the picture gets a filmic color grade and a soft glow on bright lights. High also adds ambient occlusion, which shades creases and the ground under buildings.
 - **Biomes:** the north is frozen tundra and snowy pine forest, the middle is temperate woodland, and the south turns to savanna, jungle and desert, with swamps along wet coasts. Each biome has its own ground color, trees (palms and cacti, flat-topped acacias, dense jungle, snowy pines, willows), ground cover and wildlife (camels, zebras, elephants, reindeer). Deserts and tundra grow less food, so fewer people live there.
-- **Palms and acacias:** palms have drooping fronds and coconuts, and savanna acacias spread a wide layered canopy over forked limbs.
+- **Natural models:** leafy trees have lumpy multi-lobed crowns that darken underneath, pines grow in layered tiers, palms have drooping fronds and coconuts, savanna acacias spread a wide layered canopy, and hill rocks are craggy boulders. Animals have rounded bodies, jointed legs, heads with ears and eyes, tails and antlers, and every ship and boat has a curved hull with a pointed bow.
 
-  ![A palm tree on a desert island](docs/palm.png)
+  ![A Stone Age camp among palms, acacias and leafy trees](docs/trees.png)
 - **Town buildings:** towns grow new buildings as they age and get richer: totems and standing stones, wells, pottery kilns, aqueducts, bathhouses, ziggurats, watermills, taverns, monasteries, town halls, schools, banks, factories, water towers, fire stations, museums, parks, shopping malls, solar farms and TV towers.
 
   ![An 1800s town with factories, a museum and a school](docs/buildings.png)
