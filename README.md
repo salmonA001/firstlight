@@ -107,6 +107,9 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 - **Town buildings:** towns grow new buildings as they age and get richer: totems and standing stones, wells, pottery kilns, aqueducts, bathhouses, ziggurats, watermills, taverns, monasteries, town halls, schools, banks, factories, water towers, fire stations, museums, parks, shopping malls, solar farms and TV towers.
 
   ![An 1800s town with factories, a museum and a school](docs/buildings.png)
+- **Weather:** some clouds drift in low and grey and drop rain showers as they pass, with the odd lightning bolt. Over snowy lands, high mountains and in winter they snow instead. Deserts stay dry.
+
+  ![A grey cloud snowing over a winter town](docs/snow.png)
 - Seasons change every year: green summers, autumn colors and snowy winters.
 - Day turns to night: the sun sets in orange, the sky goes dark and lanterns and windows light up in every town. You can turn this off with **Day and night** in the panel.
 - Wild herds of deer and boar graze the wilderness and disappear as towns claim the land.
