@@ -101,6 +101,12 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
   ![Rocky mountains with snow caps above forests and towns](docs/mountains.png)
 - **Realistic finish:** on Medium and High the picture gets a filmic color grade and a soft glow on bright lights. High also adds ambient occlusion, which shades creases and the ground under buildings.
 - **Biomes:** the north is frozen tundra and snowy pine forest, the middle is temperate woodland, and the south turns to savanna, jungle and desert, with swamps along wet coasts. Each biome has its own ground color, trees (palms and cacti, flat-topped acacias, dense jungle, snowy pines, willows), ground cover and wildlife (camels, zebras, elephants, reindeer). Deserts and tundra grow less food, so fewer people live there.
+- **Palms and acacias:** palms have drooping fronds and coconuts, and savanna acacias spread a wide layered canopy over forked limbs.
+
+  ![A palm tree on a desert island](docs/palm.png)
+- **Town buildings:** towns grow new buildings as they age and get richer: totems and standing stones, wells, pottery kilns, aqueducts, bathhouses, ziggurats, watermills, taverns, monasteries, town halls, schools, banks, factories, water towers, fire stations, museums, parks, shopping malls, solar farms and TV towers.
+
+  ![An 1800s town with factories, a museum and a school](docs/buildings.png)
 - Seasons change every year: green summers, autumn colors and snowy winters.
 - Day turns to night: the sun sets in orange, the sky goes dark and lanterns and windows light up in every town. You can turn this off with **Day and night** in the panel.
 - Wild herds of deer and boar graze the wilderness and disappear as towns claim the land.

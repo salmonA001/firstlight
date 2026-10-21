@@ -2354,11 +2354,149 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     if (t.era >= 5) l.push('power');
     if (t.era >= 6) l.push('turbine');
     if (t.era >= 6) l.push('stadium');
+    // everyday buildings that come and go with the eras
+    const st = STY(t.style), size = t.members.size, rel = !!t.faith;
+    if (t.era === 0) { l.push('totem'); if (rel || size >= 10) l.push('stones'); }
+    if (t.era >= 1 && t.era <= 3) l.push('well');
+    if (t.era >= 1 && t.era <= 2) l.push('kiln');
+    if (t.era >= 1 && t.era <= 4 && (st === 'med' || st === 'desert') && size >= 12) l.push('aqueduct');
+    if (t.era >= 1 && t.era <= 3 && (st === 'med' || st === 'desert' || st === 'eastern') && t.wealth > 20) l.push('bathhouse');
+    if (t.era >= 1 && t.era <= 2 && (st === 'meso' || st === 'desert') && rel) l.push('ziggurat');
+    if (t.era >= 2 && t.era <= 4 && t.farms > 3) l.push('watermill');
+    if (t.era >= 2 && t.era <= 5 && size >= 10) l.push('tavern');
+    if (t.era >= 2 && t.era <= 4 && rel) l.push('monastery');
+    if (t.era >= 3) l.push('townhall');
+    if (t.era >= 3 && t.techs.has('writing')) l.push('school');
+    if (t.era >= 3 && t.trades > 5) l.push('bank');
+    if (t.era >= 4 && t.era <= 5) l.push('factory');
+    if (t.era >= 4) l.push('watertower');
+    if (t.era >= 4) l.push('firestation');
+    if (t.era >= 5) l.push('museum');
+    if (t.era >= 5) l.push('park');
+    if (t.era >= 6) l.push('mall');
+    if (t.era >= 6) l.push('solar');
+    if (t.era >= 6 && size >= 16) l.push('tvtower');
     return l;
   }
   function special(S, B, kind, style, e, col) {
     const roof = style === 'eastern' ? '#3d5552' : style === 'med' || style === 'meso' ? '#a8442e' : style === 'desert' ? '#cdb38c' : '#5a3a2a';
+    const wall = style === 'desert' ? '#d9c7a0' : style === 'med' ? '#ece4d2' : style === 'nordic' ? '#8a6a4a' : style === 'eastern' ? '#e2dccb' : style === 'meso' ? '#c9b48a' : '#b89a72';
+    const brick = '#9a5a42', glass = '#3b5568', dark = '#2d3034';
     switch (kind) {
+      case 'totem':
+        // carved pole with stacked faces and outstretched wings
+        part(S, 'cyl', B, 0, 0, 0, .14, 1.05, .14, '#6b4a2f');
+        [['#b5462f', .25], ['#2f6db5', .5], ['#e0a526', .75]].forEach(([c, y]) => { part(S, 'cyl', B, 0, y, 0, .16, .12, .16, c); part(S, 'box', B, 0, y + .04, .07, .06, .03, .03, '#1d1a16'); });
+        part(S, 'box', B, 0, .92, 0, .7, .06, .08, '#6b4a2f'); part(S, 'cone', B, 0, 1.05, 0, .12, .14, .12, '#e0a526');
+        break;
+      case 'stones':
+        // a ring of standing stones with lintels
+        for (let a = 0; a < 8; a++) { const x = Math.cos(a * .785) * .45, z = Math.sin(a * .785) * .45; part(S, 'box', B, x, 0, z, .1, .42 + (a % 3) * .05, .07, '#8f8a82', 0, -a * .785, 0); }
+        part(S, 'box', B, .32, .45, .32, .32, .06, .08, '#8f8a82', 0, -.785, 0); part(S, 'box', B, 0, 0, 0, .2, .08, .14, '#7d786f');
+        break;
+      case 'well':
+        part(S, 'cyl', B, 0, 0, 0, .3, .16, .3, '#9a948a'); part(S, 'cyl', B, 0, .155, 0, .22, .01, .22, '#24414f');
+        for (const x of [-.13, .13]) part(S, 'box', B, x, 0, 0, .025, .38, .025, '#5a4632');
+        part(S, 'prism', B, 0, .36, 0, .38, .12, .3, roof); part(S, 'cyl', B, 0, .3, 0, .02, .26, .02, '#4a3626', 0, 0, Math.PI / 2);
+        break;
+      case 'kiln':
+        part(S, 'dome', B, 0, 0, 0, .5, .4, .5, '#a0603c'); part(S, 'box', B, 0, 0, .22, .14, .12, .06, '#2a1d14');
+        part(S, 'cyl', B, .12, .2, -.08, .07, .28, .07, '#8a4f33');
+        for (let k = 0; k < 4; k++) part(S, 'cyl', B, -.38 + k * .09, 0, .3, .06, .1 + (k % 2) * .03, .06, k % 2 ? '#c27a4a' : '#b0683f');
+        break;
+      case 'aqueduct':
+        // a run of stone arches carrying a channel into town
+        for (let k = -2; k <= 2; k++) { part(S, 'box', B, k * .32, 0, 0, .08, .55, .12, '#d8cdb4'); }
+        part(S, 'box', B, 0, .55, 0, 1.4, .1, .14, '#cfc3a8'); part(S, 'box', B, 0, .65, 0, 1.4, .02, .08, '#3d7fa0');
+        for (let k = -2; k < 2; k++) part(S, 'cyl', B, k * .32 + .16, .38, 0, .22, .12, .12, '#cfc3a8', Math.PI / 2, 0, 0);
+        break;
+      case 'bathhouse':
+        part(S, 'box', B, 0, 0, 0, .9, .32, .6, wall); part(S, 'dome', B, 0, .32, 0, .4, .26, .4, style === 'eastern' ? '#3d5552' : '#c9b48a');
+        part(S, 'box', B, 0, .01, .42, .5, .02, .22, '#4aa3b5'); for (const x of [-.3, -.1, .1, .3]) part(S, 'cyl', B, x, 0, .31, .03, .3, .03, '#efe9da');
+        break;
+      case 'ziggurat':
+        for (let k = 0; k < 4; k++) part(S, 'box', B, 0, k * .16, 0, .95 - k * .2, .16, .95 - k * .2, k % 2 ? '#c9b48a' : '#b9a47a');
+        part(S, 'box', B, 0, .01, .3, .14, .5, .5, '#a8946a', -.6, 0, 0); part(S, 'box', B, 0, .64, 0, .2, .14, .2, col);
+        break;
+      case 'watermill':
+        part(S, 'box', B, 0, 0, 0, .55, .42, .45, wall); part(S, 'prism', B, 0, .42, 0, .6, .22, .5, roof);
+        part(S, 'cyl', B, .33, .02, 0, .42, .06, .42, '#5a4632', 0, 0, Math.PI / 2);
+        for (let a = 0; a < 6; a++) part(S, 'box', B, .36, .23, 0, .015, .42, .04, '#4a3626', a * .524, 0, 0);
+        part(S, 'box', B, .33, -.02, .35, .1, .02, .7, '#3d7fa0');
+        break;
+      case 'tavern':
+        part(S, 'box', B, 0, 0, 0, .7, .42, .45, wall); part(S, 'prism', B, 0, .42, 0, .76, .24, .5, roof);
+        part(S, 'box', B, 0, 0, .23, .14, .24, .01, '#3a2a1c'); for (const x of [-.22, .22]) part(S, 'box', B, x, .22, .23, .12, .1, .01, '#e8c86a');
+        part(S, 'box', B, .3, .32, .3, .02, .02, .16, '#3a2a1c'); part(S, 'box', B, .3, .25, .38, .01, .12, .1, col);
+        for (const x of [-.25, .25]) { part(S, 'cyl', B, x, 0, .45, .07, .12, .07, '#7a5a3a'); }
+        break;
+      case 'monastery':
+        part(S, 'box', B, 0, 0, 0, 1, .36, .7, '#d8d0bc'); part(S, 'box', B, 0, .01, 0, .6, .02, .36, '#5b8a46');
+        part(S, 'prism', B, 0, .36, -.25, 1.02, .16, .22, roof); part(S, 'prism', B, 0, .36, .25, 1.02, .16, .22, roof);
+        part(S, 'box', B, .4, 0, -.25, .2, .8, .2, '#d8d0bc'); part(S, 'pyr', B, .4, .8, -.25, .26, .3, .26, roof);
+        break;
+      case 'townhall':
+        part(S, 'box', B, 0, 0, 0, 1, .46, .55, e >= 5 ? '#d6d0c4' : wall); part(S, 'prism', B, 0, .46, 0, 1.04, .2, .6, e >= 5 ? '#6a6f75' : roof);
+        part(S, 'box', B, 0, .46, 0, .26, .5, .26, e >= 5 ? '#d6d0c4' : wall); part(S, 'pyr', B, 0, .96, 0, .32, .3, .32, e >= 5 ? '#4a5a5f' : roof);
+        part(S, 'cyl', B, 0, .72, .135, .16, .01, .16, '#f2efe6', Math.PI / 2, 0, 0); part(S, 'box', B, 0, 0, .28, .2, .28, .01, '#3a2a1c');
+        part(S, 'cyl', B, -.4, 0, .4, .02, .6, .02, '#4a4a4a'); part(S, 'box', B, -.4, .48, .44, .02, .12, .18, col);
+        break;
+      case 'school':
+        part(S, 'box', B, 0, 0, 0, .95, .34, .45, e >= 5 ? '#d9b07a' : brick); part(S, 'prism', B, 0, .34, 0, 1, .16, .5, e >= 5 ? '#5a5f66' : roof);
+        for (const x of [-.32, -.1, .12, .34]) part(S, 'box', B, x, .15, .23, .12, .12, .01, glass);
+        part(S, 'box', B, 0, .5, 0, .1, .1, .1, '#e8e2d2'); part(S, 'box', B, 0, .01, .5, .6, .01, .3, '#9a8f7a');
+        part(S, 'cyl', B, .4, 0, .5, .015, .55, .015, '#888'); part(S, 'box', B, .4, .46, .54, .01, .1, .16, col);
+        break;
+      case 'bank':
+        part(S, 'box', B, 0, 0, 0, .8, .05, .55, '#cfc8b6'); part(S, 'box', B, 0, .05, -.05, .7, .42, .4, '#e6dfcf');
+        for (let x = -.3; x <= .31; x += .15) part(S, 'cyl', B, x, .05, .18, .05, .42, .05, '#f2ede2');
+        part(S, 'prism', B, 0, .47, .03, .8, .14, .5, '#e6dfcf'); part(S, 'box', B, 0, .2, .16, .16, .2, .01, '#3a3226');
+        break;
+      case 'factory':
+        // brick works with a saw-tooth roof and tall smoking chimneys
+        part(S, 'box', B, 0, 0, 0, 1.1, .4, .6, brick);
+        for (let x = -.42; x <= .43; x += .28) { part(S, 'prism', B, x, .4, 0, .28, .14, .62, '#5a5f66', 0, Math.PI / 2, 0); part(S, 'box', B, x - .07, .44, 0, .01, .1, .58, glass); }
+        for (const x of [-.4, .35]) part(S, 'cyl', B, x, .4, -.22, .1, .9, .1, '#7a3b2a');
+        part(S, 'box', B, .2, 0, .3, .3, .28, .01, '#4a4e52');
+        break;
+      case 'watertower':
+        for (const [x, z] of [[-.15, -.15], [.15, -.15], [-.15, .15], [.15, .15]]) part(S, 'cyl', B, x, 0, z, .03, .8, .03, '#6a6c70');
+        part(S, 'box', B, 0, .4, 0, .34, .02, .02, '#6a6c70'); part(S, 'cyl', B, 0, .8, 0, .48, .32, .48, e >= 6 ? '#e8e8e8' : '#8a8f95'); part(S, 'cone', B, 0, 1.12, 0, .5, .14, .5, '#6a6f75');
+        part(S, 'box', B, 0, .9, .245, .2, .08, .01, col);
+        break;
+      case 'firestation':
+        part(S, 'box', B, 0, 0, 0, .8, .4, .5, brick); part(S, 'box', B, 0, .4, 0, .82, .04, .52, '#3a3d42');
+        for (const x of [-.2, .2]) part(S, 'box', B, x, 0, .251, .3, .3, .01, '#c0392b');
+        part(S, 'box', B, .36, 0, -.1, .16, .8, .16, brick); part(S, 'box', B, .36, .8, -.1, .18, .04, .18, '#3a3d42');
+        part(S, 'box', B, -.2, 0, .45, .14, .1, .3, '#c0392b'); part(S, 'box', B, -.2, .1, .5, .12, .05, .1, '#9fd3ec');
+        break;
+      case 'museum':
+        part(S, 'box', B, 0, 0, 0, 1.1, .06, .7, '#d8d2c4'); part(S, 'box', B, 0, .06, -.08, 1, .44, .5, '#ece6d8');
+        for (let x = -.42; x <= .43; x += .12) part(S, 'cyl', B, x, .06, .2, .04, .44, .04, '#f4efe4');
+        part(S, 'prism', B, 0, .5, .02, 1.05, .16, .66, '#ece6d8'); part(S, 'box', B, 0, .58, .34, .4, .06, .01, col);
+        for (let k = 0; k < 3; k++) part(S, 'box', B, 0, k * .02, .38 + k * .04, .6, .02, .04, '#d0c9b8');
+        break;
+      case 'park':
+        // lawn, paths, a fountain, trees and benches
+        part(S, 'box', B, 0, -.01, 0, 1.2, .02, 1.2, '#5f9a48'); part(S, 'box', B, 0, 0, 0, .14, .022, 1.2, '#cdbf9e'); part(S, 'box', B, 0, 0, 0, 1.2, .022, .14, '#cdbf9e');
+        part(S, 'cyl', B, 0, .01, 0, .36, .06, .36, '#c9c4b8'); part(S, 'cyl', B, 0, .06, 0, .3, .01, .3, '#5fb4d0'); part(S, 'cyl', B, 0, .06, 0, .04, .2, .04, '#c9c4b8'); part(S, 'sphere', B, 0, .22, 0, .08, .1, .08, '#9fd8ec');
+        for (const [x, z] of [[-.38, -.38], [.38, -.38], [-.38, .38], [.38, .38]]) { part(S, 'cyl', B, x, 0, z, .03, .22, .03, '#5a4632'); part(S, 'sphere', B, x, .16, z, .28, .26, .28, '#3f7a3a'); }
+        for (const x of [-.24, .24]) part(S, 'box', B, x, .03, .12, .14, .03, .04, '#6b4a2f');
+        break;
+      case 'mall':
+        part(S, 'box', B, 0, 0, 0, 1.3, .38, .8, '#d6d6d2'); part(S, 'box', B, 0, .1, .401, 1.2, .2, .01, glass);
+        part(S, 'box', B, 0, .38, 0, .5, .12, .4, '#9fd3ec'); part(S, 'box', B, -.4, .3, .405, .36, .07, .01, col); part(S, 'box', B, .3, .3, .405, .3, .07, .01, '#e0a526');
+        part(S, 'box', B, 0, -.01, .7, 1.3, .01, .5, '#3a3d42'); for (let x = -.5; x <= .51; x += .2) part(S, 'box', B, x, 0, .7, .1, .05, .16, CRATES[Math.round(x * 10 + 5) % CRATES.length]);
+        break;
+      case 'solar':
+        for (let r = -1; r <= 1; r++) for (let c = -1; c <= 1; c++) { part(S, 'box', B, c * .4, 0, r * .35, .02, .1, .02, '#8a8f95'); part(S, 'box', B, c * .4, .1, r * .35, .34, .015, .24, '#1e3a5f', -.5, 0, 0); }
+        break;
+      case 'tvtower':
+        // a tall concrete needle with an observation pod
+        part(S, 'cyl', B, 0, 0, 0, .3, .2, .3, '#c9c9c4'); part(S, 'cone', B, 0, 0, 0, .18, 2.4, .18, '#d8d8d4'); part(S, 'cyl', B, 0, .02, 0, .1, 2.4, .1, '#d8d8d4');
+        part(S, 'sphere', B, 0, 1.75, 0, .34, .26, .34, '#cfcfca'); part(S, 'cyl', B, 0, 1.84, 0, .36, .05, .36, glass);
+        part(S, 'cyl', B, 0, 2.4, 0, .02, .55, .02, '#b5332e'); part(S, 'sphere', B, 0, 2.93, 0, .05, .05, .05, '#ff4a3a');
+        break;
       case 'barracks':
         part(S, 'box', B, 0, 0, 0, .95, .3, .42, e >= 5 ? '#6f7560' : '#7a6a55'); part(S, 'prism', B, 0, .3, 0, 1, .18, .46, e >= 5 ? '#4f5545' : roof);
         part(S, 'cyl', B, .4, 0, .3, .03, .85, .03, '#4a3a2a'); part(S, 'box', B, .4, .66, .44, .02, .16, .26, col);
@@ -3062,8 +3200,42 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     world.trunks = instanced(trunkGeo, new THREE.MeshStandardMaterial({ color: '#5a4330', roughness: 1 }), MAXT);
     world.pines = instanced(pineGeo, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .9 }), MAXT);
     world.leaves = instanced(leafGeo, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .9, flatShading: true }), MAXT);
-    world.pines.setColorAt(0, tmpC.set('#fff')); world.leaves.setColorAt(0, tmpC.set('#fff'));
-    world.treeSlots = new Array(n); world.nT = 0; world.nP = 0; world.nL = 0;
+    // palms get drooping fronds and acacias a wide layered umbrella canopy, not a squashed blob
+    const tshade = (g, shade) => { g = g.index ? g.toNonIndexed() : g; g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 3).fill(shade), 3)); g.deleteAttribute('uv'); return g; };
+    const tmerge = gs => { const pos = [], nor = [], col = []; for (const g of gs) { pos.push(...g.attributes.position.array); nor.push(...g.attributes.normal.array); col.push(...g.attributes.color.array); } const m = new THREE.BufferGeometry(); m.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); m.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); m.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); return m; };
+    const frondGeo = () => {
+      const pos = [], col = [], NF = 9, SEG = 6;
+      for (let f = 0; f < NF; f++) {
+        const a = f / NF * Math.PI * 2 + (f % 2) * .2, ca = Math.cos(a), sa = Math.sin(a), len = .36 + (f % 3) * .05, lift = f % 2 ? .1 : .16;
+        const pt = (t, side) => { const r = len * t, w = (.075 * Math.sin(Math.PI * Math.min(1, t * 1.15)) + .006) * side, y = lift * t - .32 * t * t - Math.abs(side) * .025 * t;
+          return [ca * r - sa * w, y, sa * r + ca * w]; };
+        for (let k = 0; k < SEG; k++) {
+          const t0 = k / SEG, t1 = (k + 1) / SEG, a0 = pt(t0, 0), a1 = pt(t1, 0), l0 = pt(t0, -1), l1 = pt(t1, -1), r0 = pt(t0, 1), r1 = pt(t1, 1);
+          pos.push(...a0, ...l0, ...a1, ...l0, ...l1, ...a1, ...a0, ...a1, ...r0, ...r0, ...a1, ...r1);
+          const c0 = 1 - t0 * .3, c1 = 1 - t1 * .3; for (const c of [c0, c0, c1, c0, c1, c1, c0, c1, c0, c0, c1, c1]) col.push(c, c, c);
+        }
+      }
+      let g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.computeVertexNormals();
+      const nuts = [0, 2.1, 4.2].map(a => tshade(new THREE.SphereGeometry(.028, 6, 5).translate(Math.cos(a) * .03, -.035, Math.sin(a) * .03), .32));
+      g = tmerge([g, ...nuts, tshade(new THREE.CylinderGeometry(.03, .045, .06, 6).translate(0, -.02, 0), .45)]);
+      g.translate(0, .74, 0); return g;
+    };
+    const canopyGeo = () => {
+      const parts = [];
+      for (const [x, y, z, r] of [[0, .05, 0, .27], [.2, .02, .06, .21], [-.18, .03, -.08, .22], [.04, .06, -.21, .19], [-.06, .01, .2, .2], [.12, .09, -.04, .16]]) {
+        const g = new THREE.IcosahedronGeometry(1, 1); g.scale(r, r * .3, r); g.translate(x, y, z); parts.push(tshade(g, .7 + y * 2.4));
+      }
+      for (const [x, z] of [[.15, .05], [-.14, -.07], [.02, -.16], [-.04, .15]]) {        // forked limbs up into the canopy
+        const g = new THREE.CylinderGeometry(.012, .02, .2, 5); g.translate(0, .1, 0); g.rotateZ(-Math.atan2(x, .18)); g.rotateX(Math.atan2(z, .18)); g.translate(0, -.16, 0); parts.push(tshade(g, .28));
+      }
+      const g = tmerge(parts); g.translate(0, .5, 0); return g;
+    };
+    world.palms = instanced(frondGeo(), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .85, vertexColors: true, side: THREE.DoubleSide }), MAXT);
+    world.acacias = instanced(canopyGeo(), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .9, vertexColors: true, flatShading: true }), MAXT);
+    group.add(world.palms, world.acacias);
+    for (const m of [world.pines, world.leaves, world.palms, world.acacias]) m.setColorAt(0, tmpC.set('#fff'));
+    world.treeM = [world.leaves, world.pines, world.palms, world.acacias];
+    world.treeSlots = new Array(n); world.nT = 0; world.nF = [0, 0, 0, 0];
     for (let i = 0; i < n; i++) if (sim.terrain[i] === T.FOREST) placeTrees(i);
     // ground cover by biome
     { const cov = []; for (let i = 0; i < n; i++) { const b = sim.biome[i], t = sim.terrain[i], j = sim.jit[i]; if (t === T.WATER || t === T.MOUNTAIN || sim.owner[i]) continue;
@@ -3182,14 +3354,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   function treeShape(bi, e, h1, h2, h3, s) {
     const pineHi = e > 1.15 ? h3 > .15 : h3 > .72;
     switch (bi) {
-      case 1: return h3 > .5 ? { pine: false, tw: 0, th: 0, fy: -.25, sx: .28, sy: 1.25, col: [.28, .45, .28] } // cactus
-                             : { pine: false, tw: .9, th: 2.1, fy: .48, sx: 1.5, sy: .35, col: [.25, .5, .3] }; // palm
-      case 2: return { pine: false, tw: 1, th: 1.5, fy: .2, sx: 1.7, sy: .4, col: [.2 + h1 * .04, .45, .27] }; // acacia
-      case 3: return h3 > .7 ? { pine: false, tw: .9, th: 2.2, fy: .5, sx: 1.4, sy: .4, col: [.3, .6, .25] } : { pine: false, tw: 1.3, th: 1.4, fy: .15, sx: 1.45, sy: 1.25, col: [.3 + h2 * .05, .6, .16 + h1 * .06] };
-      case 4: return { pine: true, tw: 1, th: 1, fy: 0, sx: .85, sy: 1.15, col: [.38, .3, .14 + h1 * .05] };
-      case 5: return { pine: true, tw: .8, th: .7, fy: -.15, sx: .6, sy: .65, col: [.36, .2, .3] };
-      case 6: return { pine: false, tw: 1, th: 1.1, fy: -.05, sx: 1.25, sy: 1.15, col: [.17 + h1 * .04, .3, .22] }; // willow
-      default: return { pine: pineHi, tw: 1, th: 1, fy: 0, sx: 1, sy: 1, col: pineHi ? [.3 + h2 * .05, .38, .17 + h1 * .07] : [.2 + h1 * .1, .45 + h2 * .15, .22 + h3 * .1] };
+      case 1: return h3 > .5 ? { kind: 0, tw: 0, th: 0, fy: -.25, sx: .28, sy: 1.25, col: [.28, .45, .28] } // cactus
+                             : { kind: 2, tw: .9, th: 2.1, fy: 0, sx: 1, sy: 1, col: [.24, .55, .17] }; // palm
+      case 2: return { kind: 3, tw: 1.1, th: 1.45, fy: 0, sx: 1.15, sy: 1, col: [.19 + h1 * .04, .45, .16] }; // acacia
+      case 3: return h3 > .7 ? { kind: 2, tw: .9, th: 2.1, fy: 0, sx: 1.05, sy: 1, col: [.29, .6, .15] } : { kind: 0, tw: 1.3, th: 1.4, fy: .15, sx: 1.45, sy: 1.25, col: [.3 + h2 * .05, .6, .16 + h1 * .06] };
+      case 4: return { kind: 1, tw: 1, th: 1, fy: 0, sx: .85, sy: 1.15, col: [.38, .3, .14 + h1 * .05] };
+      case 5: return { kind: 1, tw: .8, th: .7, fy: -.15, sx: .6, sy: .65, col: [.36, .2, .3] };
+      case 6: return { kind: 0, tw: 1, th: 1.1, fy: -.05, sx: 1.25, sy: 1.15, col: [.17 + h1 * .04, .3, .22] }; // willow
+      default: return { kind: pineHi ? 1 : 0, tw: 1, th: 1, fy: 0, sx: 1, sy: 1, col: pineHi ? [.3 + h2 * .05, .38, .17 + h1 * .07] : [.2 + h1 * .1, .45 + h2 * .15, .22 + h3 * .1] };
     }
   }
   function placeTrees(i) {
@@ -3198,28 +3370,27 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (let k = 0; k < count; k++) {
       const h1 = hash(i * 3.1 + k, k * 7.7), h2 = hash(k * 1.9, i * .37 + k), h3 = hash(i + k * 13.3, 2.2);
       const px = x + .15 + h1 * .7, py = y + .15 + h2 * .7, s = .75 + h3 * .6;
-      const bi = sim.biome[i], f = treeShape(bi, e, h1, h2, h3, s), pine = f.pine;
-      const ti = world.nT++, fi = pine ? world.nP++ : world.nL++, fm = pine ? world.pines : world.leaves;
+      const bi = sim.biome[i], f = treeShape(bi, e, h1, h2, h3, s), kd = f.kind;
+      const ti = world.nT++, fi = world.nF[kd]++, fm = world.treeM[kd];
       const gy = heightAt(px, py) - .03;
       setInst(world.trunks, ti, wx(px), gy, wz(py), s * f.tw, s * f.th, s * f.tw, h1 * 6);
       setInst(fm, fi, wx(px), gy + f.fy * s, wz(py), s * f.sx, s * f.sy, s * f.sx, h1 * 6);
       fm.setColorAt(fi, tmpC.setHSL(f.col[0], f.col[1], f.col[2]));
-      slots.push([ti, pine ? 1 : 0, fi, px, py, s, h1, f]);
+      slots.push([ti, kd, fi, px, py, s, h1, f]);
     }
     world.treeSlots[i] = slots;
-    world.trunks.count = world.nT; world.pines.count = world.nP; world.leaves.count = world.nL;
+    world.trunks.count = world.nT; world.treeM.forEach((m, k) => m.count = world.nF[k]);
     flagTrees();
   }
   function flagTrees() {
-    world.trunks.instanceMatrix.needsUpdate = world.pines.instanceMatrix.needsUpdate = world.leaves.instanceMatrix.needsUpdate = true;
-    if (world.pines.instanceColor) world.pines.instanceColor.needsUpdate = true;
-    if (world.leaves.instanceColor) world.leaves.instanceColor.needsUpdate = true;
+    world.trunks.instanceMatrix.needsUpdate = true;
+    for (const m of world.treeM) { m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   }
   function showTrees(i, on) {
     const slots = world.treeSlots[i];
     if (!slots) { if (on) placeTrees(i); return; }
-    for (const [ti, pine, fi, px, py, s, h1, f] of slots) {
-      const fm = pine ? world.pines : world.leaves;
+    for (const [ti, kd, fi, px, py, s, h1, f] of slots) {
+      const fm = world.treeM[kd];
       if (on) { const gy = heightAt(px, py) - .03; setInst(world.trunks, ti, wx(px), gy, wz(py), s * f.tw, s * f.th, s * f.tw, h1 * 6); setInst(fm, fi, wx(px), gy + f.fy * s, wz(py), s * f.sx, s * f.sy, s * f.sx, h1 * 6); }
       else { hide(world.trunks, ti); hide(fm, fi); }
     }
@@ -3355,6 +3526,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     world.seasonU.uSnow.value = snow; world.seasonU.uAutumn.value = autumn;
     world.leaves.material.color.setRGB(1, 1, 1).lerp(LEAF_SPRING, spring * .5).lerp(LEAF_AUTUMN, autumn * .85).lerp(LEAF_WINTER, snow * .9);
     world.pines.material.color.setRGB(1, 1, 1).lerp(PINE_SNOW, snow * .55);
+    world.acacias.material.color.setRGB(1, 1, 1).lerp(LEAF_SPRING, spring * .3).lerp(LEAF_AUTUMN, autumn * .25);
     world.fields.material.color.setRGB(1, 1, 1).lerp(FIELD_SPRING, spring * .8).lerp(FIELD_SNOW, snow * .9);
     world.water.material.color.copy(WATER_SUMMER).lerp(WATER_WINTER, snow * .6);
     sun.intensity = 1.7 - snow * .35; sun.color.setRGB(1, .95 - autumn * .05, .86 - autumn * .1);
