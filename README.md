@@ -104,6 +104,9 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 - **Natural models:** leafy trees have lumpy multi-lobed crowns that darken underneath, pines grow in layered tiers, palms have drooping fronds and coconuts, savanna acacias spread a wide layered canopy, and hill rocks are craggy boulders. Animals have rounded bodies, jointed legs, heads with ears and eyes, tails and antlers, and every ship and boat has a curved hull with a pointed bow.
 
   ![A Stone Age camp among palms, acacias and leafy trees](docs/trees.png)
+- **Quarries and mines:** once a town leaves the Stone Age it digs into the nearest hill or mountain outside town. Early towns cut stone in stepped quarries with a swinging wooden crane, later ones drive timbered mine shafts with ore carts on rails and spoil heaps, industrial towns raise winding towers with turning wheels and coal heaps, and modern mines have steel headframes and dump trucks.
+
+  ![A mine with a winding tower, ore cart and coal heap outside a snowy town](docs/mine.png)
 - **Town buildings:** towns grow new buildings as they age and get richer: totems and standing stones, wells, pottery kilns, aqueducts, bathhouses, ziggurats, watermills, taverns, monasteries, town halls, schools, banks, factories, water towers, fire stations, museums, parks, shopping malls, solar farms and TV towers.
 
   ![An 1800s town with factories, a museum and a school](docs/buildings.png)

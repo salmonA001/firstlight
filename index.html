@@ -3035,6 +3035,74 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       for (const z of [.12, -.04, -.18]) for (const x of [-.075, .075]) part(D, 'cyl', B, x, 0, z, .05, .02, .05, '#1f2124', 0, 0, Math.PI / 2);
     }
   }
+
+  // quarries and mines dig into the nearest hill or mountain: open stone quarries, then timbered mine shafts
+  // with ore carts, then winding towers with spinning wheels, and steel headframes with dump trucks
+  function mineSite(t) {
+    if (!world.ext) return null;
+    world.mineAt = world.mineAt || new Map();
+    const c = world.mineAt.get(t.id);
+    const ext = (world.ext.get(t.id) || 2) + (t.walls ? 1.6 : .9), key = sim.ownerVersion + ':' + Math.round(ext * 2);
+    if (c && c.v === key) return c.site;
+    // just outside town, clear of other towns and of airports, stations and launch pads
+    const used = [...sim.tribes.values()].filter(o => o !== t).map(o => [o.camp.x + .5, o.camp.y + .5, (world.ext.get(o.id) || 2) + 1.5]).concat((world.sites || []).map(st => [st.x, st.y, (st.len || 2) / 2 + 1]));
+    let best = null, bd = 1e9; const R = Math.ceil(ext + 6);
+    for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+      const x = t.camp.x + dx, y = t.camp.y + dy, d = dx * dx + dy * dy; if (d < ext * ext || d > (ext + 6) ** 2 || x < 1 || y < 1 || x >= W - 1 || y >= H - 1) continue;
+      if (used.some(([ux, uy, ur]) => (x + .5 - ux) ** 2 + (y + .5 - uy) ** 2 < ur * ur)) continue;
+      const i = y * W + x, tr = sim.terrain[i]; if ((tr !== T.HILLS && tr !== T.MOUNTAIN) || (sim.owner[i] && sim.owner[i] !== t.id)) continue;
+      const score = d + (tr === T.MOUNTAIN ? 6 : 0) - Math.min(4, sim.stone[i]); if (score < bd) { bd = score; best = { x: x + .5, y: y + .5, head: Math.atan2(t.camp.x - x, t.camp.y - y), mtn: tr === T.MOUNTAIN }; }
+    }
+    if (best) { best.h = heightAt(best.x, best.y); best.tiles = []; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) best.tiles.push((Math.floor(best.y) + dy) * W + Math.floor(best.x) + dx); }
+    world.mineAt.set(t.id, { v: key, site: best }); return best;
+  }
+  function mine(D, B, era, col, k) {
+    const rock = '#8d877d', wood = '#5e4430', dark = '#14110f';
+    if (era <= 2) {
+      // stepped quarry face, cut blocks and a wooden crane swinging a block
+      part(D, 'box', B, 0, -.1, .05, .8, .06, .5, '#a8a194'); for (let s = 0; s < 3; s++) part(D, 'box', B, 0, -.1, -.22 - s * .12, .9 - s * .15, .18 + s * .16, .14, s % 2 ? '#a19a8e' : rock);
+      for (const [x, z, r] of [[.3, .15, .3], [-.25, .2, 1.1], [.05, .32, .6], [-.38, -.05, 0]]) part(D, 'box', B, x, -.02, z, .13, .09, .09, '#b0a99c', 0, r, 0);
+      const sw = Math.sin(clock * .5 + k) * .9;
+      part(D, 'cyl', B, .25, -.02, -.02, .03, .55, .03, wood); part(D, 'box', B, .25, .5, -.02, .025, .025, .5, wood, 0, sw, 0, 0);
+      const bx = .25 + Math.sin(sw) * .22, bz = -.02 + Math.cos(sw) * .22;
+      part(D, 'box', B, bx, .26, bz, .005, .24, .005, '#2a2420'); part(D, 'box', B, bx, .2, bz, .09, .07, .07, '#b0a99c');
+      return;
+    }
+    // mine entrance cut into the slope, with a timber or concrete portal and rails running out
+    part(D, 'sphere', B, 0, -.25, -.28, 1.1, .62, .75, era >= 6 ? '#8a7a66' : '#7d6c58');
+    part(D, 'box', B, 0, -.02, .07, .22, .22, .05, dark);
+    const portal = era >= 5 ? '#9a9a96' : wood;
+    for (const x of [-.12, .12]) part(D, 'box', B, x, -.02, .09, .04, .24, .04, portal); part(D, 'box', B, 0, .2, .09, .3, .05, .05, portal);
+    for (const x of [-.04, .04]) part(D, 'box', B, x, -.01, .45, .012, .012, .75, '#4a4a4a');
+    for (let z = .12; z < .8; z += .1) part(D, 'box', B, 0, -.02, z, .14, .012, .025, wood);
+    const ph = (Math.sin(clock * .35 + k) + 1) / 2, cz = .14 + ph * .62;                          // ore cart rolling in and out
+    part(D, 'box', B, 0, 0, cz, .1, .06, .13, '#5a5d61'); part(D, 'sphere', B, 0, .045, cz, .09, .05, .11, era >= 4 ? '#1d1b1a' : '#8a6a4a');
+    part(D, 'cone', B, .4, -.02, .5, .38, .22, .34, era >= 4 ? '#262422' : '#6a6055');            // spoil heap
+    if (era <= 3) { part(D, 'box', B, -.38, -.02, .45, .22, .16, .2, wood); part(D, 'prism', B, -.38, .14, .45, .24, .1, .22, '#4a3626'); return; }
+    // winding tower over the shaft, with its wheel turning and an engine house beside it
+    const steel = era >= 5 ? '#6f777f' : '#3a3530', hx = -.35, hz = .42, H = .85;
+    for (const [x, z] of [[-.1, -.1], [.1, -.1], [-.1, .1], [.1, .1]]) part(D, 'box', B, hx + x * .7, -.02, hz + z * .7, .025, H, .025, steel, z * -.25, 0, x * .25);
+    part(D, 'box', B, hx, H * .55, hz, .16, .02, .16, steel); part(D, 'box', B, hx, H - .05, hz, .18, .03, .18, steel);
+    const a = clock * 1.6 + k;
+    part(D, 'cyl', B, hx, H + .07, hz, .2, .02, .2, '#2a2a2a', 0, 0, Math.PI / 2);
+    for (let s = 0; s < 3; s++) part(D, 'box', B, hx, H + .07, hz, .012, .2, .012, '#2a2a2a', a + s * Math.PI / 3, 0, 0);
+    part(D, 'box', B, hx, .05, hz, .005, H, .005, '#1a1a1a');
+    part(D, 'box', B, hx, -.02, hz + .32, .26, .22, .2, era >= 5 ? '#c9c4b8' : '#8a4a34'); part(D, 'prism', B, hx, .2, hz + .32, .28, .08, .22, '#3e3e42');
+    part(D, 'cyl', B, hx + .1, .2, hz + .38, .05, .4, .05, era >= 5 ? '#9a9a96' : '#7a3b2a');
+    if (era >= 6) {                                                                                  // a dump truck hauling to the heap
+      const u = (Math.sin(clock * .3 + k * 2) + 1) / 2, tx = -.1 + u * .5, tz = .75 - u * .25;
+      part(D, 'box', B, tx, .02, tz, .14, .08, .2, '#e0a526'); part(D, 'box', B, tx, .1, tz - .03, .13, .05, .12, '#3a3a3a');
+      for (const [wx2, wz2] of [[-.075, .06], [.075, .06], [-.075, -.06], [.075, -.06]]) part(D, 'cyl', B, tx + wx2, .01, tz + wz2, .05, .025, .05, '#1a1a1a', 0, 0, Math.PI / 2);
+    }
+  }
+  function updateMines() {
+    const D = world.dset;
+    for (const t of sim.tribes.values()) {
+      if (t.era < 1 || t.members.size < 6) continue;
+      const st = mineSite(t); if (!st) continue;
+      mine(D, base(wx(st.x), st.h, wz(st.y), st.head, st.mtn ? 1.15 : 1), t.era, t.color, t.id);
+    }
+  }
   function updateCaravans() {
     const D = world.dset; if (!world.tradeRoads) return;
     let n = 0;
@@ -3902,7 +3970,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); }
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -4237,6 +4305,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         if (lp) { const B = base(wx(lp.x), lp.h, wz(lp.y), lp.head); launchPad(S, B, lamps); sites.push({ kind: 'pad', t, ...lp }); }
       }
     }
+    for (const t of sim.tribes.values()) { const m = t.era >= 1 && t.members.size >= 6 && mineSite(t); if (m) for (const i of m.tiles) world.siteClear.add(i); }   // trees make way for the mine
     for (const i of oldClear) if (!world.siteClear.has(i)) showTrees(i, sim.terrain[i] === T.FOREST);
     for (const i of world.siteClear) if (!oldClear.has(i)) showTrees(i, false);
     endSet(S); G.count = gn; G.instanceMatrix.needsUpdate = true;
@@ -4450,6 +4519,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   // test hook: look at the nth station, airport or launch pad
   window.addEventListener('focusSite', e => { const { kind, i = 0, h = 0, d = 1 } = e.detail, st = (world.sites || []).filter(q => q.kind === kind)[i]; if (st) window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y, h: st.h + h, d } })); window.__site = st ? st.t.name : 'none'; window.__parts = JSON.stringify(world.bset.n) + ' ' + JSON.stringify(world.dset.n); });
   window.addEventListener('focusRain', e => { const c = world.cloudSet.filter(c => c.wet && c.x > 5 && c.x < W - 5 && c.y > 5 && c.y < H - 5)[e.detail.i || 0]; if (!c) return; c.ph = Math.PI / 2 - clock * .06; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, d: e.detail.d || 3 } })); window.__cloud = [Math.round(c.x), Math.round(c.y)]; });
+  window.addEventListener('focusMine', e => { const ts = [...sim.tribes.values()].filter(t => t.era >= 1 && t.members.size >= 6 && mineSite(t)), t = ts[(e.detail.i || 0) % ts.length]; if (!t) return; const st = mineSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x + Math.sin(st.head) * .6, y: st.y + Math.cos(st.head) * .6, h: st.h, d: e.detail.d || .45 } })); window.__mine = t.name + ' era ' + t.era; });
   window.addEventListener('focusHerd', e => { const h = world.herds[e.detail.i % world.herds.length]; const t = clock * .05 + h.x; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: h.x + 1.1 + Math.sin(t) * 1.6, y: h.y + .5 + Math.cos(t * .8) * 1.3, d: e.detail.d || .5 } })); window.__herd = h.kind; });
   window.addEventListener('focusTile', e => { const { x, y, h, d = 1 } = e.detail; const tgt = new THREE.Vector3(wx(x), h ?? Math.max(0, heightAt(x, y)), wz(y)); controls.target.copy(tgt); camera.position.copy(tgt).add(new THREE.Vector3(0, 4.5 * d, 6 * d)); focus = null; follow = 0; });
   function drawPop() {
