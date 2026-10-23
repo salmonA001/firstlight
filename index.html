@@ -2279,13 +2279,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       hl.push(...a[0], ...a[6], ...b[0], ...b[0], ...a[6], ...b[6]); }                           // deck
     { const a = sec(0); for (let j = 1; j < 6; j++) hl.push(...a[0], ...a[j], ...a[j + 1]); }   // transom
     const hull = new THREE.BufferGeometry(); hull.setAttribute('position', new THREE.Float32BufferAttribute(hl, 3)); hull.computeVertexNormals();
-    return { box, cyl, pyr, cone, dome, sphere, prism, hull };
+    // cooling tower: a waisted hyperboloid shell, open at the top
+    const tw = []; for (let k = 0; k <= 12; k++) { const y = k / 12; tw.push(new THREE.Vector2(.5 * (.6 + .4 * ((y - .72) / .72) ** 2), y)); }
+    const tower = new THREE.LatheGeometry(tw, 20);
+    return { box, cyl, pyr, cone, dome, sphere, prism, hull, tower };
   })();
   function partSet(cap, group) {
     const set = { meshes: {}, n: {} };
     for (const k in PART_GEOS) {
       const flat = k === 'pyr' || k === 'prism' || k === 'cone' || k === 'hull';
-      const m = instanced(PART_GEOS[k], new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .82, flatShading: flat, side: k === 'hull' ? THREE.DoubleSide : THREE.FrontSide }), k === 'box' ? cap : Math.ceil(cap / 2.5));
+      const m = instanced(PART_GEOS[k], new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .82, flatShading: flat, side: k === 'hull' || k === 'tower' ? THREE.DoubleSide : THREE.FrontSide }), k === 'box' ? cap : Math.ceil(cap / 2.5));
       m.setColorAt(0, tmpC.set('#fff')); set.meshes[k] = m; set.n[k] = 0; group.add(m);
     }
     return set;
@@ -3042,7 +3045,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     if (!world.ext) return null;
     world.mineAt = world.mineAt || new Map();
     const c = world.mineAt.get(t.id);
-    const ext = (world.ext.get(t.id) || 2) + (t.walls ? 1.6 : .9), key = sim.ownerVersion + ':' + Math.round(ext * 2);
+    const ext = (world.ext.get(t.id) || 2) + (t.walls ? 1.6 : .9), key = sim.ownerVersion + ':' + Math.round(ext * 2) + ':' + (world.sites || []).length;
     if (c && c.v === key) return c.site;
     // just outside town, clear of other towns and of airports, stations and launch pads
     const used = [...sim.tribes.values()].filter(o => o !== t).map(o => [o.camp.x + .5, o.camp.y + .5, (world.ext.get(o.id) || 2) + 1.5]).concat((world.sites || []).map(st => [st.x, st.y, (st.len || 2) / 2 + 1]));
@@ -3760,6 +3763,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         }
       }
     }
+    for (const st of world.sites || []) if (st.kind === 'power') st.vents.forEach(([vx, vy, h, steam], k) => {
+      for (let p = 0; p < (steam ? 7 : 5) && n < 900; p++) {
+        const ph = (clock * (steam ? .12 : .2) + p / (steam ? 7 : 5) + k * .29) % 1, sz = (steam ? .25 + ph * .7 : .06 + ph * .22) * (1 - Math.max(0, ph - .7) * 2.6);
+        setInst(Sm, n, wx(vx) + ph * (steam ? .9 : .7) + Math.sin(clock * .7 + p) * .06, h + ph * (steam ? 2.6 : 2.2), wz(vy) + ph * .3, sz, sz * (steam ? .8 : 1), sz);
+        Sm.setColorAt(n++, tmpC.set(steam ? '#f4f4f2' : '#4f5154'));
+      }
+    });
     for (let i = n; i < n + 60 && i < 900; i++) Sm.setColorAt(i, tmpC.set('#e6e4de'));
     Sm.count = n; Sm.instanceMatrix.needsUpdate = true; if (Sm.instanceColor) Sm.instanceColor.needsUpdate = true;
   }
@@ -4121,6 +4131,33 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (let z = -L / 2; z <= L / 2; z += .4) for (const x of [-.27, .27]) lamp(lamps, B, x, 0, z, Math.abs(z) > L / 2 - .2 ? 'red' : 'led', .18, .022);
     lamp(lamps, B, 1.4, 1.03, -.95, 'green', .3, .05);
   }
+
+  // power stations outside industrial towns: coal halls with tall chimneys, then cooling towers, then nuclear plants
+  // returns the smoke and steam vents in local coordinates [x, top, z, steam]
+  function powerPlant(S, B, era, nuclear) {
+    const vents = [], concrete = '#9d998f', brick = era >= 5 ? '#c9c4b8' : '#8a4a34';
+    part(S, 'box', B, 0, -.02, 0, 2.1, .05, 1.7, concrete);
+    part(S, 'box', B, -.45, 0, .4, .95, .38, .5, brick); part(S, 'prism', B, -.45, .38, .4, .97, .12, .52, '#4a4c50');
+    for (let k = 0; k < 5; k++) part(S, 'box', B, -.85 + k * .2, .14, .655, .1, .14, .01, '#2b3440');           // tall windows
+    if (!nuclear) part(S, 'box', B, -.45, 0, -.05, .5, .26, .35, brick);                                          // boiler house
+    if (!nuclear) {
+      const n = era === 4 ? 3 : 1, H = era === 4 ? 1.3 : 1.7;
+      for (let k = 0; k < n; k++) { const x = .15 + k * .22; part(S, 'cyl', B, x, 0, .45, .13, H, .13, era === 4 ? '#7a3b2a' : '#a8a8a4'); part(S, 'cyl', B, x, H - .1, .45, .14, .06, .14, era === 4 ? '#3a2a22' : '#c0392b'); vents.push([x, H, .45, 0]); }
+      part(S, 'cone', B, .6, 0, -.1, .55, .3, .45, '#1d1b1a'); part(S, 'box', B, .25, .1, -.05, .06, .04, .55, '#4a4a4a', 0, 1.2, -.35);   // coal heap and conveyor
+    } else {
+      part(S, 'cyl', B, .1, 0, .3, .55, .45, .55, '#d8d6d0'); part(S, 'dome', B, .1, .45, .3, .55, .5, .55, '#d8d6d0');                // containment dome
+      part(S, 'box', B, .1, .15, .02, .08, .12, .02, '#3a3a3a');
+    }
+    if (era >= 5) {
+      const big = nuclear ? 1.15 : .9;
+      for (const [x, z] of nuclear ? [[.5, -.4], [-.5, -.4]] : [[.55, -.45]]) { part(S, 'tower', B, x, 0, z, .75 * big, 1.05 * big, .75 * big, '#c8c4bc'); part(S, 'cyl', B, x, 1.03 * big, z, .37 * big, .03, .37 * big, '#a8a49c'); vents.push([x, 1.05 * big, z, 1]); }
+    }
+    // switchyard and a line of pylons heading toward town
+    for (let k = 0; k < 3; k++) part(S, 'box', B, -.85 + k * .16, 0, -.55, .09, .12, .09, '#6a6e72');
+    for (const z of [-.75, .75]) { part(S, 'box', B, -.95, 0, z * .9, .03, .45, .03, '#7a7e82'); part(S, 'box', B, -.95, .4, z * .9, .22, .02, .02, '#7a7e82'); }
+    part(S, 'box', B, -.4, .02, 0, 2, .01, 1.6, '#6a675f'); part(S, 'box', B, -.4, .02, 0, 1.98, .012, 1.58, concrete);         // fence line
+    return vents;
+  }
   function station(S, B, era, lamps) {
     // tracks run along z through the station
     for (const x of [-.18, .18]) { part(S, 'box', B, x, -.02, 0, .2, .03, 2.6, '#5a524a'); for (const r of [-.06, .06]) part(S, 'box', B, x + r, .01, 0, .015, .02, 2.6, '#8a8f95'); }
@@ -4303,6 +4340,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       if (t.era >= 6 && t.techs.has('flight')) {
         const lp = findSite(t, 2.4, 2.4, 2, 9, used);
         if (lp) { const B = base(wx(lp.x), lp.h, wz(lp.y), lp.head); launchPad(S, B, lamps); sites.push({ kind: 'pad', t, ...lp }); }
+      }
+      if (t.era >= 4 && t.members.size >= 10) {
+        const pw = findSite(t, 2.2, 1.8, 1.6, 8, used);
+        if (pw) { const nuclear = t.era >= 6 && t.id % 2 === 0, c = Math.cos(pw.head), s = Math.sin(pw.head);
+          const vents = powerPlant(S, base(wx(pw.x), pw.h, wz(pw.y), pw.head), t.era, nuclear).map(([x, top, z, steam]) => [pw.x + x * c + z * s, pw.y - x * s + z * c, pw.h + top, steam]);
+          sites.push({ kind: 'power', t, ...pw, vents }); }
       }
     }
     for (const t of sim.tribes.values()) { const m = t.era >= 1 && t.members.size >= 6 && mineSite(t); if (m) for (const i of m.tiles) world.siteClear.add(i); }   // trees make way for the mine
@@ -4520,6 +4563,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   window.addEventListener('focusSite', e => { const { kind, i = 0, h = 0, d = 1 } = e.detail, st = (world.sites || []).filter(q => q.kind === kind)[i]; if (st) window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y, h: st.h + h, d } })); window.__site = st ? st.t.name : 'none'; window.__parts = JSON.stringify(world.bset.n) + ' ' + JSON.stringify(world.dset.n); });
   window.addEventListener('focusRain', e => { const c = world.cloudSet.filter(c => c.wet && c.x > 5 && c.x < W - 5 && c.y > 5 && c.y < H - 5)[e.detail.i || 0]; if (!c) return; c.ph = Math.PI / 2 - clock * .06; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, d: e.detail.d || 3 } })); window.__cloud = [Math.round(c.x), Math.round(c.y)]; });
   window.addEventListener('focusMine', e => { const ts = [...sim.tribes.values()].filter(t => t.era >= 1 && t.members.size >= 6 && mineSite(t)), t = ts[(e.detail.i || 0) % ts.length]; if (!t) return; const st = mineSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x + Math.sin(st.head) * .6, y: st.y + Math.cos(st.head) * .6, h: st.h, d: e.detail.d || .45 } })); window.__mine = t.name + ' era ' + t.era; });
+  window.addEventListener('focusPower', e => { const ps = (world.sites || []).filter(st => st.kind === 'power'), st = ps[(e.detail.i || 0) % ps.length]; if (!st) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y, h: st.h, d: e.detail.d || .6 } })); window.__power = st.t.name + ' era ' + st.t.era; });
   window.addEventListener('focusHerd', e => { const h = world.herds[e.detail.i % world.herds.length]; const t = clock * .05 + h.x; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: h.x + 1.1 + Math.sin(t) * 1.6, y: h.y + .5 + Math.cos(t * .8) * 1.3, d: e.detail.d || .5 } })); window.__herd = h.kind; });
   window.addEventListener('focusTile', e => { const { x, y, h, d = 1 } = e.detail; const tgt = new THREE.Vector3(wx(x), h ?? Math.max(0, heightAt(x, y)), wz(y)); controls.target.copy(tgt); camera.position.copy(tgt).add(new THREE.Vector3(0, 4.5 * d, 6 * d)); focus = null; follow = 0; });
   function drawPop() {
