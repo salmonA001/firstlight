@@ -3098,6 +3098,73 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       for (const [wx2, wz2] of [[-.075, .06], [.075, .06], [-.075, -.06], [.075, -.06]]) part(D, 'cyl', B, tx + wx2, .01, tz + wz2, .05, .025, .05, '#1a1a1a', 0, 0, Math.PI / 2);
     }
   }
+
+  // shipyards on the shore near each harbor: a slipway down into the water where a new ship is framed,
+  // planked or plated and launched, over and over, with timber sheds early and a rolling gantry crane later
+  function yardSite(t) {
+    if (!world.ext || t.port == null) return null;
+    world.yardAt = world.yardAt || new Map();
+    const ext = (world.ext.get(t.id) || 2) + (t.walls ? 1.3 : .6), key = sim.ownerVersion + ':' + t.port + ':' + Math.round(ext * 2) + ':' + (world.sites || []).length, c = world.yardAt.get(t.id);
+    if (c && c.v === key) return c.site;
+    const px = t.port % W, py = (t.port / W) | 0, mn = mineSite(t);
+    const used = [...sim.tribes.values()].filter(o => o !== t).map(o => [o.camp.x + .5, o.camp.y + .5, (world.ext.get(o.id) || 2) + 1]).concat((world.sites || []).map(st => [st.x, st.y, (st.len || 2) / 2 + .8]));
+    if (mn) used.push([mn.x, mn.y, 1.6]);
+    let best = null, bd = 1e9;
+    for (let dy = -6; dy <= 6; dy++) for (let dx = -6; dx <= 6; dx++) {
+      const x = px + dx, y = py + dy; if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1 || dx * dx + dy * dy < 7) continue;   // clear of the harbor itself
+      const i = y * W + x, tr = sim.terrain[i]; if (tr !== T.GRASS && tr !== T.SAND && tr !== T.FARM && tr !== T.FOREST) continue;
+      if ((sim.owner[i] && sim.owner[i] !== t.id) || (x + .5 - t.camp.x - .5) ** 2 + (y + .5 - t.camp.y - .5) ** 2 < ext * ext) continue;
+      if (used.some(([ux, uy, ur]) => (x + .5 - ux) ** 2 + (y + .5 - uy) ** 2 < ur * ur)) continue;
+      for (const [ox, oy] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
+        // the slipway needs two tiles of open water in front of it
+        if (!isWater(x + ox + .5, y + oy + .5) || !isWater(x + 2 * ox + .5, y + 2 * oy + .5)) continue;
+        const score = dx * dx + dy * dy + (tr === T.FOREST ? 3 : 0); if (score < bd) { bd = score; best = { x: x + .5 + ox * .2, y: y + .5 + oy * .2, head: Math.atan2(ox, oy), tiles: [-1, 0, 1].flatMap(a => [-1, 0, 1].map(b => i + a * W + b)) }; }
+      }
+    }
+    if (best) best.h = Math.max(.02, heightAt(best.x - Math.sin(best.head) * .4, best.y - Math.cos(best.head) * .4));
+    world.yardAt.set(t.id, { v: key, site: best }); return best;
+  }
+  function shipyard(D, B, era, col, k) {
+    const steel = era >= 5, wood = '#6b4a2f', grey = '#8a8f95';
+    // slipway sloping down into the water, sheds and stock on the shore
+    part(D, 'box', B, 0, -.12, .25, .62, .1, 1.7, steel ? '#8d8a82' : '#7a6248', -.08, 0, 0);
+    part(D, 'box', B, .62, -.02, -.45, .45, .3, .5, steel ? '#a9adb2' : '#7a5a3a'); part(D, 'prism', B, .62, .28, -.45, .47, .14, .52, steel ? '#5a6068' : '#4a3626');
+    part(D, 'box', B, -.62, -.02, -.5, .4, .22, .4, steel ? '#b8b2a6' : '#8a6a42'); part(D, 'prism', B, -.62, .2, -.5, .42, .1, .42, steel ? '#5a6068' : '#4a3626');
+    for (let s = 0; s < 4; s++) part(D, 'box', B, -.6, -.02 + s * .035, .05, .3, .03, .36, steel ? '#6e7276' : '#9a7a52', 0, s * .08, 0);   // timber or steel plate stack
+    // a ship takes shape on the slip: keel, then frames, then the hull closes up, then it slides down into the sea
+    const cyc = ((clock * .025 + k * .31) % 1), z0 = .3, len = steel ? 1.3 : 1.05;
+    const slide = cyc > .9 ? (cyc - .9) / .1 : 0, sz = z0 + slide * slide * 1.6, sy = .02 - slide * .25;
+    if (cyc < .9 || slide < .95) {
+      part(D, 'box', B, 0, sy, sz, .04, .03, len, steel ? '#3a3e42' : wood, -.08, 0, 0);                                 // keel
+      const frames = Math.floor(Math.min(1, cyc / .45) * 9);
+      for (let f = 0; f < frames; f++) { const fz = sz - len / 2 + .08 + f * (len - .16) / 8, w = .32 * Math.sin(Math.PI * (.15 + .7 * f / 8));
+        for (const x of [-1, 1]) part(D, 'box', B, x * w * .4, sy + .02, fz, .018, .22, .018, steel ? '#5a5f64' : '#8a6a42', 0, 0, x * -.45); }
+      if (cyc > .45) { const plate = Math.min(1, (cyc - .45) / .35); part(D, 'hull', B, 0, sy, sz, .36, .2 * plate + .02, len, steel ? (cyc > .8 ? '#7d858c' : '#9a6a4a') : '#7a5634', -.08, 0, 0); }
+      if (cyc > .8 && steel) part(D, 'box', B, 0, sy + .22, sz - .2, .2, .16, .3, '#d8d8d4');
+    }
+    // scaffolding and cranes
+    if (!steel) {
+      for (const x of [-.32, .32]) for (const z of [-.25, .2, .65]) part(D, 'cyl', B, x, -.02, z, .025, .45, .025, wood);
+      for (const x of [-.32, .32]) part(D, 'box', B, x, .42, .2, .02, .02, 1, wood);
+      const sw = Math.sin(clock * .4 + k) * .8; part(D, 'cyl', B, .45, -.02, .9, .04, .8, .04, wood); part(D, 'box', B, .45, .78, .9, .03, .03, .7, wood, 0, sw + 3.14, 0);
+    } else {
+      // gantry crane on rails straddling the slip, its trolley running back and forth
+      const gz = .25 + Math.sin(clock * .2 + k) * .45, tx = Math.sin(clock * .5 + k * 2) * .3;
+      for (const x of [-.5, .5]) { part(D, 'box', B, x, -.02, .25, .03, .02, 1.7, '#3a3a3a'); part(D, 'box', B, x, -.02, gz, .06, 1, .06, '#e0a526'); }
+      part(D, 'box', B, 0, .98, gz, 1.12, .07, .08, '#e0a526'); part(D, 'box', B, tx, .9, gz, .1, .08, .12, '#3a3a3a');
+      part(D, 'box', B, tx, .45, gz, .006, .45, .006, '#1a1a1a'); part(D, 'box', B, tx, .42, gz, .05, .04, .05, '#c0392b');
+      part(D, 'box', B, .5, .7, gz, .1, .12, .12, '#3a3a3a');
+    }
+    part(D, 'box', B, .62, .45 + (steel ? .02 : 0), -.45, .02, .1, .14, col);   // flag on the shed
+  }
+  function updateYards() {
+    const D = world.dset;
+    for (const t of sim.tribes.values()) {
+      if (t.era < 2 || t.port == null || t.members.size < 8) continue;
+      const st = yardSite(t); if (!st) continue;
+      shipyard(D, base(wx(st.x), st.h, wz(st.y), st.head), t.era, t.color, t.id);
+    }
+  }
   function updateMines() {
     const D = world.dset;
     for (const t of sim.tribes.values()) {
@@ -3980,7 +4047,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines();
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -4349,6 +4416,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       }
     }
     for (const t of sim.tribes.values()) { const m = t.era >= 1 && t.members.size >= 6 && mineSite(t); if (m) for (const i of m.tiles) world.siteClear.add(i); }   // trees make way for the mine
+    for (const t of sim.tribes.values()) { const y = t.era >= 2 && t.members.size >= 8 && yardSite(t); if (y) for (const i of y.tiles) world.siteClear.add(i); }               // and for the shipyard
     for (const i of oldClear) if (!world.siteClear.has(i)) showTrees(i, sim.terrain[i] === T.FOREST);
     for (const i of world.siteClear) if (!oldClear.has(i)) showTrees(i, false);
     endSet(S); G.count = gn; G.instanceMatrix.needsUpdate = true;
@@ -4564,6 +4632,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   window.addEventListener('focusRain', e => { const c = world.cloudSet.filter(c => c.wet && c.x > 5 && c.x < W - 5 && c.y > 5 && c.y < H - 5)[e.detail.i || 0]; if (!c) return; c.ph = Math.PI / 2 - clock * .06; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, d: e.detail.d || 3 } })); window.__cloud = [Math.round(c.x), Math.round(c.y)]; });
   window.addEventListener('focusMine', e => { const ts = [...sim.tribes.values()].filter(t => t.era >= 1 && t.members.size >= 6 && mineSite(t)), t = ts[(e.detail.i || 0) % ts.length]; if (!t) return; const st = mineSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x + Math.sin(st.head) * .6, y: st.y + Math.cos(st.head) * .6, h: st.h, d: e.detail.d || .45 } })); window.__mine = t.name + ' era ' + t.era; });
   window.addEventListener('focusPower', e => { const ps = (world.sites || []).filter(st => st.kind === 'power'), st = ps[(e.detail.i || 0) % ps.length]; if (!st) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y, h: st.h, d: e.detail.d || .6 } })); window.__power = st.t.name + ' era ' + st.t.era; });
+  window.addEventListener('focusYard', e => { const ts = [...sim.tribes.values()].filter(t => t.era >= 2 && t.members.size >= 8 && yardSite(t)), t = ts[(e.detail.i || 0) % ts.length]; if (!t) return; const st = yardSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x + Math.sin(st.head) * .4, y: st.y + Math.cos(st.head) * .4, h: st.h, d: e.detail.d || .45 } })); window.__yard = t.name + ' era ' + t.era; });
   window.addEventListener('focusHerd', e => { const h = world.herds[e.detail.i % world.herds.length]; const t = clock * .05 + h.x; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: h.x + 1.1 + Math.sin(t) * 1.6, y: h.y + .5 + Math.cos(t * .8) * 1.3, d: e.detail.d || .5 } })); window.__herd = h.kind; });
   window.addEventListener('focusTile', e => { const { x, y, h, d = 1 } = e.detail; const tgt = new THREE.Vector3(wx(x), h ?? Math.max(0, heightAt(x, y)), wz(y)); controls.target.copy(tgt); camera.position.copy(tgt).add(new THREE.Vector3(0, 4.5 * d, 6 * d)); focus = null; follow = 0; });
   function drawPop() {

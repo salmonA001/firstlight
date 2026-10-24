@@ -104,6 +104,9 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 - **Natural models:** leafy trees have lumpy multi-lobed crowns that darken underneath, pines grow in layered tiers, palms have drooping fronds and coconuts, savanna acacias spread a wide layered canopy, and hill rocks are craggy boulders. Animals have rounded bodies, jointed legs, heads with ears and eyes, tails and antlers, and every ship and boat has a curved hull with a pointed bow.
 
   ![A Stone Age camp among palms, acacias and leafy trees](docs/trees.png)
+- **Shipyards:** harbor towns build a shipyard on the shore beside the harbor. A new ship takes shape on the slipway, first the keel, then the frames, then the planks or steel plates, and then it slides down into the sea before the next one is started. Early yards have timber scaffolding and a swinging wooden crane, and modern ones have a yellow gantry crane rolling along rails over the slip.
+
+  ![A wooden ship being framed on a slipway with scaffolding and a crane](docs/shipyard.png)
 - **Power stations:** industrial towns build a power station out of town. In the 1800s it is a brick hall with three tall chimneys and a coal heap, by the 1900s a cooling tower breathes clouds of steam beside a single stack, and in the 2000s some nations run nuclear plants with a containment dome and twin cooling towers. Every plant has a switchyard and pylons.
 
   ![A power station with a chimney and a cooling tower giving off steam](docs/power.png)
