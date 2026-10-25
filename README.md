@@ -104,6 +104,9 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 - **Natural models:** leafy trees have lumpy multi-lobed crowns that darken underneath, pines grow in layered tiers, palms have drooping fronds and coconuts, savanna acacias spread a wide layered canopy, and hill rocks are craggy boulders. Animals have rounded bodies, jointed legs, heads with ears and eyes, tails and antlers, and every ship and boat has a curved hull with a pointed bow.
 
   ![A Stone Age camp among palms, acacias and leafy trees](docs/trees.png)
+- **Battlefields:** fights out in the countryside leave their mark. The ground is trampled and scorched, gunpowder battles leave craters, and wreckage of the era lies around: broken spears and shields, toppled cannons and overturned carts, then burnt-out tanks and wire. The scars fade over a few years, but a great battle leaves a memorial stone with rows of graves.
+
+  ![Scorched ground and a burnt-out tank after a battle](docs/battlefield.png)
 - **Shipyards:** harbor towns build a shipyard on the shore beside the harbor. A new ship takes shape on the slipway, first the keel, then the frames, then the planks or steel plates, and then it slides down into the sea before the next one is started. Early yards have timber scaffolding and a swinging wooden crane, and modern ones have a yellow gantry crane rolling along rails over the slip.
 
   ![A wooden ship being framed on a slipway with scaffolding and a crane](docs/shipyard.png)

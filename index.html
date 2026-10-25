@@ -3165,6 +3165,49 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       shipyard(D, base(wx(st.x), st.h, wz(st.y), st.head), t.era, t.color, t.id);
     }
   }
+
+  // battlefields remember: scorched ground, craters and wreckage of the era linger after a fight and fade
+  // over the years, and a great battle leaves a memorial behind
+  function noteScar(e) {
+    world.seenFx = world.seenFx || new WeakSet(); if (world.seenFx.has(e)) return; world.seenFx.add(e);
+    const x = e.x + .5, y = e.y + .5, i = Math.floor(y) * W + Math.floor(x);
+    if (!sim.inb(Math.floor(x), Math.floor(y)) || sim.terrain[i] === T.WATER || sim.terrain[i] === T.MOUNTAIN) return;
+    let near = null, nd = 1e9;
+    for (const t of sim.tribes.values()) { const d = Math.hypot(t.camp.x + .5 - x, t.camp.y + .5 - y); if (d < (world.ext && world.ext.get(t.id) || 2) + .6) return; if (d < nd) { nd = d; near = t; } }
+    if ((world.sites || []).some(st => Math.hypot(st.x - x, st.y - y) < (st.len || 2) / 2 + .8)) return;   // not across runways and launch pads
+    const sc = world.scars || (world.scars = []), hit = sc.find(c => Math.hypot(c.x - x, c.y - y) < 1.4);
+    if (hit) { hit.n += e.type === 'blast' ? 3 : 1; hit.last = sim.tick; hit.era = Math.max(hit.era, near ? near.era : 0); return; }
+    if (sc.length >= 40) sc.splice(sc.reduce((a, c, k) => c.last < sc[a].last && c.n < 12 ? k : a, 0), 1);
+    sc.push({ x, y, n: e.type === 'blast' ? 3 : 1, last: sim.tick, era: near ? near.era : 0, seed: (x * 7.3 + y * 3.1) % 10 });
+  }
+  function updateScars() {
+    const D = world.dset, sc = world.scars; if (!sc) return;
+    for (let k = sc.length - 1; k >= 0; k--) {
+      const c = sc[k], age = (sim.tick - c.last) / YEAR, big = c.n >= 14;
+      if (age > (big ? 30 : 6)) { sc.splice(k, 1); continue; }
+      if (c.n < 3) continue;                                                   // a scuffle leaves nothing behind
+      const fade = Math.max(0, 1 - age / 6), h = heightAt(c.x, c.y), B = base(wx(c.x), h, wz(c.y), c.seed), sz = Math.min(1.6, .5 + c.n * .05);
+      if (fade > 0) {
+        for (let q = 0; q < 3; q++) { const a = c.seed + q * 2.1, w = (sz * (1.5 - q * .35)) * fade + .15;                       // trampled, scorched ground in uneven patches
+          part(D, 'cyl', B, Math.cos(a) * .15 * q, .004 + q * .002, Math.sin(a) * .15 * q, w, .01, w * (.6 + q * .15), ['#5a4a38', '#463a2e', c.era >= 3 ? '#2a2420' : '#3a3028'][q], 0, a, 0); }
+        const craters = c.era >= 3 ? Math.min(5, Math.floor(c.n / 4)) : 0;
+        for (let q = 0; q < craters; q++) { const a = c.seed + q * 2.3, r = .2 + (q % 3) * .22, cx = Math.cos(a) * r, cz = Math.sin(a) * r, cs = (.18 + (q % 2) * .1) * fade + .06;
+          part(D, 'cyl', B, cx, .01, cz, cs, .03, cs, '#5a4a3a'); part(D, 'cyl', B, cx, .025, cz, cs * .62, .012, cs * .62, '#1f1b18'); }
+        const bits = Math.min(4, Math.floor(c.n / 3));
+        for (let q = 0; q < bits; q++) { const a = c.seed * 2 + q * 1.7, r = .15 + q * .17, bx = Math.cos(a) * r, bz = Math.sin(a) * r;
+          if (c.era <= 2) { part(D, 'box', B, bx, .01, bz, .01, .01, .3, '#6b5238', .1, a, 0); if (q % 2) part(D, 'cyl', B, bx + .06, .01, bz, .1, .012, .1, '#7a5a3a', 1.4, a, 0); }      // broken spears and shields
+          else if (c.era <= 4) { if (q === 0) { part(D, 'cyl', B, bx, .01, bz, .05, .5, .05, '#2a2a2a', Math.PI / 2 - .1, a, 0); part(D, 'cyl', B, bx, .05, bz + .05, .14, .02, .14, '#5a4030', 0, a, Math.PI / 2 - .3); }  // toppled cannon
+            else part(D, 'box', B, bx, .01, bz, .16, .07, .1, '#5a4430', 0, a, .5); }                                                                                     // overturned cart
+          else if (q === 0) { const T2 = base(wx(c.x) + bx, h, wz(c.y) + bz, a); part(D, 'box', T2, 0, 0, 0, .2, .07, .3, '#2b2a28', 0, 0, .18); part(D, 'box', T2, .02, .07, -.02, .13, .05, .14, '#232220', 0, .6, .18); part(D, 'box', T2, .02, .1, .08, .015, .015, .2, '#1e1d1c', -.4, .6, 0); }  // burnt-out tank
+          else for (let w = 0; w < 3; w++) part(D, 'box', B, bx + w * .1, .01, bz, .008, .05, .008, '#3a3a3a');                                                            // wire posts
+        }
+      }
+      if (big && age > .4) {                                                     // the memorial: a stone with rows of graves
+        part(D, 'box', B, 0, 0, 0, .26, .04, .26, '#9a958b'); part(D, c.era >= 4 ? 'pyr' : 'box', B, 0, .04, 0, .1, c.era >= 4 ? .42 : .22, .1, '#c9c3b6');
+        for (let r = 0; r < 2; r++) for (let g = 0; g < 4; g++) { const gx = -.24 + g * .16, gz = .3 + r * .14; part(D, 'box', B, gx, 0, gz, .018, .08, .018, '#e8e4dc'); part(D, 'box', B, gx, .05, gz, .07, .015, .018, '#e8e4dc'); }
+      }
+    }
+  }
   function updateMines() {
     const D = world.dset;
     for (const t of sim.tribes.values()) {
@@ -4047,7 +4090,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards();
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -4425,6 +4468,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   function updateEffects() {
     let n = 0, arc = 0; world.shake = 0;
     for (const e of sim.effects) {
+      if ((e.type === 'battle' || e.type === 'blast') && !e.sea && !e.air) noteScar(e);
       if (e.type === 'quake') { world.shake = Math.max(world.shake, e.ttl / 60); continue; }
       if ((e.type === 'battle' || e.type === 'blast') && n < 400) {
         const y = e.sea ? .12 : e.air ? 5 : heightAt(e.x + .5, e.y + .5) + (e.type === 'blast' ? .3 : .6);
@@ -4633,6 +4677,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   window.addEventListener('focusMine', e => { const ts = [...sim.tribes.values()].filter(t => t.era >= 1 && t.members.size >= 6 && mineSite(t)), t = ts[(e.detail.i || 0) % ts.length]; if (!t) return; const st = mineSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x + Math.sin(st.head) * .6, y: st.y + Math.cos(st.head) * .6, h: st.h, d: e.detail.d || .45 } })); window.__mine = t.name + ' era ' + t.era; });
   window.addEventListener('focusPower', e => { const ps = (world.sites || []).filter(st => st.kind === 'power'), st = ps[(e.detail.i || 0) % ps.length]; if (!st) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y, h: st.h, d: e.detail.d || .6 } })); window.__power = st.t.name + ' era ' + st.t.era; });
   window.addEventListener('focusYard', e => { const ts = [...sim.tribes.values()].filter(t => t.era >= 2 && t.members.size >= 8 && yardSite(t)), t = ts[(e.detail.i || 0) % ts.length]; if (!t) return; const st = yardSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x + Math.sin(st.head) * .4, y: st.y + Math.cos(st.head) * .4, h: st.h, d: e.detail.d || .45 } })); window.__yard = t.name + ' era ' + t.era; });
+  window.addEventListener('focusScar', e => { const sc = (world.scars || []).filter(c => c.n >= 3).sort((a, b) => b.last - a.last), c = sc[(e.detail.i || 0) % Math.max(1, sc.length)]; window.__scar = sc.length + ' ' + (c ? c.n + ' era ' + c.era : ''); if (c) window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, d: e.detail.d || .35 } })); });
   window.addEventListener('focusHerd', e => { const h = world.herds[e.detail.i % world.herds.length]; const t = clock * .05 + h.x; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: h.x + 1.1 + Math.sin(t) * 1.6, y: h.y + .5 + Math.cos(t * .8) * 1.3, d: e.detail.d || .5 } })); window.__herd = h.kind; });
   window.addEventListener('focusTile', e => { const { x, y, h, d = 1 } = e.detail; const tgt = new THREE.Vector3(wx(x), h ?? Math.max(0, heightAt(x, y)), wz(y)); controls.target.copy(tgt); camera.position.copy(tgt).add(new THREE.Vector3(0, 4.5 * d, 6 * d)); focus = null; follow = 0; });
   function drawPop() {
