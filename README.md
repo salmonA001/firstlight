@@ -104,6 +104,9 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 - **Natural models:** leafy trees have lumpy multi-lobed crowns that darken underneath, pines grow in layered tiers, palms have drooping fronds and coconuts, savanna acacias spread a wide layered canopy, and hill rocks are craggy boulders. Animals have rounded bodies, jointed legs, heads with ears and eyes, tails and antlers, and every ship and boat has a curved hull with a pointed bow.
 
   ![A Stone Age camp among palms, acacias and leafy trees](docs/trees.png)
+- **Wartime forts:** a nation at war fortifies the side of town facing its nearest enemy, with its colors flying. It starts as a timber watchtower behind a palisade, then becomes a stone tower with battlements, a star fort with cannon, an earthwork redoubt with a field gun, a zigzag trench line with a concrete pillbox and barbed wire, and finally an air defense post with a turning radar and missile launcher.
+
+  ![A stone watchtower flying its nation's flag outside a town at war](docs/fort.png)
 - **Battlefields:** fights out in the countryside leave their mark. The ground is trampled and scorched, gunpowder battles leave craters, and wreckage of the era lies around: broken spears and shields, toppled cannons and overturned carts, then burnt-out tanks and wire. The scars fade over a few years, but a great battle leaves a memorial stone with rows of graves.
 
   ![Scorched ground and a burnt-out tank after a battle](docs/battlefield.png)
