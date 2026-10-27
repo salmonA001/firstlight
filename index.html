@@ -2288,7 +2288,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     const set = { meshes: {}, n: {} };
     for (const k in PART_GEOS) {
       const flat = k === 'pyr' || k === 'prism' || k === 'cone' || k === 'hull';
-      const m = instanced(PART_GEOS[k], new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .82, flatShading: flat, side: k === 'hull' || k === 'tower' ? THREE.DoubleSide : THREE.FrontSide }), k === 'box' ? cap : Math.ceil(cap / 2.5));
+      const m = instanced(PART_GEOS[k], new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .82, flatShading: flat, side: k === 'hull' || k === 'tower' || k === 'dome' ? THREE.DoubleSide : THREE.FrontSide }), k === 'box' ? cap : Math.ceil(cap / 2.5));
       m.setColorAt(0, tmpC.set('#fff')); set.meshes[k] = m; set.n[k] = 0; group.add(m);
     }
     return set;
@@ -3273,6 +3273,71 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       frontier(D, base(wx(st.x), st.h, wz(st.y), st.head), Math.min(6, t.era), t.color, t.id);
     }
   }
+
+  // astronomers climb the highest ground near town: a sky-watching platform, then domed observatories whose
+  // shutters open and turn at night, then a great radio telescope dish that sweeps the sky
+  function obsSite(t) {
+    if (!world.ext || !t.techs.has('astronomy')) return null;
+    world.obsAt = world.obsAt || new Map();
+    const ext = (world.ext.get(t.id) || 2) + (t.walls ? 1.6 : 1), key = sim.ownerVersion + ':' + Math.round(ext * 2) + ':' + (world.sites || []).length, c = world.obsAt.get(t.id);
+    if (c && c.v === key) return c.site;
+    const avoid = (world.sites || []).map(st => [st.x, st.y, (st.len || 2) / 2 + 1.2]);
+    for (const f of [mineSite(t), yardSite(t)]) if (f) avoid.push([f.x, f.y, 1.6]);
+    for (const o of sim.tribes.values()) if (o !== t) avoid.push([o.camp.x + .5, o.camp.y + .5, (world.ext.get(o.id) || 2) + 1]);
+    let best = null, bh = -1e9;
+    for (let dy = -9; dy <= 9; dy++) for (let dx = -9; dx <= 9; dx++) {
+      const x = t.camp.x + dx, y = t.camp.y + dy, d = Math.hypot(dx, dy); if (d < ext || d > ext + 6 || !sim.passable(x, y)) continue;
+      const i = y * W + x; if (sim.owner[i] && sim.owner[i] !== t.id) continue;
+      if (avoid.some(([ux, uy, ur]) => Math.hypot(x + .5 - ux, y + .5 - uy) < ur)) continue;
+      const h = sim.elev[i] - d * .12; if (h > bh) { bh = h; best = { x: x + .5, y: y + .5, head: Math.atan2(-dx, -dy), tiles: [-1, 0, 1].flatMap(a => [-1, 0, 1].map(b => i + a * W + b)) }; }
+    }
+    if (best) best.h = heightAt(best.x, best.y);
+    world.obsAt.set(t.id, { v: key, site: best }); return best;
+  }
+  function observatory(D, B, era, col, k) {
+    const night = world.night || 0, open = night > .3, white = '#ecebe6';
+    if (era <= 2) {
+      // a raised stone sky platform with steps, a sighting gnomon and an armillary ring
+      part(D, 'box', B, 0, -.05, 0, .7, .2, .7, '#a39a88'); part(D, 'box', B, 0, .15, 0, .5, .1, .5, '#b3aa96');
+      for (let q = 0; q < 3; q++) part(D, 'box', B, 0, -.05 + q * .06, .4 + q * .035, .26, .06, .07, '#9a9180');
+      part(D, 'box', B, -.12, .25, -.08, .03, .35, .03, '#7a705e');
+      part(D, 'cyl', B, .12, .25, .05, .2, .012, .2, '#b08a3a', .5, clock * .2 + k, 0); part(D, 'cyl', B, .12, .25, .05, .2, .012, .2, '#b08a3a', 1.6, .3, 0);
+      return;
+    }
+    const dome = (x, z, r, hgt) => {
+      part(D, 'cyl', B, x, -.03, z, r, hgt, r, white); part(D, 'cyl', B, x, hgt - .04, z, r * 1.04, .04, r * 1.04, '#c9c7c0');
+      const rot = open ? clock * .08 + k + x : k;                                         // the dome turns to follow the stars at night
+      part(D, 'dome', B, x, hgt, z, r, r, r, '#d6d8dc', 0, rot, 0);
+      const sx = Math.sin(rot), sz = Math.cos(rot);
+      if (open) {                                                                         // shutter open: a dark slit and the telescope peering out
+        part(D, 'box', B, x + sx * r * .2, hgt + r * .02, z + sz * r * .2, r * .14, r * .48, r * .42, '#1a1c22', -.5, rot, 0);
+        part(D, 'cyl', B, x + sx * r * .18, hgt + r * .12, z + sz * r * .18, r * .1, r * .55, r * .1, '#3a3d44', .9 * sz, 0, -.9 * sx);
+      } else part(D, 'box', B, x, hgt + r * .02, z, r * .1, r * .5, r * 1.02, '#b8bac0', -.15, rot, 0);
+    };
+    if (era <= 4) { dome(0, 0, .45, .38); part(D, 'box', B, .32, -.03, .2, .3, .22, .26, era >= 4 ? '#c9b9a0' : '#a89a84'); part(D, 'prism', B, .32, .19, .2, .32, .1, .28, '#6b4a3a'); }
+    else if (era === 5) { dome(-.22, -.1, .55, .5); dome(.38, .28, .32, .3); part(D, 'box', B, .3, -.03, -.35, .36, .2, .26, '#d8d6d0'); }
+    else {
+      // radio telescope: a big dish on a turning mount, slowly sweeping the sky, beside a small domed lab
+      const az = clock * .05 + k, el = .95 + Math.sin(clock * .03 + k) * .3, tilt = Math.PI / 2 - el;
+      part(D, 'box', B, 0, -.03, 0, .5, .06, .5, '#a8a8a2');
+      const M = B.clone().multiply(tmpM.makeRotationY(az));
+      for (const x of [-.12, .12]) part(D, 'box', M, x, .02, 0, .05, .6, .08, '#e8e8e4');
+      M.multiply(tmpM.makeTranslation(0, .62, 0));
+      part(D, 'dome', M, 0, 0, 0, 1, .3, 1, '#f2f2ef', Math.PI + tilt, 0, 0);                     // the dish faces up the sky at its elevation
+      part(D, 'cyl', M, 0, 0, 0, .025, .42, .025, '#c8c8c4', tilt, 0, 0);                        // feed horn on its mast
+      for (const x of [-.3, .3]) part(D, 'box', M, x, 0, 0, .01, .45, .01, '#c8c8c4', tilt, 0, -x * .9);
+      dome(.62, .5, .26, .24);
+    }
+    part(D, 'cyl', B, -.4, -.02, .4, .015, .55, .015, '#3a3a3a'); part(D, 'box', B, -.31, .48, .4, .18, .1, .01, col, 0, Math.sin(clock * 3 + k) * .25, 0);
+  }
+  function updateObs() {
+    const D = world.dset;
+    for (const t of sim.tribes.values()) {
+      if (t.members.size < 8) continue;
+      const st = obsSite(t); if (!st) continue;
+      observatory(D, base(wx(st.x), st.h, wz(st.y), st.head), Math.min(6, t.era), t.color, t.id);
+    }
+  }
   function updateMines() {
     const D = world.dset;
     for (const t of sim.tribes.values()) {
@@ -4155,7 +4220,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts();
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -4525,7 +4590,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     }
     for (const t of sim.tribes.values()) { const m = t.era >= 1 && t.members.size >= 6 && mineSite(t); if (m) for (const i of m.tiles) world.siteClear.add(i); }   // trees make way for the mine
     for (const t of sim.tribes.values()) { const y = t.era >= 2 && t.members.size >= 8 && yardSite(t); if (y) for (const i of y.tiles) world.siteClear.add(i); }
-    for (const t of sim.tribes.values()) { const f = t.wars.size && t.members.size >= 5 && frontSite(t); if (f) for (const i of f.tiles) world.siteClear.add(i); }   // and for wartime forts               // and for the shipyard
+    for (const t of sim.tribes.values()) { const f = t.wars.size && t.members.size >= 5 && frontSite(t); if (f) for (const i of f.tiles) world.siteClear.add(i); }   // and for wartime forts
+    for (const t of sim.tribes.values()) { const o = t.members.size >= 8 && obsSite(t); if (o) for (const i of o.tiles) world.siteClear.add(i); }                   // and for observatories               // and for the shipyard
     for (const i of oldClear) if (!world.siteClear.has(i)) showTrees(i, sim.terrain[i] === T.FOREST);
     for (const i of world.siteClear) if (!oldClear.has(i)) showTrees(i, false);
     endSet(S); G.count = gn; G.instanceMatrix.needsUpdate = true;
@@ -4745,6 +4811,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   window.addEventListener('focusYard', e => { const ts = [...sim.tribes.values()].filter(t => t.era >= 2 && t.members.size >= 8 && yardSite(t)), t = ts[(e.detail.i || 0) % ts.length]; if (!t) return; const st = yardSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x + Math.sin(st.head) * .4, y: st.y + Math.cos(st.head) * .4, h: st.h, d: e.detail.d || .45 } })); window.__yard = t.name + ' era ' + t.era; });
   window.addEventListener('focusScar', e => { const sc = (world.scars || []).filter(c => c.n >= 3).sort((a, b) => b.last - a.last), c = sc[(e.detail.i || 0) % Math.max(1, sc.length)]; window.__scar = sc.length + ' ' + (c ? c.n + ' era ' + c.era : ''); if (c) window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, d: e.detail.d || .35 } })); });
   window.addEventListener('focusFront', e => { const ts = [...sim.tribes.values()].filter(t => t.wars.size && t.members.size >= 5 && frontSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__front = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = frontSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x + Math.sin(st.head) * .5, y: st.y + Math.cos(st.head) * .5, h: st.h, d: e.detail.d || .35 } })); });
+  window.addEventListener('focusObs', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 8 && obsSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__obs = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = obsSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y + .3, h: st.h, d: e.detail.d || .35 } })); });
   window.addEventListener('focusHerd', e => { const h = world.herds[e.detail.i % world.herds.length]; const t = clock * .05 + h.x; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: h.x + 1.1 + Math.sin(t) * 1.6, y: h.y + .5 + Math.cos(t * .8) * 1.3, d: e.detail.d || .5 } })); window.__herd = h.kind; });
   window.addEventListener('focusTile', e => { const { x, y, h, d = 1 } = e.detail; const tgt = new THREE.Vector3(wx(x), h ?? Math.max(0, heightAt(x, y)), wz(y)); controls.target.copy(tgt); camera.position.copy(tgt).add(new THREE.Vector3(0, 4.5 * d, 6 * d)); focus = null; follow = 0; });
   function drawPop() {
