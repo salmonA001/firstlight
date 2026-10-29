@@ -2344,6 +2344,41 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     });
   }
 
+  // regional crops: flooded rice paddies, vineyards, millet, maize and root crops, each painted as rows on the soil
+  function cropTexture(kind) {
+    return canvasTexture(64, (g, n) => {
+      const dot = (x, y, r, c) => { g.fillStyle = c; g.beginPath(); g.arc(x, y, r, 0, 6.283); g.fill(); };
+      if (kind === 1) {
+        g.fillStyle = '#6d8b88'; g.fillRect(0, 0, n, n);
+        for (let k = 0; k < 40; k++) { g.fillStyle = `rgba(200,225,235,${.15 + Math.random() * .2})`; g.fillRect(Math.random() * n, Math.random() * n, 4 + Math.random() * 8, 1); }
+        for (let y = 4; y < n; y += 5) for (let x = 3 + (y % 2) * 2; x < n; x += 5) dot(x, y, 1.3, y % 3 ? '#7fae3a' : '#8fbe44');
+        g.strokeStyle = '#6b5a3a'; g.lineWidth = 3; g.strokeRect(1.5, 1.5, n - 3, n - 3);
+        g.lineWidth = 2; for (const y0 of [22, 43]) { g.beginPath(); for (let x = 0; x <= n; x += 4) g.lineTo(x, y0 + Math.sin(x / 9) * 2.5); g.stroke(); }
+      } else if (kind === 2) {
+        g.fillStyle = '#8a6a44'; g.fillRect(0, 0, n, n);
+        for (let y = 5; y < n; y += 10) { g.fillStyle = '#6b5236'; g.fillRect(0, y + 3, n, 1); for (let x = 3; x < n; x += 6) dot(x + (y % 20 ? 1 : 0), y, 2.8, x % 12 ? '#3f5a2a' : '#4a6a30'); }
+      } else if (kind === 3) {
+        g.fillStyle = '#7f5c38'; g.fillRect(0, 0, n, n);
+        for (let y = 2; y < n; y += 6) { g.fillStyle = '#b08048'; g.fillRect(0, y, n, 3); for (let x = 1; x < n; x += 3) dot(x, y + 1, 1.3, Math.random() < .5 ? '#93382a' : '#a8502e'); }
+      } else if (kind === 4) {
+        g.fillStyle = '#6a5434'; g.fillRect(0, 0, n, n);
+        for (let y = 3; y < n; y += 8) { g.fillStyle = '#5f8a32'; g.fillRect(0, y, n, 5); for (let x = 2; x < n; x += 4) { dot(x, y + 2, 1.6, '#4e7a2a'); if (Math.random() < .4) dot(x, y + 1, .9, '#d8c860'); } }
+      } else {
+        g.fillStyle = '#5a4632'; g.fillRect(0, 0, n, n);
+        for (let y = 3; y < n; y += 7) { g.fillStyle = '#6e5840'; g.fillRect(0, y, n, 3); for (let x = 3; x < n; x += 5) dot(x, y + 1, 1.8, '#4f7a34'); }
+      }
+      for (let k = 0; k < 120; k++) { g.fillStyle = `rgba(${60 + Math.random() * 60},${60 + Math.random() * 50},30,.25)`; g.fillRect(Math.random() * n, Math.random() * n, 1.5, 1.5); }
+    });
+  }
+  const CROP_STYLE = { eastern: 1, indic: 1, island: 1, med: 2, desert: 3, sahel: 3, meso: 4, arctic: 5 };
+  function cropKind(i) {
+    const o = sim.owner[i], t = o && sim.tribes.get(o), st = t ? STY(t.style) : '', b = sim.biome[i];
+    if (b === 4 || b === 5 || st === 'arctic') return 5;
+    if (b === 3 || b === 6 || b === 9 || b === 10) return st === 'meso' ? 4 : 1;
+    if ((b === 1 || b === 8) && !CROP_STYLE[st]) return 3;
+    return CROP_STYLE[st] || 0;
+  }
+
   // ---------- primitive part sets
   const PART_GEOS = (() => {
     const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, .5, 0);
@@ -3978,8 +4013,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     world.fieldTex = fieldTexture(); world.fieldTex.encoding = THREE.sRGBEncoding;
     const fieldGeo = new THREE.PlaneGeometry(.96, .96); fieldGeo.rotateX(-Math.PI / 2);
     world.fields = instanced(fieldGeo, new THREE.MeshStandardMaterial({ map: world.fieldTex, roughness: 1, polygonOffset: true, polygonOffsetFactor: -2 }), n, false);
+    world.crops = [world.fields];
+    for (let k = 1; k <= 5; k++) { const tx = cropTexture(k); tx.encoding = THREE.sRGBEncoding; world.crops.push(instanced(fieldGeo, new THREE.MeshStandardMaterial({ map: tx, roughness: k === 1 ? .35 : 1, metalness: k === 1 ? .08 : 0, polygonOffset: true, polygonOffsetFactor: -2 }), n, false)); }
     world.fieldsKey = -1;
-    group.add(world.trunks, world.pines, world.leaves, world.rocks, world.fields);
+    group.add(world.trunks, world.pines, world.leaves, world.rocks, ...world.crops);
     // people: jointed figures (legs and arms swing as they walk)
     const MAXA = 4000;
     // body parts are shaped pieces merged into one mesh each; vertex shade marks shoes, belt, eyes and hair
@@ -4182,18 +4219,19 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   }
   function updateFields() {
     if (world.fieldsKey === sim.ownerVersion) return; world.fieldsKey = sim.ownerVersion;
-    const VW = W + 1, ch = world.ch; let n = 0;
+    const VW = W + 1, ch = world.ch, cn = world.crops.map(() => 0);
     for (let i = 0; i < W * H; i++) {
       if (sim.terrain[i] !== T.FARM) continue;
+      const kind = cropKind(i);
       const x = i % W, y = (i / W) | 0, a = ch[y * VW + x], b = ch[y * VW + x + 1], c = ch[(y + 1) * VW + x], d = ch[(y + 1) * VW + x + 1];
       tmpN.set((a + c) - (b + d), 2, (a + b) - (c + d)).normalize();
       tmpQ.setFromUnitVectors(UP, tmpN);
       const turn = new THREE.Quaternion().setFromAxisAngle(UP, (sim.jit[i] > .5 ? Math.PI / 2 : 0));
       tmpQ.multiply(turn);
       tmpP.set(wx(x + .5), (a + b + c + d) / 4 + .015, wz(y + .5)); tmpS.set(1, 1, 1);
-      tmpM.compose(tmpP, tmpQ, tmpS); world.fields.setMatrixAt(n++, tmpM);
+      tmpM.compose(tmpP, tmpQ, tmpS); world.crops[kind].setMatrixAt(cn[kind]++, tmpM);
     }
-    world.fields.count = n; world.fields.instanceMatrix.needsUpdate = true;
+    world.crops.forEach((m, k) => { m.count = cn[k]; m.instanceMatrix.needsUpdate = true; });
   }
   function updateBorders() {
     if (world.ownerSeen === sim.ownerVersion) return; world.ownerSeen = sim.ownerVersion;
@@ -4267,7 +4305,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     world.leaves.material.color.setRGB(1, 1, 1).lerp(LEAF_SPRING, spring * .5).lerp(LEAF_AUTUMN, autumn * .85).lerp(LEAF_WINTER, snow * .9);
     world.pines.material.color.setRGB(1, 1, 1).lerp(PINE_SNOW, snow * .55);
     world.acacias.material.color.setRGB(1, 1, 1).lerp(LEAF_SPRING, spring * .3).lerp(LEAF_AUTUMN, autumn * .25);
-    world.fields.material.color.setRGB(1, 1, 1).lerp(FIELD_SPRING, spring * .8).lerp(FIELD_SNOW, snow * .9);
+    for (const m of world.crops) m.material.color.setRGB(1, 1, 1).lerp(FIELD_SPRING, spring * (m === world.fields ? .8 : .25)).lerp(FIELD_SNOW, snow * .9);
     world.water.material.color.copy(WATER_SUMMER).lerp(WATER_WINTER, snow * .6);
     sun.intensity = 1.7 - snow * .35; sun.color.setRGB(1, .95 - autumn * .05, .86 - autumn * .1);
   }
