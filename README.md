@@ -33,7 +33,9 @@ Houses have doors, windows, roofs and decorations in their culture's style: Nord
 ### Nations and their AI
 - **Council AI:** every year each nation sizes up its food, housing, neighbors and threats, then picks a plan: *grow, expand, fortify, arm for war, pursue knowledge* or *trade*. It learns from how well its last plan worked.
 - **Rulers with personalities:** a ruler can be a Warlord, a Merchant, the Wise, or a Builder, and that tilts the nation's choices.
-- **Six cultures:** Steppe, Nordic, Desert, Eastern, Mediterranean and Jungle. Each has its own names, homes, walls, wonders, dress and temperament.
+- **Eleven cultures:** Steppe, Nordic, Desert, Eastern, Mediterranean, Jungle, Sahel, Indic, Islander, Arctic and Slavic. Each has its own names, homes, walls, wonders, boats, dress, livestock, festivals and temperament, and each tends to arise in the land that suits it: Arctic peoples in the frozen north, Islanders on islands, Sahel peoples on the savanna. The newer five build mud-brick towns with timber beams and a great mud mosque, red sandstone walls with domed pavilions and a great stupa, thatched round houses with giant stone heads and voyaging canoes, igloos and kayaks that later become brightly painted timber houses, and log houses under onion-domed cathedrals and a red-walled kremlin.
+
+  ![Five new cultures and their wonders: a mud mosque, a stupa, carved stone heads, a snow hall and an onion-domed cathedral](docs/cultures.png)
 - **Diplomacy:** relations rise and fall with borders, trade and faith. Nations form alliances, declare wars, surrender and pay tribute.
 - **Faiths:** nations found religions that spread along trade routes. A shared faith brings nations closer, and a rival faith can start a holy war.
 
@@ -96,11 +98,16 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 - **Night lights:** with day and night on, towns light up after dark. Stone Age caves glow with campfires, early towns have a bonfire and torches by the doors and along the walls, the 1800s bring gas street lamps along roads, and modern cities have lit windows, streetlights, car headlights and red warning lights on tall towers. Lighthouses sweep the sea with beams and ships carry lanterns.
 
   ![A Middle Ages town at night lit by torches and a bonfire](docs/night.png)
-- **Terrain:** low coastal plains, rolling hills, deep sea trenches and tall mountains of banded rock with ragged snow caps. The ground is patchy and textured rather than flat color, and the sea turns turquoise in the shallows, with foam where waves meet the shore.
+- **Terrain:** low coastal plains, rolling hills, deep sea trenches and tall mountains of banded rock with ragged snow caps. Rivers run from the high ground down to the sea or a lake, widening as they go and foaming white where they fall, with fertile land along their banks and roads that bridge them. Inland lakes fill low hollows, and the badlands weather into flat-topped red mesas with stepped cliffs.
+
+  ![Rivers and a lake winding between snowy mountains and forest](docs/rivers.png) The ground is patchy and textured rather than flat color, and the sea turns turquoise in the shallows, with foam where waves meet the shore.
 
   ![Rocky mountains with snow caps above forests and towns](docs/mountains.png)
 - **Realistic finish:** on Medium and High the picture gets a filmic color grade and a soft glow on bright lights. High also adds ambient occlusion, which shades creases and the ground under buildings.
-- **Biomes:** the north is frozen tundra and snowy pine forest, the middle is temperate woodland, and the south turns to savanna, jungle and desert, with swamps along wet coasts. Each biome has its own ground color, trees (palms and cacti, flat-topped acacias, dense jungle, snowy pines, willows), ground cover and wildlife (camels, zebras, elephants, reindeer). Deserts and tundra grow less food, so fewer people live there.
+- **Low for weak devices:** Low now has crisp shadows from towns and people (the shadow area follows the camera and tightens as you zoom in), building details, a color grade with a soft vignette built into the normal draw, and baked shading in valleys, all without an extra post-processing pass. A new Lowest setting keeps the old plain look for very old devices, and Auto drops to it if the frame rate stays low.
+
+  ![The Low setting with shadows and details](docs/low.png)
+- **Biomes:** the north is frozen tundra and snowy pine forest, the middle is temperate woodland, and the south turns to savanna, jungle and desert, with swamps along wet coasts. Newer biomes add grassy steppe with birch groves and wild horses, red rock badlands with juniper and rock spires, bamboo forests with pandas, mangrove coasts on stilt roots, and alpine meadows of wildflowers and mountain firs. Each biome has its own ground color, trees (palms and cacti, flat-topped acacias, dense jungle, snowy pines, willows), ground cover and wildlife (camels, zebras, elephants, reindeer). Deserts and tundra grow less food, so fewer people live there.
 - **Natural models:** leafy trees have lumpy multi-lobed crowns that darken underneath, pines grow in layered tiers, palms have drooping fronds and coconuts, savanna acacias spread a wide layered canopy, and hill rocks are craggy boulders. Animals have rounded bodies, jointed legs, heads with ears and eyes, tails and antlers, and every ship and boat has a curved hull with a pointed bow.
 
   ![A Stone Age camp among palms, acacias and leafy trees](docs/trees.png)

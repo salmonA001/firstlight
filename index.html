@@ -28,6 +28,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
 #app { display: grid; grid-template-columns: minmax(0, 1fr) 360px; height: 100%; }
 #stage { position: relative; min-width: 0; overflow: hidden; background: var(--ink); }
+#stage.vig::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 45%, transparent 55%, rgba(10, 14, 20, .3) 100%); }
 #stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 #labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .tlabel { position: absolute; transform: translate(-50%, -100%); white-space: nowrap; pointer-events: auto; cursor: pointer;
@@ -198,7 +199,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         <button type="button" data-s="4">Max</button>
       </div>
       <div class="row"><button class="btn" id="newWorld" type="button">New world</button><button class="btn" id="saveBtn" type="button">Save world</button><button class="btn" id="loadBtn" type="button">Load saved</button><span class="note" id="saveNote"></span></div>
-      <div class="row"><label class="note" for="gfx">Graphics</label><select id="gfx"><option value="auto">Auto</option><option value="low">Low (phones, older PCs)</option><option value="medium">Medium</option><option value="high">High (strong GPUs)</option></select><span class="note" id="gfxNote"></span><label class="note"><input type="checkbox" id="dayNight"> Day and night</label></div>
+      <div class="row"><label class="note" for="gfx">Graphics</label><select id="gfx"><option value="auto">Auto</option><option value="lowest">Lowest (very old devices)</option><option value="low">Low (phones, older PCs)</option><option value="medium">Medium</option><option value="high">High (strong GPUs)</option></select><span class="note" id="gfxNote"></span><label class="note"><input type="checkbox" id="dayNight"> Day and night</label></div>
       <div class="chart"><div class="chart-h"><span>World population</span><span id="popNow"></span></div><canvas id="popChart" height="54"></canvas></div>
     </div>
     <div class="sec" id="inspect"><h2>Inspector</h2><div class="empty">Click a person or a settlement on the map.</div></div>
@@ -231,10 +232,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   const FOOD_REGEN = [0, 0.001, 0.005, 0.003, 0.001, 0, 0.04];
   const WOOD_CAP = 16;
   // climate zones layered over the terrain: they change the ground, the trees, the wildlife and how much food grows
-  const BIO = { TEMPERATE: 0, DESERT: 1, SAVANNA: 2, JUNGLE: 3, TAIGA: 4, TUNDRA: 5, SWAMP: 6 };
+  const BIO = { TEMPERATE: 0, DESERT: 1, SAVANNA: 2, JUNGLE: 3, TAIGA: 4, TUNDRA: 5, SWAMP: 6, STEPPE: 7, BADLANDS: 8, BAMBOO: 9, MANGROVE: 10, ALPINE: 11 };
   const BIOMES = [
     { id: 'temperate', name: 'Temperate woodland', fert: 1 }, { id: 'desert', name: 'Desert', fert: .45 }, { id: 'savanna', name: 'Savanna', fert: .9 },
     { id: 'jungle', name: 'Jungle', fert: 1.15 }, { id: 'taiga', name: 'Snowy pine forest', fert: .75 }, { id: 'tundra', name: 'Frozen tundra', fert: .45 }, { id: 'swamp', name: 'Swamp', fert: .8 },
+    { id: 'steppe', name: 'Grassy steppe', fert: .7 }, { id: 'badlands', name: 'Red rock badlands', fert: .35 }, { id: 'bamboo', name: 'Bamboo forest', fert: 1.05 },
+    { id: 'mangrove', name: 'Mangrove coast', fert: .85 }, { id: 'alpine', name: 'Alpine meadow', fert: .6 },
   ];
 
   const ERAS = [
@@ -347,8 +350,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     { id: 'eastern', name: 'Eastern', syl: ['ji', 'shan', 'lin', 'mei', 'tao', 'kai', 'zhu', 'han', 'yun', 'li', 'ming', 'qin', 'wu', 'jin'], end: ['', 'an', 'ing', 'ou'], bias: { war: .9, trade: 1, research: 1.3, farm: 1.1, build: 1.1 } },
     { id: 'med', name: 'Mediterranean', syl: ['al', 'ex', 'do', 'ri', 'cas', 'ta', 'me', 'ne', 'pho', 'lo', 'the', 'ka', 'ly', 'sy'], end: ['ians', 'os', 'ians', 'enes', 'ines'], bias: { war: 1, trade: 1.5, research: 1.1, farm: 1, build: 1.1 } },
     { id: 'meso', name: 'Jungle', syl: ['ix', 'chal', 'te', 'co', 'na', 'hua', 'tl', 'ma', 'ya', 'qui', 'pa', 'to', 'xo', 'ka'], end: ['ca', 'lan', 'tec', 'ec', 'ni'], bias: { war: 1.05, trade: .95, research: 1.05, farm: 1.35, build: 1.25 } },
+    { id: 'sahel', name: 'Sahel', syl: ['ma', 'li', 'son', 'gha', 'kei', 'ta', 'du', 'ba', 'ka', 'mo', 'nia', 'so', 'ko', 'ji'], end: ['ba', 'ke', 'ni', 'i', 'ou'], bias: { war: 1, trade: 1.35, research: 1, farm: 1.05, build: 1.2 } },
+    { id: 'indic', name: 'Indic', syl: ['ra', 'ja', 'vi', 'sha', 'dev', 'kri', 'ma', 'ash', 'nan', 'ind', 'su', 'lak', 'pra', 'am'], end: ['pur', 'an', 'ya', 'a', 'ra'], bias: { war: .95, trade: 1.1, research: 1.2, farm: 1.2, build: 1.25 } },
+    { id: 'island', name: 'Islander', syl: ['ka', 'lo', 'ha', 'ma', 'nu', 'pa', 'ta', 'ri', 'ki', 'mo', 'tu', 'we', 'hi', 'ra'], end: ['nui', 'ua', 'oa', 'iki', 'ani'], bias: { war: 1.05, trade: 1.2, research: .95, farm: 1, build: 1.05 } },
+    { id: 'arctic', name: 'Arctic', syl: ['ak', 'in', 'nu', 'ka', 'ta', 'pa', 'qi', 'lu', 'sik', 'ut', 'mi', 'na', 'ar', 'ik'], end: ['miut', 'ut', 'ik', 'aq', 'it'], bias: { war: .85, trade: 1.05, research: 1.05, farm: .7, build: 1 } },
+    { id: 'slavic', name: 'Slavic', syl: ['vla', 'mir', 'bor', 'slav', 'dra', 'go', 'ra', 'sto', 'yar', 'lu', 'mi', 'zor', 've', 'do'], end: ['ichi', 'ane', 'ovo', 'sk', 'ava'], bias: { war: 1.1, trade: 1, research: 1, farm: 1.1, build: 1.15 } },
   ];
-  const WONDERS = { steppe: ["Khan's Great Tent", 'Stone Fortress'], nordic: ['Great Mead Hall', 'Stave Cathedral'], desert: ['Great Pyramid', 'Domed Palace'], eastern: ['Great Pagoda', 'Imperial Palace'], med: ['Temple of the Sky', 'Colosseum'], meso: ['Step Pyramid', 'Star Observatory'] };
+  // the lands each culture tends to grow out of, so arctic peoples live in the cold and islanders on islands
+  const HOMELAND = [[7, 2], [4, 0], [1, 8], [9, 0], [0, 11], [3, 10], [2, 1, 8], [3, 9, 2], [-1], [5, 4], [4, 0, 7]];
+  const WONDERS = { steppe: ["Khan's Great Tent", 'Stone Fortress'], nordic: ['Great Mead Hall', 'Stave Cathedral'], desert: ['Great Pyramid', 'Domed Palace'], eastern: ['Great Pagoda', 'Imperial Palace'], med: ['Temple of the Sky', 'Colosseum'], meso: ['Step Pyramid', 'Star Observatory'], sahel: ['Great Mud Mosque', 'Golden Palace'], indic: ['Great Stupa', 'Temple of a Thousand Pillars'], island: ['Great Moai Ring', 'Royal Meeting House'], arctic: ['Great Snow Hall', 'Whalebone Lodge'], slavic: ['Onion Dome Cathedral', 'Great Kremlin'] };
   const WONDER_ERA = [1, 3, 5];
   // the strategies a civilization's council can choose, and how each one steers the people's work
   const PERSONAS = {
@@ -393,9 +403,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     artist: t => t.wonders.length ? `Painting a picture of the ${t.wonders[t.wonders.length - 1]}` : 'Carving a statue for the square', worker: () => 'Working a shift at the factory',
     engineer: t => t.era >= 5 ? 'Designing a new engine' : 'Drawing plans for a bridge', programmer: () => 'Writing code at the data center',
   };
-  const HERD = { steppe: 'Herding horses on the open grass', nordic: 'Herding sheep in the meadow', desert: 'Leading goats to graze', eastern: 'Tending water buffalo in the fields', med: 'Herding goats on the hillside', meso: 'Herding llamas to fresh pasture' };
+  const HERD = { steppe: 'Herding horses on the open grass', nordic: 'Herding sheep in the meadow', desert: 'Leading goats to graze', eastern: 'Tending water buffalo in the fields', med: 'Herding goats on the hillside', meso: 'Herding llamas to fresh pasture', sahel: 'Driving cattle across the grassland', indic: 'Leading cattle down to the river', island: 'Tending pigs among the palms', arctic: 'Driving reindeer across the snow', slavic: 'Herding cattle and geese' };
   const PLAY = ['Playing tag with friends', 'Chasing chickens around the square', 'Playing with a wooden toy', 'Racing the other children', 'Splashing in puddles', 'Playing hide and seek'];
-  const FESTS = { steppe: ['Naadam Games', 'Horse Festival'], nordic: ['Midsummer Feast', 'Yule Feast'], desert: ['Festival of the Flood', 'Feast of the Sun God'], eastern: ['Lantern Festival', 'Spring Festival'], med: ['Wine Harvest Festival', 'Festival of the Games'], meso: ['Festival of the Sun', 'Maize Festival'] };
+  const FESTS = { steppe: ['Naadam Games', 'Horse Festival'], nordic: ['Midsummer Feast', 'Yule Feast'], desert: ['Festival of the Flood', 'Feast of the Sun God'], eastern: ['Lantern Festival', 'Spring Festival'], med: ['Wine Harvest Festival', 'Festival of the Games'], meso: ['Festival of the Sun', 'Maize Festival'] , sahel: ['Fishing Festival', 'Harvest Drum Festival'], indic: ['Festival of Lights', 'Festival of Colors'], island: ['Canoe Festival', 'Feast of the Ancestors'], arctic: ['Return of the Sun', 'Whaling Feast'], slavic: ['Kupala Night', 'Pancake Week'] };
   const SPACE_STEPS = ['satellite', 'satellite', 'crew', 'resupply', 'moon', 'station', 'resupply', 'probe', 'mars', 'resupply'];
   const SPACE_TEXT = {
     satellite: n => `The ${n} launched a rocket and put a satellite into orbit.`,
@@ -484,17 +494,33 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         const x = Math.round(o.x + dx), y = Math.round(o.y + dy), i = y * W + x;
         if (x >= 0 && y >= 0 && x < W && y < H && this.terrain[i] === T.GRASS && r() < .5) { this.terrain[i] = T.FOREST; this.wood[i] = WOOD_CAP * (.6 + r() * .4); this.food[i] = FOOD_CAP[T.FOREST] * (.5 + r() * .5); }
       }
+      // inland lakes fill hollows well away from the coast
+      for (let k = 0, tries = 0; k < 5 && tries < 400; tries++) {
+        const cx = 6 + r() * (W - 12), cy = 6 + r() * (H - 12), R = 1.4 + r() * 1.8, x0 = Math.round(cx), y0 = Math.round(cy), t0 = this.terrain[y0 * W + x0];
+        if ((t0 !== T.GRASS && t0 !== T.FOREST) || this.elev[y0 * W + x0] > 1.1) continue;
+        let ok = true; for (let dy = -6; dy <= 6 && ok; dy++) for (let dx = -6; dx <= 6; dx++) { const t = this.terrain[(y0 + dy) * W + x0 + dx]; if (t === T.WATER || t === T.MOUNTAIN) { ok = false; break; } }
+        if (!ok) continue; k++;
+        for (let dy = -5; dy <= 5; dy++) for (let dx = -5; dx <= 5; dx++) {
+          const x = x0 + dx, y = y0 + dy, i = y * W + x, f = 1 - Math.hypot(x - cx, y - cy) / R + (fbm(hn, x / 2.5 + 9, y / 2.5) - .5) * .5;
+          if (f > 0) { this.terrain[i] = T.WATER; this.elev[i] = -.35 - Math.min(1, f * 1.4) * .9; this.food[i] = this.wood[i] = this.stone[i] = 0; }
+          else { if (this.terrain[i] !== T.WATER && this.terrain[i] !== T.MOUNTAIN) this.elev[i] = Math.min(this.elev[i], .12 - f * 1.3); if (f > -.25 && this.terrain[i] === T.FOREST && r() < .5) { this.terrain[i] = T.GRASS; this.wood[i] = 0; } }
+        }
+      }
       // climate: cold in the north, hot in the south, dry or wet by moisture
+      const nearWater = (x, y, R) => { for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < W && yy < H && this.terrain[yy * W + xx] === T.WATER) return true; } return false; };
       const tn = makeNoise(r), mq = p => landM[Math.min(landM.length - 1, Math.floor(p * landM.length))], m10 = mq(.1), m90 = mq(.9);
       this.biome = new Uint8Array(n); this.fert = new Float32Array(n).fill(1);
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         const i = y * W + x, t0 = this.terrain[i]; if (t0 === T.WATER) continue;
         const temp = y / (H - 1) * 1.1 - .05 + (fbm(tn, x / 18, y / 18) - .5) * .55 - Math.max(0, this.elev[i] - 1.6) * .07;
         const m = (mv[i] - m10) / (m90 - m10) + (fbm(tn, x / 8 + 40, y / 8) - .5) * .3;
-        let b = BIO.TEMPERATE;
-        if (temp < .15) b = BIO.TUNDRA; else if (temp < .3) b = BIO.TAIGA;
-        else if (temp > .68) b = m < .4 ? BIO.DESERT : m > .66 ? BIO.JUNGLE : BIO.SAVANNA;
-        else if (m > .72 && this.elev[i] < 1) { let wet = false; for (let dy = -3; dy <= 3 && !wet; dy++) for (let dx = -3; dx <= 3; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < W && yy < H && this.terrain[yy * W + xx] === T.WATER) { wet = true; break; } } if (wet) b = BIO.SWAMP; }
+        const ev = this.elev[i]; let b = BIO.TEMPERATE;
+        if (temp < .15) b = BIO.TUNDRA; else if (temp < .3) b = t0 === T.HILLS && temp > .24 ? BIO.ALPINE : BIO.TAIGA;
+        else if (temp > .68) b = m < .4 ? (ev > 1.3 && t0 !== T.SAND ? BIO.BADLANDS : BIO.DESERT) : m > .5 && ev < .7 && nearWater(x, y, 1) ? BIO.MANGROVE : m > .66 ? BIO.JUNGLE : BIO.SAVANNA;
+        else if (t0 === T.HILLS) b = BIO.ALPINE;
+        else if (m < .32 && temp < .52) b = BIO.STEPPE;
+        else if (m > .72 && ev < 1 && nearWater(x, y, 3)) b = BIO.SWAMP;
+        else if (m > .6 && temp > .5) b = BIO.BAMBOO;
         this.biome[i] = b; this.fert[i] = BIOMES[b].fert;
         let t = t0;
         if (b === BIO.DESERT && (t === T.GRASS || (t === T.FOREST && r() > .08))) t = T.SAND;
@@ -502,11 +528,27 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         else if (b === BIO.JUNGLE && t === T.GRASS && r() < .55) t = T.FOREST;
         else if ((b === BIO.TAIGA || b === BIO.SWAMP) && t === T.GRASS && r() < .32) t = T.FOREST;
         else if (b === BIO.TUNDRA && t === T.FOREST && r() < .7) t = T.GRASS;
+        else if ((b === BIO.STEPPE || b === BIO.ALPINE) && t === T.FOREST && r() < .75) t = T.GRASS;
+        else if (b === BIO.BAMBOO && t === T.GRASS && r() < .45) t = T.FOREST;
+        else if (b === BIO.MANGROVE && (t === T.SAND || t === T.GRASS) && r() < .6) t = T.FOREST;
+        else if (b === BIO.BADLANDS && t === T.FOREST) t = r() < .85 ? T.GRASS : t;
+        // badlands weather into flat-topped mesas with steep stepped cliffs
+        if (b === BIO.BADLANDS && t !== T.MOUNTAIN) { const st = .7, e2 = ev * 1.3 + (fbm(tn, x / 4 + 70, y / 4) > .52 ? 1.5 : 0), f = Math.floor(e2 / st) * st, k = (e2 - f) / st; this.elev[i] = f + Math.pow(k, 6) * st + .02; if (this.elev[i] >= 2.4 && t !== T.HILLS) { t = T.HILLS; this.stone[i] = 20 + r() * 15; } }
         if (t !== t0) { this.terrain[i] = t; this.wood[i] = t === T.FOREST ? WOOD_CAP * (.6 + r() * .4) : 0; }
         this.food[i] = FOOD_CAP[this.terrain[i]] * this.fert[i] * (.5 + r() * .5);
       }
-      const order = [0, 1, 2, 3, 4, 5]; for (let k = 5; k > 0; k--) { const j = Math.floor(r() * (k + 1)); [order[k], order[j]] = [order[j], order[k]]; }
-      this.cultureSeeds = []; for (let k = 0; k < 12; k++) this.cultureSeeds.push({ x: r() * W, y: r() * H, s: order[k % 6] });
+      const NS = STYLES.length, order = [...Array(NS).keys()]; for (let k = NS - 1; k > 0; k--) { const j = Math.floor(r() * (k + 1)); [order[k], order[j]] = [order[j], order[k]]; }
+      this.cultureSeeds = [];
+      for (let k = 0; k < 14; k++) {
+        const s = order[k % NS], home = HOMELAND[s]; let best = null;
+        for (let tries = 0; tries < 400 && !best; tries++) {
+          const x = r() * W, y = r() * H, i = Math.floor(y) * W + Math.floor(x), tt = this.terrain[i]; if (tt === T.WATER) continue;
+          const fits = home[0] < 0 ? this.islands.some(o => Math.hypot(o.x - x, o.y - y) < o.r + 1) : home.includes(this.biome[i]);
+          if ((fits || tries > 300) && this.cultureSeeds.every(c => Math.hypot(c.x - x, c.y - y) > (tries > 200 ? 6 : 13))) best = { x, y, s };
+        }
+        this.cultureSeeds.push(best || { x: r() * W, y: r() * H, s });
+      }
+      this.carveRivers(r);
       // connected bodies of water, so ships only sail where they can reach
       this.waterRegion = new Int32Array(n).fill(-1); this.regionSize = [];
       for (let i = 0; i < n; i++) {
@@ -517,6 +559,39 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         this.regionSize.push(size);
       }
       this.computeLand();
+    }
+    // rivers run downhill from the high ground to the sea or a lake, cutting valleys and watering the land along them
+    carveRivers(r) {
+      const n = W * H; this.river = new Uint8Array(n); this.rivers = [];
+      // distance to the nearest sea or lake over land, so every river keeps heading for open water
+      const dist = new Int32Array(n).fill(1e6), q = []; for (let i = 0; i < n; i++) if (this.terrain[i] === T.WATER) { dist[i] = 0; q.push(i); }
+      for (let h = 0; h < q.length; h++) { const c = q[h], cx = c % W, cy = (c / W) | 0; for (const [dx, dy] of DIRS) { const x = cx + dx, y = cy + dy; if (x < 0 || y < 0 || x >= W || y >= H) continue; const j = y * W + x; if (dist[j] > dist[c] + 1) { dist[j] = dist[c] + 1; q.push(j); } } }
+      for (let tries = 0; tries < 300 && this.rivers.length < 9; tries++) {
+        const sx = 3 + Math.floor(r() * (W - 6)), sy = 3 + Math.floor(r() * (H - 6)), si = sy * W + sx;
+        if (this.elev[si] < 2.6 || this.elev[si] > 6.5 || this.biome[si] === BIO.DESERT || this.biome[si] === BIO.BADLANDS) continue;
+        if (this.rivers.some(p => p.some(i => Math.abs(i % W - sx) + Math.abs(((i / W) | 0) - sy) < 8))) continue;
+        const path = [si], seen = new Set(path); let c = si, ok = false;
+        for (let step = 0; step < 160; step++) {
+          const cx = c % W, cy = (c / W) | 0; let nb = -1, ne = 1e9;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+            const x = cx + dx, y = cy + dy; if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) continue; const j = y * W + x; if (seen.has(j) || dist[j] >= dist[c]) continue;
+            const e = this.elev[j] + (dx && dy ? .25 : 0) + this.jit[j] * .5 + (this.river[j] ? -5 : 0); if (e < ne) { ne = e; nb = j; }
+          }
+          if (nb < 0) break;
+          path.push(nb); seen.add(nb); c = nb;
+          if (this.terrain[nb] === T.WATER || this.river[nb]) { ok = true; break; }
+          if (this.elev[nb] > this.elev[path[path.length - 2]] - .01) this.elev[nb] = Math.max(.12, this.elev[path[path.length - 2]] - .03);   // cut through the ridge
+        }
+        if (!ok || path.length < 10) continue;
+        for (let k = 0; k < path.length; k++) {
+          const i = path[k]; if (this.terrain[i] === T.WATER) continue;
+          this.river[i] = 1; if (this.terrain[i] === T.MOUNTAIN) this.terrain[i] = T.HILLS;
+          this.elev[i] = Math.max(.1, this.elev[i] - .12);
+          const x = i % W, y = (i / W) | 0;
+          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const j = (y + dy) * W + x + dx; if (this.terrain[j] !== T.WATER) { this.fert[j] = Math.min(1.5, this.fert[j] * 1.25 + .1); this.food[j] = Math.max(this.food[j], FOOD_CAP[this.terrain[j]] * this.fert[j] * .8); } }
+        }
+        this.rivers.push(path);
+      }
     }
     // connected landmasses, so the sim knows which nations live across the sea
     computeLand() {
@@ -1554,7 +1629,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         }
         case 'people': {
           if (!this.passable(x, y)) return null;
-          const st = this.r() < .5 ? this.cultureAt(x, y) : this.ri(0, 5);
+          const st = this.r() < .5 ? this.cultureAt(x, y) : this.ri(0, STYLES.length - 1);
           for (let k = 0; k < 6; k++) { const q = this.nearPassable(x, y, 2); this.makeAgent(q.x, q.y, null, st).thought = 'Just arrived in a strange new land'; }
           return this.emit('arrival', `Six ${STYLES[st].name.toLowerCase()} strangers arrived ${where}.`, { tribe: nearT && nearT.id });
         }
@@ -1963,7 +2038,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const agents = this.agents.filter(a => a.alive).map(a => { const o = {}; for (const k in a) if (k[0] !== '_') o[k] = a[k]; return o; });
       return JSON.stringify({ v: 1, seed: this.seed, startEra: this.startEra, tick: this.tick, nextId: this.nextId, tribeCount: this.tribeCount,
         terrain: arr(this.terrain), elev: arr(this.elev), food: arr(this.food), wood: arr(this.wood), stone: arr(this.stone), jit: arr(this.jit), waterRegion: arr(this.waterRegion), biome: arr(this.biome), fert: arr(this.fert),
-        regionSize: this.regionSize, cultureSeeds: this.cultureSeeds, usedNames: [...this.usedNames], agents, tribes, wars, ships: this.ships.filter(x => x.alive), armies: this.armies.filter(r => !r.dead), planes: this.planes.filter(p => p.alive), links: this.links, seaSites: this.seaSites, rockets: this.rockets || [],
+        regionSize: this.regionSize, cultureSeeds: this.cultureSeeds, rivers: this.rivers || [], usedNames: [...this.usedNames], agents, tribes, wars, ships: this.ships.filter(x => x.alive), armies: this.armies.filter(r => !r.dead), planes: this.planes.filter(p => p.alive), links: this.links, seaSites: this.seaSites, rockets: this.rockets || [],
         fires: [...this.fires], popHistory: this.popHistory, religions: [...this.religions.values()], history: this.history.slice(-300) });
     }
     static load(json) {
@@ -1974,6 +2049,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         jit: Float32Array.from(d.jit), waterRegion: Int32Array.from(d.waterRegion), biome: d.biome ? Uint8Array.from(d.biome) : new Uint8Array(W * H), fert: d.fert ? Float32Array.from(d.fert) : new Float32Array(W * H).fill(1), regionSize: d.regionSize, cultureSeeds: d.cultureSeeds, usedNames: new Set(d.usedNames),
         listeners: [], effects: [], dirty: new Set(), deadCount: 0, ownerVersion: 0, ships: d.ships, armies: d.armies || [], planes: d.planes || [], links: d.links || [], seaSites: d.seaSites || [], rockets: d.rockets || [], fires: new Map(d.fires), popHistory: d.popHistory,
         religions: new Map(d.religions.map(r => [r.id, r])), history: d.history, agents: d.agents, byId: new Map(), tribes: new Map() });
+      s.rivers = d.rivers || []; s.river = new Uint8Array(W * H); for (const p of s.rivers) for (const i of p) if (s.terrain[i] !== T.WATER) s.river[i] = 1;
       s.computeLand();
       for (const a of s.agents) s.byId.set(a.id, a);
       for (const t of d.tribes) {
@@ -2103,9 +2179,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   // graphics quality: low for phones and older machines, high for strong GPUs
   const GFX = {
-    low: { label: 'Low', pr: 1, shadows: false, map: 1024, life: 0, trees: 1, people: 1200, post: 0 },
-    medium: { label: 'Medium', pr: 1.5, shadows: true, map: 2048, life: 1, trees: 2, people: 2500, post: 1 },
-    high: { label: 'High', pr: 1.75, shadows: true, map: 4096, life: 2, trees: 3, people: 4000, post: 2 },
+    lowest: { label: 'Lowest', pr: 1, shadows: false, map: 1024, life: 0, trees: 1, people: 1200, post: 0, every: 2 },
+    // Low keeps weak devices smooth but still looks finished: cheap hard-edged shadows redrawn every third frame,
+    // building details and a color grade done inside the normal draw instead of an extra pass
+    low: { label: 'Low', pr: 1, shadows: true, soft: false, map: 1024, life: 1, trees: 1, people: 1500, post: 0, every: 3 },
+    medium: { label: 'Medium', pr: 1.5, shadows: true, map: 2048, life: 1, trees: 2, people: 2500, post: 1, every: 2 },
+    high: { label: 'High', pr: 1.75, shadows: true, map: 4096, life: 2, trees: 3, people: 4000, post: 2, every: 2 },
   };
   function autoGfx() {
     const mobile = matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
@@ -2116,8 +2195,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   let gfxLevel = gfxPick === 'auto' ? autoGfx() : gfxPick, Q = GFX[gfxLevel] || GFX.medium;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, Q.pr));
   renderer.outputEncoding = THREE.sRGBEncoding;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .9;
-  renderer.shadowMap.enabled = Q.shadows; renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
+  // without post-processing the grade happens in every material's tone mapping: filmic curve, a touch more color, warmer at dusk
+  THREE.ShaderChunk.tonemapping_pars_fragment = THREE.ShaderChunk.tonemapping_pars_fragment.replace('vec3 CustomToneMapping( vec3 color ) { return color; }',
+    'vec3 CustomToneMapping( vec3 color ) { vec3 c = ACESFilmicToneMapping( color ); float l = dot(c, vec3(0.2126, 0.7152, 0.0722)); c = mix(vec3(l), c, 1.12); c = (c - 0.5) * 1.04 + 0.5; return clamp(c, 0.0, 1.0); }');
+  renderer.toneMapping = THREE.CustomToneMapping; renderer.toneMappingExposure = .9;
+  renderer.shadowMap.enabled = Q.shadows; renderer.shadowMap.type = Q.soft === false ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap; renderer.shadowMap.autoUpdate = false;
   const scene = new THREE.Scene();
   const HORIZON = new THREE.Color('#c9d8e2');
   scene.background = HORIZON.clone();
@@ -2179,6 +2261,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   }
   function postFrame() {
     // lights bloom more after dark; the grade warms slightly at dusk and dawn
+    stage.classList.toggle('vig', !composer && gfxLevel !== 'lowest');
     if (!composer) return;
     const night = world ? world.night || 0 : 0;
     bloom.threshold = .95 - night * .55; bloom.strength = .16 + night * .5; bloom.radius = .45 + night * .2;
@@ -2338,6 +2421,36 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         part(S, 'box', B, 0, 0, 0, .58, h, .24, '#e3dccb');
         part(S, 'box', B, -.17, h, 0, .1, .07, .24, '#e3dccb'); part(S, 'box', B, 0, h, 0, .1, .07, .24, '#e3dccb'); part(S, 'box', B, .17, h, 0, .1, .07, .24, '#e3dccb');
         break;
+      case 'sahel':
+        // sun-dried mud brick bristling with timber beams and pointed pinnacles
+        if (tower) { part(S, 'cyl', B, 0, 0, 0, .38, h * 1.4, .38, '#b07a48'); part(S, 'cyl', B, 0, h * 1.4, 0, .3, h * .4, .3, '#b07a48'); part(S, 'cone', B, 0, h * 1.8, 0, .2, .2, .2, '#b98654'); for (const a of [0, 1.57, 3.14, 4.71]) part(S, 'cyl', B, Math.sin(a) * .17, h * .9, Math.cos(a) * .17, .02, .14, .02, '#5a4026', Math.PI / 2, a, 0); break; }
+        part(S, 'box', B, 0, 0, 0, .58, h, .26, '#b98654');
+        for (const x of [-.2, 0, .2]) { part(S, 'cone', B, x, h, 0, .1, .14, .1, '#b98654'); part(S, 'cyl', B, x, h * .55, .13, .015, .12, .015, '#5a4026', Math.PI / 2, 0, 0); }
+        break;
+      case 'indic':
+        // red sandstone with rounded battlements; towers carry a little domed pavilion
+        if (tower) { part(S, 'cyl', B, 0, 0, 0, .4, h * 1.5, .4, '#a8503a'); for (const [x, z] of [[-.07, -.07], [.07, -.07], [-.07, .07], [.07, .07]]) part(S, 'cyl', B, x, h * 1.5, z, .02, .16, .02, '#e8d8b8'); part(S, 'dome', B, 0, h * 1.5 + .16, 0, .24, .16, .24, '#e8d8b8'); break; }
+        part(S, 'box', B, 0, 0, 0, .58, h, .24, '#b5583a');
+        for (const x of [-.19, 0, .19]) part(S, 'dome', B, x, h, 0, .1, .08, .1, '#b5583a');
+        break;
+      case 'island':
+        // palisade of tall carved posts
+        if (tower) { part(S, 'cyl', B, 0, 0, 0, .1, h * 2.2, .1, '#6b4a2f'); part(S, 'box', B, 0, h * 2.2, 0, .36, .04, .36, '#7a5a3a'); part(S, 'pyr', B, 0, h * 2.2 + .04, 0, .44, .24, .44, '#a08a55'); part(S, 'box', B, 0, h * 1.6, .05, .08, .1, .02, '#b5302a'); break; }
+        for (const x of [-.22, -.11, 0, .11, .22]) { part(S, 'cyl', B, x, 0, 0, .09, h * (x === 0 ? 1.5 : 1.15), .09, '#6b4a2f'); }
+        part(S, 'sphere', B, 0, h * 1.5, 0, .06, .06, .06, '#b5302a');
+        break;
+      case 'arctic':
+        // stacked snow blocks; stone figures stand watch
+        if (tower) { part(S, 'box', B, 0, 0, 0, .14, .22, .1, '#8a8c8e'); part(S, 'box', B, 0, .22, 0, .4, .07, .1, '#7d8082'); part(S, 'box', B, 0, .29, 0, .12, .18, .1, '#8a8c8e'); part(S, 'box', B, 0, .47, 0, .1, .08, .09, '#7d8082'); for (const x of [-.12, .12]) part(S, 'box', B, x, 0, 0, .08, .2, .08, '#8a8c8e'); break; }
+        part(S, 'box', B, 0, 0, 0, .58, h * .7, .26, '#eef2f4'); part(S, 'box', B, 0, h * .35, .131, .58, .01, .005, '#c6d0d8');
+        for (const x of [-.15, .15]) part(S, 'box', B, x, h * .35, .131, .01, h * .35, .005, '#c6d0d8');
+        break;
+      case 'slavic':
+        // log walls with a shingled cap; wooden towers under tall tent roofs
+        if (tower) { part(S, 'box', B, 0, 0, 0, .36, h * 1.6, .36, '#7a5a3a'); part(S, 'box', B, 0, h * 1.6, 0, .42, .1, .42, '#6b4a2f'); part(S, 'pyr', B, 0, h * 1.6 + .1, 0, .42, .5, .42, '#3f6a4a'); part(S, 'cyl', B, 0, h * 1.6 + .55, 0, .015, .12, .015, '#d8a838'); break; }
+        for (let y = .03; y < h; y += .07) part(S, 'cyl', B, 0, y, 0, .07, .58, .07, '#7a5a3a', 0, 0, Math.PI / 2);
+        part(S, 'prism', B, 0, h + .03, 0, .62, .1, .26, '#5a4632');
+        break;
       default: // meso: stepped stone with a painted band
         if (tower) { part(S, 'box', B, 0, 0, 0, .42, .2, .42, '#b9a888'); part(S, 'box', B, 0, .2, 0, .32, .2, .32, '#b9a888'); part(S, 'box', B, 0, .4, 0, .22, .2, .22, '#b9a888'); part(S, 'box', B, 0, .6, 0, .14, .12, .14, '#a8442e'); break; }
         part(S, 'box', B, 0, 0, 0, .58, h * .6, .3, '#b9a888'); part(S, 'box', B, 0, h * .6, 0, .58, h * .4, .2, '#c7b694'); part(S, 'box', B, 0, h * .8, 0, .59, .04, .21, '#2f7f73');
@@ -2388,9 +2501,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     if (t.era >= 6 && size >= 16) l.push('tvtower');
     return l;
   }
+  const ROOF_C = { eastern: '#3d5552', med: '#a8442e', meso: '#a8442e', desert: '#cdb38c', sahel: '#b07a4a', indic: '#b5583a', island: '#a08a55', arctic: '#7a2f2a', slavic: '#3f6a4a' };
+  const WALL_C = { desert: '#d9c7a0', med: '#ece4d2', nordic: '#8a6a4a', eastern: '#e2dccb', meso: '#c9b48a', sahel: '#b98654', indic: '#d9a878', island: '#a8865a', arctic: '#e8e4dc', slavic: '#d8c9a8' };
   function special(S, B, kind, style, e, col) {
-    const roof = style === 'eastern' ? '#3d5552' : style === 'med' || style === 'meso' ? '#a8442e' : style === 'desert' ? '#cdb38c' : '#5a3a2a';
-    const wall = style === 'desert' ? '#d9c7a0' : style === 'med' ? '#ece4d2' : style === 'nordic' ? '#8a6a4a' : style === 'eastern' ? '#e2dccb' : style === 'meso' ? '#c9b48a' : '#b89a72';
+    const roof = ROOF_C[style] || '#5a3a2a', wall = WALL_C[style] || '#b89a72';
     const brick = '#9a5a42', glass = '#3b5568', dark = '#2d3034';
     switch (kind) {
       case 'totem':
@@ -2612,10 +2726,22 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     else if (style === 'eastern' && top % 3 === 0) part(S, 'pyr', B, 0, h, 0, w + .12, .22, w + .12, '#3d5552');
     else if (style === 'desert' && top % 3 === 0) part(S, 'dome', B, 0, h, 0, w * .7, .3, w * .7, '#cdb38c');
     else if (style === 'med' && top % 3 === 0) part(S, 'pyr', B, 0, h, 0, w + .06, .16, w + .06, '#b5583a');
+    else if (top % 3 === 0 && modernTop(S, B, style, h, w)) {}
     else if (top % 4 === 0) part(S, 'box', B, 0, h, 0, w * .6, .02, w * .6, '#3f8a46');
   }
+  // rooftops that keep a newer culture's look on modern buildings
+  function modernTop(S, B, style, h, w) {
+    switch (style) {
+      case 'sahel': for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) part(S, 'cone', B, x * w * .42, h, z * w * .42, .09, .2, .09, '#b98654'); part(S, 'box', B, 0, h, 0, w * .9, .06, w * .9, '#a8784a'); return true;
+      case 'indic': for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) part(S, 'cyl', B, x * w * .22, h, z * w * .22, .02, .16, .02, '#e8d8b8'); part(S, 'box', B, 0, h + .16, 0, w * .6, .03, w * .6, '#e8d8b8'); part(S, 'dome', B, 0, h + .19, 0, w * .5, .2, w * .5, '#e8d8b8'); return true;
+      case 'island': part(S, 'pyr', B, 0, h, 0, w + .1, .26, w + .1, '#a08a55'); return true;
+      case 'arctic': part(S, 'prism', B, 0, h, 0, w + .04, .3, w + .04, '#7a2f2a'); return true;
+      case 'slavic': part(S, 'cyl', B, 0, h, 0, w * .4, .1, w * .4, '#e6dccb'); part(S, 'sphere', B, 0, h + .22, 0, w * .32, .22, w * .32, '#d8a838'); part(S, 'cone', B, 0, h + .38, 0, .05, .14, .05, '#d8a838'); return true;
+    }
+    return false;
+  }
   function house(S, B, style, e, j, k, col = '#8a4a3a') {
-    if (e === 0) { cave(S, B, j); return; }
+    if (e === 0 && style !== 'arctic' && style !== 'island') { cave(S, B, j); return; }
     const st = e === 0 ? 0 : e <= 2 ? 1 : e <= 4 ? 2 : 3, dt = Q.life >= 1, glass = e >= 6 ? '#9fd3ec' : '#3b4a57';
     if (st === 3 && j > .3) {
       // modern towers keep a little of their culture: roofs, colors and balconies
@@ -2631,6 +2757,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       else if (style === 'nordic') part(S, 'prism', B, 0, h, 0, .52, .32, .52, '#3a3d42');
       else if (style === 'med') part(S, 'pyr', B, 0, h, 0, .56, .16, .56, '#b5583a');
       else if (style === 'meso') { part(S, 'box', B, 0, h, 0, .4, .1, .4, '#a59c86'); part(S, 'box', B, 0, h + .1, 0, .26, .1, .26, '#988f79'); }
+      else if (modernTop(S, B, style, h, .5)) {}
       else { part(S, 'box', B, 0, h, 0, .3, .12, .3, '#55595e'); if (dt) part(S, 'cyl', B, .12, h + .12, .12, .08, .02, .08, '#d8d8d8', .5, 0, 0); }
       if (dt && e >= 6) part(S, 'box', B, 0, h + .01, 0, .36, .015, .36, '#2b3540');
       return;
@@ -2713,6 +2840,90 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
           }
         }
         break;
+      case 'sahel':
+        if (s < 2) {
+          // round mud huts with conical thatch; a little granary beside the bigger compounds
+          part(S, 'cyl', B, 0, 0, 0, .5, .32, .5, '#a8784a'); part(S, 'cone', B, 0, .32, 0, .66, .4, .66, '#c2a060'); door(S, B, .25, .12, .2, '#3b2a1a');
+          if (s && dt) { part(S, 'cyl', B, .38, 0, .25, .2, .24, .2, '#b08050'); part(S, 'cone', B, .38, .24, .25, .26, .2, .26, '#c2a060'); part(S, 'cyl', B, 0, .2, 0, .51, .03, .51, col); part(S, 'cyl', B, -.32, 0, .3, .07, .12, .07, '#8a5a3a'); }
+        } else {
+          const h = .45 + j * .35;
+          part(S, 'box', B, 0, 0, 0, .6, h, .55, '#b98654'); door(S, B, .276, .14, .24, '#3b2a1a');
+          for (const [x, z] of [[-.27, .25], [.27, .25], [-.27, -.25], [.27, -.25]]) part(S, 'cone', B, x, h, z, .09, .16, .09, '#b98654');
+          if (dt) {
+            for (let r = 0; r < 2; r++) for (const x of [-.2, -.07, .07, .2]) part(S, 'cyl', B, x, h * (.45 + r * .35), .29, .014, .1, .014, '#5a4026', Math.PI / 2, 0, 0);
+            part(S, 'box', B, 0, h - .05, .277, .5, .04, .01, col); win(S, B, .18, h * .55, .277, .07, .08, '#2a2018');
+          }
+        }
+        break;
+      case 'indic':
+        if (s === 0) { part(S, 'box', B, 0, 0, 0, .5, .28, .44, '#c9a87a'); part(S, 'prism', B, 0, .28, 0, .58, .26, .5, '#b09a5a'); door(S, B, .221, .12, .2, '#5a3a24'); }
+        else if (s === 1) {
+          // flat-roofed ochre house with a shady veranda
+          part(S, 'box', B, 0, 0, 0, .58, .4, .44, '#d9a878'); part(S, 'box', B, 0, .4, 0, .6, .05, .46, '#c49060'); door(S, B, .221, .13, .22, '#6b3a24');
+          if (dt) { part(S, 'box', B, 0, .3, .32, .58, .03, .2, '#b5583a'); for (const x of [-.26, 0, .26]) part(S, 'cyl', B, x, 0, .4, .02, .3, .02, '#e8d8b8'); part(S, 'cyl', B, .3, 0, .48, .05, .1, .05, '#b0653a'); part(S, 'sphere', B, .3, .1, .48, .05, .05, .05, '#4f7a3a'); part(S, 'box', B, -.18, .25, .222, .1, .1, .01, col); }
+        } else {
+          // tall mansion with an overhanging balcony and a domed rooftop pavilion
+          const h = .7 + j * .3;
+          part(S, 'box', B, 0, 0, 0, .6, h, .55, '#e0b080'); door(S, B, .276, .14, .26, '#6b3a24');
+          if (dt) {
+            part(S, 'box', B, 0, h * .55, .32, .28, .18, .1, '#d4a070'); part(S, 'dome', B, 0, h * .55 + .18, .32, .14, .08, .07, '#b5583a'); win(S, B, 0, h * .6, .371, .16, .09, '#2a2018');
+            for (const x of [-.2, .2]) win(S, B, x, h * .3, .276, .07, .1, '#2a2018');
+            part(S, 'box', B, 0, h, 0, .62, .04, .57, '#c49060');
+            for (const [x, z] of [[.08, .08], [.2, .08], [.08, .2], [.2, .2]]) part(S, 'cyl', B, x, h + .04, z - .1, .015, .14, .015, '#e8d8b8');
+            part(S, 'dome', B, .14, h + .18, .04, .12, .1, .12, '#e8d8b8'); part(S, 'box', B, -.3, h * .5, 0, .01, .08, .3, col);
+          }
+        }
+        break;
+      case 'island':
+        if (s < 2) {
+          // open-sided round house on a stone platform under a huge thatched dome
+          part(S, 'cyl', B, 0, 0, 0, .66, .06, .58, '#8f8a80');
+          for (let a = 0; a < 6; a++) part(S, 'cyl', B, Math.cos(a * 1.047) * .26, .06, Math.sin(a * 1.047) * .22, .025, .2, .025, '#6b4a2f');
+          part(S, 'dome', B, 0, .24, 0, .64, .42, .56, '#a08a55'); if (s) part(S, 'cyl', B, 0, .26, 0, .62, .03, .54, col);
+          if (dt) { part(S, 'box', B, 0, .06, 0, .3, .01, .22, '#d8c49a'); if (j > .5) { part(S, 'cyl', B, .48, 0, .2, .02, .5, .02, '#7a6a4a', 0, 0, -.15); for (const a of [0, 1.6, 3.2, 4.8]) part(S, 'box', B, .55 + Math.cos(a) * .1, .5, .2 + Math.sin(a) * .1, .22, .01, .05, '#3f7a35', 0, -a, -.3); } }
+        } else {
+          // raised house on stilts with a steep thatched roof and crossed gable ends
+          for (const [x, z] of [[-.22, -.17], [.22, -.17], [-.22, .17], [.22, .17]]) part(S, 'cyl', B, x, 0, z, .03, .22, .03, '#5a4026');
+          part(S, 'box', B, 0, .22, 0, .56, .04, .44, '#7a5a3a'); part(S, 'box', B, 0, .26, 0, .48, .26, .36, '#c9a87a'); part(S, 'prism', B, 0, .52, 0, .64, .42, .5, '#a08a55');
+          door(S, B, .181, .12, .18, '#3b2a1a');
+          if (dt) { for (const z of [-.25, .25]) for (const r of [-.5, .5]) part(S, 'box', B, 0, .9, z, .02, .2, .02, '#5a4026', 0, 0, r); part(S, 'box', B, 0, .03, .3, .06, .22, .02, '#6b4a2f', -.4, 0, 0); part(S, 'box', B, 0, .3, .182, .4, .03, .01, col); }
+        }
+        break;
+      case 'arctic':
+        if (s < 2) {
+          // snow-block igloo with an entrance tunnel; a kayak on its rack beside the bigger ones
+          part(S, 'dome', B, 0, 0, 0, .55, .42, .55, '#eef2f4'); part(S, 'dome', B, 0, 0, .3, .2, .17, .22, '#e6ecf0');
+          part(S, 'box', B, 0, 0, .41, .1, .1, .01, '#3a4048');
+          if (dt) { for (const y of [.12, .25]) part(S, 'cyl', B, 0, y, 0, .52 - y * .5, .012, .52 - y * .5, '#c6d0d8'); part(S, 'cyl', B, 0, .41, 0, .06, .01, .06, '#9fd3ec'); }
+          if (s && dt) { for (const x of [-.4, .4]) part(S, 'cyl', B, x, 0, -.2, .015, .22, .015, '#5a4632'); part(S, 'hull', B, 0, .22, -.2, .1, .05, .8, col, 0, Math.PI / 2, 0); }
+        } else {
+          // brightly painted timber house on a rock footing
+          const pal = ['#b5302a', '#e0b030', '#2f6db5', '#3f8a5a'][Math.floor(j * 4) % 4];
+          part(S, 'box', B, 0, 0, 0, .62, .08, .52, '#77706a'); part(S, 'box', B, 0, .08, 0, .55, .4, .45, pal); part(S, 'prism', B, 0, .48, 0, .6, .3, .5, '#2b2b2b');
+          door(S, B, .226, .12, .22, '#f2f2f0');
+          if (dt) { for (const x of [-.18, .18]) { win(S, B, x, .3, .227, .1, .1, glass); part(S, 'box', B, x, .3, .228, .12, .12, .005, '#f2f2f0'); } part(S, 'box', B, .2, .55, -.1, .06, .2, .06, '#55595e'); }
+        }
+        break;
+      case 'slavic':
+        if (s === 0) { part(S, 'box', B, 0, 0, 0, .6, .22, .5, '#6b4a2f'); part(S, 'prism', B, 0, .22, 0, .66, .3, .56, '#5d6b3a'); door(S, B, .251, .12, .18, '#3b2d20'); }
+        else if (s === 1) {
+          // log izba with carved, painted window frames and a horse-head ridge
+          part(S, 'box', B, 0, 0, 0, .58, .4, .48, '#7a5a3a'); part(S, 'prism', B, 0, .4, 0, .66, .36, .54, '#5a4632'); door(S, B, .241, .13, .22, '#3b2d20');
+          if (dt) {
+            for (let y = .06; y < .4; y += .08) part(S, 'box', B, 0, y, .242, .58, .012, .01, '#5e4430');
+            for (const x of [-.18, .18]) { win(S, B, x, .2, .244, .09, .1, glass); part(S, 'box', B, x, .27, .246, .14, .04, .01, col); part(S, 'box', B, x, .14, .246, .12, .02, .01, '#efe8dc'); }
+            part(S, 'box', B, 0, .76, .27, .03, .08, .06, '#5e4430', -.4, 0, 0);
+          }
+        } else {
+          // plastered two-storey house; the grander ones wear a small onion dome
+          part(S, 'box', B, 0, 0, 0, .58, .62, .5, '#e6dccb'); part(S, 'prism', B, 0, .62, 0, .64, .32, .56, '#3f6a4a'); door(S, B, .251, .13, .24, '#5a3a24');
+          if (dt) {
+            for (const x of [-.18, .18]) for (const y of [.18, .44]) { win(S, B, x, y, .252, .09, .11, glass); part(S, 'box', B, x, y + .12, .254, .12, .025, .01, '#f6f2ea'); }
+            part(S, 'box', B, 0, .31, .253, .58, .02, .01, col);
+            if (j > .7) { part(S, 'cyl', B, 0, .86, 0, .07, .1, .07, '#e6dccb'); part(S, 'sphere', B, 0, 1.02, 0, .08, .09, .08, '#2f6db5'); part(S, 'cone', B, 0, 1.1, 0, .02, .08, .02, '#d8a838'); }
+          }
+        }
+        break;
       default: // jungle
         if (s === 0) { part(S, 'cyl', B, 0, 0, 0, .48, .28, .48, '#a59c86'); part(S, 'cone', B, 0, .28, 0, .62, .4, .62, '#a08a55'); door(S, B, .24, .12, .18, '#3b2d20'); }
         else {
@@ -2749,6 +2960,63 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         for (const [x, z] of [[-.9, -.9], [.9, -.9], [-.9, .9], [.9, .9]]) { part(S, 'cyl', B, x, 0, z, .5, 1.1, .5, '#8f8774'); part(S, 'cone', B, x, 1.1, z, .55, .45, .55, '#6a3b2c'); } break;
       case 'meso0': for (let k = 0; k < 5; k++) part(S, 'box', B, 0, k * .32, 0, 2.4 - k * .42, .32, 2.4 - k * .42, k % 2 ? '#a59c86' : '#988f79');
         part(S, 'box', B, 0, 1.6, 0, .5, .35, .5, '#c9bfa8'); part(S, 'box', B, 0, 0, 1.0, .36, 1.6, .5, '#b3aa94', -.9, 0, 0); break;
+      case 'sahel0': // the Great Mud Mosque: three tapering towers and a forest of timber beams
+        part(S, 'box', B, 0, 0, 0, 2.2, .8, 1.6, '#b98654');
+        for (const [x, hh, sz] of [[0, 1.9, .5], [-.75, 1.4, .38], [.75, 1.4, .38]]) {
+          for (let k = 0; k < 4; k++) part(S, 'box', B, x, k * hh / 4, .7, sz * (1 - k * .14), hh / 4, sz * (1 - k * .14), '#b07a48');
+          part(S, 'cone', B, x, hh, .7, sz * .45, .3, sz * .45, '#b98654'); part(S, 'sphere', B, x, hh + .3, .7, .05, .06, .05, '#f2ead6');
+          for (let y = .25; y < hh - .1; y += .3) for (const dx of [-.12, .12]) part(S, 'cyl', B, x + dx, y, .7 + sz / 2, .02, .16, .02, '#5a4026', Math.PI / 2, 0, 0);
+        }
+        for (let x = -1; x <= 1.01; x += .25) part(S, 'cone', B, x, .8, -.78, .1, .16, .1, '#b98654');
+        break;
+      case 'sahel1': part(S, 'box', B, 0, 0, 0, 2.2, .3, 2.2, '#a8784a');
+        for (const [x, z, r] of [[0, 0, .8], [-.7, .6, .45], [.7, .6, .45], [0, -.7, .5]]) { part(S, 'cyl', B, x, .3, z, r, .55, r, '#b98654'); part(S, 'cone', B, x, .85, z, r * 1.25, .6, r * 1.25, '#d8a838'); }
+        break;
+      case 'indic0': // the Great Stupa: a solid dome on a drum, crowned with stone parasols, ringed by a railing and four gateways
+        part(S, 'cyl', B, 0, 0, 0, 2.3, .32, 2.3, '#d8c8a8'); part(S, 'dome', B, 0, .32, 0, 1.9, 1.15, 1.9, '#ece2cc');
+        part(S, 'box', B, 0, 1.4, 0, .3, .16, .3, '#c9b48a'); part(S, 'cyl', B, 0, 1.56, 0, .03, .5, .03, '#8a7a5a'); for (const [y, r] of [[1.7, .3], [1.84, .22], [1.98, .14]]) part(S, 'cyl', B, 0, y, 0, r, .03, r, '#c9b48a');
+        for (let a = 0; a < 24; a++) part(S, 'box', B, Math.cos(a / 24 * 6.283) * 1.45, 0, Math.sin(a / 24 * 6.283) * 1.45, .05, .3, .05, '#b8a888');
+        for (const a of [0, 1.571, 3.142, 4.712]) { const B2 = B.clone().multiply(tmpM.makeRotationY(a)); for (const x of [-.16, .16]) part(S, 'box', B2, x, 0, 1.6, .06, .6, .06, '#b8a888'); for (const y of [.48, .58]) part(S, 'box', B2, 0, y, 1.6, .5, .05, .06, '#b8a888'); }
+        break;
+      case 'indic1': // temple: a pillared hall and a soaring carved tower
+        part(S, 'box', B, 0, 0, 0, 2.2, .2, 1.6, '#b9875a'); part(S, 'box', B, 0, .2, .35, 1.1, .45, .8, '#c9945e'); part(S, 'pyr', B, 0, .65, .35, 1.2, .35, .9, '#b9875a');
+        for (let k = 0; k < 7; k++) { const sz = .9 - k * .11; part(S, 'box', B, 0, .2 + k * .32, -.35, sz, .32, sz, k % 2 ? '#c9945e' : '#b9875a'); for (const x of [-1, 1]) part(S, 'box', B, x * sz * .32, .2 + k * .32, -.35 + sz * .5, sz * .22, .26, .04, '#a87a4e'); }
+        part(S, 'cyl', B, 0, 2.44, -.35, .16, .08, .16, '#a87a4e'); part(S, 'cone', B, 0, 2.52, -.35, .06, .22, .06, '#d8a838'); part(S, 'box', B, .1, 2.6, -.35, .16, .08, .01, '#e05a2a');
+        for (let x = -.45; x <= .46; x += .3) part(S, 'cyl', B, x, .2, .78, .05, .45, .05, '#e0b080');
+        break;
+      case 'island0': // a stone platform lined with giant carved heads under red topknots
+        part(S, 'box', B, 0, 0, 0, 2.6, .25, .7, '#77726a');
+        for (let k = 0; k < 7; k++) { const x = -1.08 + k * .36, hh = .5 + (k % 3) * .08; part(S, 'box', B, x, .25, 0, .24, hh, .2, '#6f6a62'); part(S, 'box', B, x, .25 + hh, .01, .22, .42, .2, '#6a655d'); part(S, 'box', B, x, .25 + hh + .26, .11, .2, .06, .04, '#5a554e'); part(S, 'box', B, x, .25 + hh + .1, .12, .05, .14, .04, '#625d56'); if (k % 2 === 0) part(S, 'cyl', B, x, .67 + hh, 0, .13, .1, .13, '#9a4a32'); }
+        break;
+      case 'island1': // great meeting house with a carved, red-painted gable and porch
+        part(S, 'box', B, 0, 0, 0, 1.5, .6, 1.4, '#7a3a24'); part(S, 'prism', B, 0, .6, .15, 1.75, .7, 1.75, '#3a2a20', 0, Math.PI / 2, 0);
+        for (const x of [-1, 1]) part(S, 'box', B, x * .44, .95, 1.05, .06, 1.05, .05, '#b5302a', 0, 0, x * .95);
+        part(S, 'box', B, 0, 1.28, 1.05, .1, .25, .06, '#b5302a'); part(S, 'sphere', B, 0, 1.45, 1.05, .07, .07, .06, '#7a3a24');
+        for (const x of [-.6, .6]) part(S, 'box', B, x, 0, .9, .08, .6, .08, '#b5302a'); door(S, B, .701, .3, .42, '#2a1a12');
+        break;
+      case 'arctic0': // great snow hall: a big dome ringed by smaller ones and their tunnels
+        part(S, 'dome', B, 0, 0, 0, 1.7, 1.15, 1.7, '#eef2f4');
+        for (let a = 0; a < 4; a++) { const x = Math.cos(a * 1.571 + .785) * 1.05, z = Math.sin(a * 1.571 + .785) * 1.05; part(S, 'dome', B, x, 0, z, .7, .5, .7, '#e6ecf0'); part(S, 'dome', B, x * .62, 0, z * .62, .3, .25, .3, '#e2e8ec'); }
+        for (const y of [.25, .55, .85]) part(S, 'cyl', B, 0, y, 0, 1.68 - y * 1.3, .02, 1.68 - y * 1.3, '#c6d0d8');
+        break;
+      case 'arctic1': // lodge framed with whale ribs under stretched skins
+        part(S, 'dome', B, 0, 0, 0, 1.8, .8, 1.3, '#9a7a52');
+        for (let k = -3; k <= 3; k++) for (const x of [-1, 1]) part(S, 'cyl', B, x * .55, 0, k * .2, .035, 1, .035, '#ece4d0', 0, 0, x * -.6);
+        part(S, 'box', B, 0, 0, .85, 1, .08, .4, '#e8e0cc'); part(S, 'box', B, 0, 0, .65, .3, .32, .02, '#3a2c20');
+        break;
+      case 'slavic0': // cathedral crowned with bright onion domes
+        part(S, 'box', B, 0, 0, 0, 1.5, 1, 1.5, '#efe8dc'); part(S, 'box', B, 0, 1, 0, 1.52, .06, 1.52, '#3f6a4a');
+        for (const [x, z, c, hh] of [[0, 0, '#d8a838', 1.1], [-.5, -.5, '#2f6db5', .55], [.5, -.5, '#3f8a5a', .55], [-.5, .5, '#b5302a', .55], [.5, .5, '#2f6db5', .55]]) {
+          const r = x ? .17 : .26; part(S, 'cyl', B, x, 1.06, z, r, hh, r, '#efe8dc'); part(S, 'sphere', B, x, 1.06 + hh + r * .9, z, r * 1.25, r * 1.3, r * 1.25, c); part(S, 'cone', B, x, 1.06 + hh + r * 1.9, z, r * .35, r * 1.1, r * .35, c);
+          part(S, 'cyl', B, x, 1.06 + hh + r * 2.9, z, .015, .2, .015, '#d8a838');
+        }
+        part(S, 'box', B, 0, 0, .751, .3, .5, .01, '#5a3a24');
+        break;
+      case 'slavic1': // fortress of red walls and green-spired towers around a golden-domed church
+        for (const a of [0, 1.571, 3.142, 4.712]) { const B2 = B.clone().multiply(tmpM.makeRotationY(a)); part(S, 'box', B2, 0, 0, 1.2, 2.4, .5, .15, '#a83a2e'); for (let x = -1.1; x <= 1.11; x += .22) part(S, 'box', B2, x, .5, 1.2, .1, .08, .15, '#a83a2e'); }
+        for (const [x, z] of [[-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2], [1.2, 1.2], [0, 1.2]]) { part(S, 'box', B, x, 0, z, .36, .9, .36, '#b5402e'); part(S, 'pyr', B, x, .9, z, .4, .55, .4, '#3f6a4a'); part(S, 'sphere', B, x, 1.48, z, .05, .05, .05, '#e03a2a'); }
+        part(S, 'box', B, 0, 0, 0, .7, .6, .7, '#efe8dc'); part(S, 'cyl', B, 0, .6, 0, .18, .3, .18, '#efe8dc'); part(S, 'sphere', B, 0, 1.08, 0, .24, .26, .24, '#d8a838'); part(S, 'cone', B, 0, 1.28, 0, .08, .22, .08, '#d8a838');
+        break;
       default: part(S, 'box', B, 0, 0, 0, 1.6, .4, 1.6, '#a59c86'); part(S, 'cyl', B, 0, .4, 0, .9, .8, .9, '#e0d6bd'); part(S, 'dome', B, 0, 1.2, 0, .9, .6, .9, '#d9cfb6');
     }
   }
@@ -2778,6 +3046,16 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       part(S, 'hull', B, 0, -.05, 0, .3, .14, .95, '#8a6a42');
       part(S, 'cyl', B, 0, .09, .1, .025, .55, .025, '#4a3626'); part(S, 'box', B, 0, .5, .05, .02, .02, 1.1, '#4a3626', -.6, 0, 0);
       part(S, 'pyr', B, 0, .15, .02, .02, .7, .7, '#f2ead6', 0, 0, 0); part(S, 'box', B, 0, .86, -.3, .01, .06, .1, col);
+    } else if (era <= 2 && style === 'island') {
+      // double-hulled voyaging canoe with a deck between and a crab-claw sail
+      for (const x of [-.17, .17]) part(S, 'hull', B, x, -.05, 0, .14, .12, 1.1, '#6b4a2f');
+      part(S, 'box', B, 0, .06, 0, .44, .03, .5, '#a8865a'); part(S, 'prism', B, 0, .09, -.05, .2, .14, .26, '#a08a55');
+      part(S, 'cyl', B, 0, .09, .15, .025, .5, .025, '#4a3626', -.25, 0, 0); part(S, 'pyr', B, 0, .2, .2, .02, .75, .55, '#d8c49a', -.3, 0, 0); part(S, 'box', B, 0, .9, .02, .01, .06, .1, col);
+    } else if (era <= 2 && style === 'arctic') {
+      // big open skin boat with a row of paddles
+      part(S, 'hull', B, 0, -.05, 0, .3, .13, 1, '#c9b08a'); part(S, 'box', B, 0, .07, 0, .3, .015, .9, '#7a5a3a');
+      for (let k = -2; k <= 2; k++) for (const x of [-1, 1]) part(S, 'box', B, x * .22, .02, k * .15, .22, .012, .02, '#5a4632', 0, 0, x * -.5);
+      part(S, 'cyl', B, 0, .07, .3, .02, .35, .02, '#5a4632'); part(S, 'box', B, 0, .4, .3, .01, .1, .14, col);
     } else if (era <= 2) {
       part(S, 'hull', B, 0, -.05, 0, .32, .16, 1, '#6b4a2f');
       part(S, 'cyl', B, 0, .11, 0, .03, .8, .03, '#4a3626'); part(S, 'box', B, 0, .38, 0, .55, .4, .02, col);
@@ -3487,6 +3765,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     if (world) { scene.remove(world.group); world.group.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
     const group = new THREE.Group(); world = { group, ch: cornerHeights(sim) };
     const ch = world.ch, n = W * H, VW = W + 1;
+    // baked ambient occlusion on the ground: hollows and valley floors darken, ridges catch a little more light
+    world.vAO = new Float32Array((W + 1) * (H + 1)).fill(1);
+    for (let y = 1; y < H; y++) for (let x = 1; x < W; x++) { const v = y * VW + x; let a = 0; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) { const xx = Math.min(W, Math.max(0, x + dx)), yy = Math.min(H, Math.max(0, y + dy)); a += ch[yy * VW + xx]; }
+      world.vAO[v] = Math.min(1.06, Math.max(.7, 1 - (a / 8 - ch[v]) * .22)); }
     // terrain: smooth shaded grid; each vertex blends the colors of the tiles around it
     const vcount = (W + 1) * (H + 1), pos = new Float32Array(vcount * 3), col = new Float32Array(vcount * 3), index = [];
     for (let y = 0; y <= H; y++) for (let x = 0; x <= W; x++) { const v = y * VW + x; pos[v * 3] = wx(x); pos[v * 3 + 1] = ch[v]; pos[v * 3 + 2] = wz(y); }
@@ -3499,13 +3781,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     world.terrain.receiveShadow = true; world.terrain.castShadow = true;
     // seasons: autumn turns green ground golden, winter lays snow on flat land
     const season = world.seasonU = { uSnow: { value: 0 }, uAutumn: { value: 0 } };
-    { const clim = new Float32Array(vcount * 2);
-      for (let v = 0; v < vcount; v++) { const x = v % VW, y = (v / VW) | 0; let a = 0, b = 0, k = 0; for (const [dx, dy] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) { const tx = x + dx, ty = y + dy; if (tx < 0 || ty < 0 || tx >= W || ty >= H) continue; const bs = BIOME_SNOW[sim.biome[ty * W + tx]]; a += bs[0]; b += bs[1]; k++; } clim[v * 2] = k ? a / k : 1; clim[v * 2 + 1] = k ? b / k : 0; }
-      world.terrain.geometry.setAttribute('aClim', new THREE.BufferAttribute(clim, 2)); }
+    { const clim = new Float32Array(vcount * 3);
+      for (let v = 0; v < vcount; v++) { const x = v % VW, y = (v / VW) | 0; let a = 0, b = 0, c = 0, k = 0; for (const [dx, dy] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) { const tx = x + dx, ty = y + dy; if (tx < 0 || ty < 0 || tx >= W || ty >= H) continue; const bi = sim.biome[ty * W + tx], bs = BIOME_SNOW[bi]; a += bs[0]; b += bs[1]; c += BIOME_ROCK[bi]; k++; } clim[v * 3] = k ? a / k : 1; clim[v * 3 + 1] = k ? b / k : 0; clim[v * 3 + 2] = k ? c / k : 0; }
+      world.terrain.geometry.setAttribute('aClim', new THREE.BufferAttribute(clim, 3)); }
     world.terrain.material.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, season);
-      sh.vertexShader = 'attribute vec2 aClim; varying vec2 vClim; varying float vUpY; varying float vH; varying vec2 vWP;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vUpY = normal.y; vH = position.y; vClim = aClim; vWP = (modelMatrix * vec4(position, 1.0)).xz;');
-      sh.fragmentShader = 'uniform float uSnow; uniform float uAutumn; varying vec2 vClim; varying float vUpY; varying float vH; varying vec2 vWP;\n' + NOISE_GLSL + sh.fragmentShader.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+      sh.vertexShader = 'attribute vec3 aClim; varying vec3 vClim; varying float vUpY; varying float vH; varying vec2 vWP;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vUpY = normal.y; vH = position.y; vClim = aClim; vWP = (modelMatrix * vec4(position, 1.0)).xz;');
+      sh.fragmentShader = 'uniform float uSnow; uniform float uAutumn; varying vec3 vClim; varying float vUpY; varying float vH; varying vec2 vWP;\n' + NOISE_GLSL + sh.fragmentShader.replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
         { // fake surface detail: rocky ridges on high ground, gentle lumps below
           float amp = mix(0.12, 0.9, smoothstep(1.8, 4.5, vH));
           vec2 e = vec2(0.08, 0.0); vec2 q = vWP * 1.4;
@@ -3518,7 +3800,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         diffuseColor.rgb *= 0.86 + 0.2 * n1 + 0.1 * n2 + 0.05 * n3;
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.08, 1.04, 0.86), smoothstep(0.55, 0.8, n1) * 0.5);
         float steep = smoothstep(0.82, 0.55, vUpY) * step(0.1, vH);
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.15, 0.13, 0.11) * (0.85 + 0.3 * n2), steep * 0.75);
+        diffuseColor.rgb = mix(diffuseColor.rgb, mix(vec3(0.15, 0.13, 0.11), vec3(0.4, 0.18, 0.09), max(vClim.z, 0.0)) * (0.85 + 0.3 * n2), steep * 0.75);
         float wet = smoothstep(0.12, -0.05, vH) * step(-0.4, vH);
         diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(0.72, 0.7, 0.66), wet * 0.6);
         float green = clamp((diffuseColor.g - max(diffuseColor.r, diffuseColor.b)) * 8.0, 0.0, 1.0);
@@ -3527,7 +3809,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.92, 0.95), snow);
         // mountains: banded grey-brown rock below a ragged snow line, cliffs stay bare
         vec3 rock = vec3(0.16, 0.14, 0.12) * (0.78 + 0.32 * vnoise(vec2(vH * 4.0, vWP.x * 0.3 + vWP.y * 0.2)) + 0.14 * n3);
-        float high = smoothstep(2.4, 4.2, vH), snowLine = 6.4 + n1 * 1.8 - vClim.x * 1.5;
+        float red = max(vClim.z, 0.0), mead = max(-vClim.z, 0.0);
+        vec3 redRock = vec3(0.42, 0.19, 0.1) * (0.75 + 0.35 * sin(vH * 9.0 + n2 * 2.0) * 0.5 + 0.2 * n3) + vec3(0.06, 0.04, 0.02) * step(0.6, fract(vH * 1.6));
+        rock = mix(rock, redRock, red);
+        float high = smoothstep(2.4, 4.2, vH) * (1.0 - mead * 0.7), snowLine = 6.4 + n1 * 1.8 - vClim.x * 1.5;
         float cap = smoothstep(snowLine, snowLine + 0.7, vH) * smoothstep(0.45, 0.75, vUpY);
         float cliff = smoothstep(0.78, 0.55, vUpY) * step(0.4, vH);
         diffuseColor.rgb = mix(diffuseColor.rgb, rock, max(high * (1.0 - cap), cliff * 0.85));
@@ -3535,6 +3820,35 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     };
     group.add(world.terrain);
     world.tileCol = new Float32Array(n * 3);
+    // rivers: a flowing ribbon draped down each valley, widening toward the sea and foaming white where it falls
+    if (sim.rivers && sim.rivers.length) {
+      const rp = [], rc = [], ru = [], ri = [];
+      for (const path of sim.rivers) {
+        let pts = path.map(i => [i % W + .5, ((i / W) | 0) + .5]);
+        for (let it = 0; it < 2; it++) { const q = [pts[0]]; for (let k = 0; k < pts.length - 1; k++) { const a = pts[k], b = pts[k + 1]; q.push([a[0] * .75 + b[0] * .25, a[1] * .75 + b[1] * .25], [a[0] * .25 + b[0] * .75, a[1] * .25 + b[1] * .75]); } q.push(pts[pts.length - 1]); pts = q; }
+        const end = pts.findIndex((p, k) => k > 4 && heightAt(p[0], p[1]) < -.02); if (end > 0) pts = pts.slice(0, end + 1);
+        const v0 = rp.length / 3, N = pts.length; let dist = 0, pyc = null;
+        for (let k = 0; k < N; k++) {
+          const p = pts[k], a = pts[Math.max(0, k - 1)], b = pts[Math.min(N - 1, k + 1)];
+          let tx = b[0] - a[0], ty = b[1] - a[1]; const tl = Math.hypot(tx, ty) || 1; tx /= tl; ty /= tl;
+          const w = .1 + Math.min(1, k / N) * .24 + (k < 6 ? -.01 * (6 - k) : 0), seg = k ? Math.hypot(p[0] - pts[k - 1][0], p[1] - pts[k - 1][1]) : 0; dist += seg;
+          const yc = Math.max(-.02, heightAt(p[0], p[1])), fall = pyc === null ? 0 : clamp01(((pyc - yc) / (seg || 1) - .5) * 1.2); pyc = yc;
+          const blue = [.17, .36, .46], fo = Math.min(1, fall + (k < 3 ? .3 : 0));
+          for (const sd of [-1, 1]) {
+            const sx = p[0] + ty * w * sd, sy = p[1] - tx * w * sd;
+            rp.push(wx(sx), Math.max(-.02, Math.max(heightAt(sx, sy), yc - .05)) + .045, wz(sy)); ru.push(sd < 0 ? 0 : 1, dist * 1.4);
+            rc.push(blue[0] + (.92 - blue[0]) * fo, blue[1] + (.95 - blue[1]) * fo, blue[2] + (.97 - blue[2]) * fo);
+          }
+          if (k) { const A = v0 + (k - 1) * 2; ri.push(A, A + 2, A + 1, A + 1, A + 2, A + 3); }
+        }
+      }
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(rp, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(rc, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(ru, 2)); g.setIndex(ri); g.computeVertexNormals();
+      const cv = document.createElement('canvas'); cv.width = 32; cv.height = 128; const cx = cv.getContext('2d'); cx.fillStyle = '#d6dde0'; cx.fillRect(0, 0, 32, 128);
+      const fr = Sim.rng(7); for (let k = 0; k < 40; k++) { cx.fillStyle = `rgba(255,255,255,${.25 + fr() * .5})`; cx.fillRect(fr() * 32, fr() * 128, 1 + fr() * 2, 6 + fr() * 18); }
+      const tex = new THREE.CanvasTexture(cv); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; world.riverTex = tex;
+      world.riverMesh = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, map: tex, roughness: .18, metalness: .1, transparent: true, opacity: .9, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+      world.riverMesh.receiveShadow = true; world.riverMesh.renderOrder = 1; group.add(world.riverMesh);
+    }
     // open sea to the horizon, with a seabed under it
     const seabed = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshStandardMaterial({ color: '#2f4f55', roughness: 1 }));
     seabed.rotation.x = -Math.PI / 2; seabed.position.y = -2.62; group.add(seabed);
@@ -3612,20 +3926,43 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     };
     world.palms = instanced(frondGeo(), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .85, vertexColors: true, side: THREE.DoubleSide }), MAXT);
     world.acacias = instanced(canopyGeo(), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .9, vertexColors: true, flatShading: true }), MAXT);
-    group.add(world.palms, world.acacias);
-    for (const m of [world.pines, world.leaves, world.palms, world.acacias]) m.setColorAt(0, tmpC.set('#fff'));
-    world.treeM = [world.leaves, world.pines, world.palms, world.acacias];
-    world.treeSlots = new Array(n); world.nT = 0; world.nF = [0, 0, 0, 0];
+    // bamboo grows as a clump of tall jointed canes with leaf sprays; mangroves stand on arching stilt roots
+    const bambooGeo = () => {
+      const parts = [];
+      for (let c = 0; c < 8; c++) {
+        const a = c * 2.4, r = .03 + (c % 3) * .045, x = Math.cos(a) * r, z = Math.sin(a) * r, h = 1.05 + (c % 4) * .14, lean = (c % 2 ? .07 : -.05);
+        const cane = new THREE.CylinderGeometry(.012, .016, h, 5).translate(0, h / 2, 0);
+        parts.push(tshade(cane.rotateZ(lean).rotateY(a).translate(x, 0, z), .72));
+        for (let k = 1; k < 5; k++) parts.push(tshade(new THREE.CylinderGeometry(.019, .019, .015, 5).translate(0, h * k / 5, 0).rotateZ(lean).rotateY(a).translate(x, 0, z), .5));
+        for (let k = 0; k < 3; k++) { const y = h * (.55 + k * .17), la = a + k * 2.1; parts.push(tshade(new THREE.IcosahedronGeometry(.075, 0).scale(1.6, .35, .7).translate(.06, 0, 0).rotateY(la).translate(x + Math.sin(lean) * -y, y, z), .9 + k * .05)); }
+      }
+      return tmerge(parts);
+    };
+    const mangroveGeo = () => {
+      const parts = [];
+      for (let k = 0; k < 7; k++) { const a = k / 7 * Math.PI * 2 + .3, rr = .17 + (k % 3) * .04; parts.push(tshade(new THREE.CylinderGeometry(.009, .013, Math.hypot(rr, .26), 5).translate(0, Math.hypot(rr, .26) / 2, 0).rotateZ(Math.atan2(rr, .26)).translate(rr, -.12, 0).rotateY(a), .22)); }
+      for (const [x, y, z, r] of [[0, .62, 0, .26], [.17, .57, .08, .19], [-.16, .58, -.07, .2], [.04, .68, -.15, .17], [-.06, .55, .16, .18]]) parts.push(tshade(lumpy(new THREE.IcosahedronGeometry(r, 1), .25, x * 10).scale(1.15, .7, 1.15).translate(x, y, z), 1));
+      return shadeY(tmerge(parts), .4, .82, .5, .92);
+    };
+    world.bamboo = instanced(bambooGeo(), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .8, vertexColors: true, flatShading: true }), MAXT);
+    world.mangroves = instanced(mangroveGeo(), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .9, vertexColors: true, flatShading: true }), MAXT);
+    group.add(world.palms, world.acacias, world.bamboo, world.mangroves);
+    for (const m of [world.pines, world.leaves, world.palms, world.acacias, world.bamboo, world.mangroves]) m.setColorAt(0, tmpC.set('#fff'));
+    world.treeM = [world.leaves, world.pines, world.palms, world.acacias, world.bamboo, world.mangroves];
+    world.treeSlots = new Array(n); world.nT = 0; world.nF = [0, 0, 0, 0, 0, 0];
     for (let i = 0; i < n; i++) if (sim.terrain[i] === T.FOREST) placeTrees(i);
     // ground cover by biome
     { const cov = []; for (let i = 0; i < n; i++) { const b = sim.biome[i], t = sim.terrain[i], j = sim.jit[i]; if (t === T.WATER || t === T.MOUNTAIN || sim.owner[i]) continue;
-        if ((b === 1 && t === T.SAND && j < .14) || (b === 2 && t === T.GRASS && j < .05) || (b === 6 && j < .35) || (b === 5 && j < .12)) cov.push(i); }
+        if ((b === 1 && t === T.SAND && j < .14) || (b === 2 && t === T.GRASS && j < .05) || (b === 6 && j < .35) || (b === 5 && j < .12) || (b === 7 && t === T.GRASS && j < .3) || (b === 8 && t !== T.SAND && j < .12) || (b === 11 && j < .6)) cov.push(i); }
       const cg = new THREE.CylinderGeometry(.5, 1, 1, 6); cg.translate(0, .5, 0);
-      world.cover = instanced(cg, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .9, flatShading: true }), cov.length * 3 + 1);
+      world.cover = instanced(cg, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .9, flatShading: true }), cov.length * 4 + 1);
       let c = 0;
       for (const i of cov) { const b = sim.biome[i], x = i % W, y = (i / W) | 0, j = sim.jit[i], px = x + .3 + j * 2, py = y + .6 - j, gy = heightAt(px, py) - .02;
         if (b === 1) { setInst(world.cover, c, wx(px), gy, wz(py), .06, .38, .06); world.cover.setColorAt(c++, tmpC.set('#5d8a3a')); setInst(world.cover, c, wx(px + .07), gy + .12, wz(py), .035, .16, .035); world.cover.setColorAt(c++, tmpC.set('#5d8a3a')); }
         else if (b === 2) { setInst(world.cover, c, wx(px), gy, wz(py), .14, .3, .14); world.cover.setColorAt(c++, tmpC.set('#a8683a')); }
+        else if (b === 7) for (let k = 0; k < 3; k++) { setInst(world.cover, c, wx(px + k * .16 - .1), gy, wz(py + (k % 2) * .14), .045, .1 + k * .025, .045); world.cover.setColorAt(c++, tmpC.set(k % 2 ? '#b4a456' : '#a39448')); }
+        else if (b === 8) { const hh = .35 + j * 2.2; setInst(world.cover, c, wx(px), gy, wz(py), .09, hh, .09, j * 6); world.cover.setColorAt(c++, tmpC.set('#b0623e')); setInst(world.cover, c, wx(px), gy + hh, wz(py), .12, .05, .12); world.cover.setColorAt(c++, tmpC.set('#7d5a44')); }
+        else if (b === 11) for (let k = 0; k < 4; k++) { setInst(world.cover, c, wx(px + hash(i, k) * .7 - .3), gy, wz(py + hash(k, i) * .7 - .3), .028, .055, .028); world.cover.setColorAt(c++, tmpC.set(['#e05a8a', '#f2d24a', '#9a6ad8', '#f4f4f4'][(i + k) % 4])); }
         else if (b === 6) for (let k = 0; k < 3; k++) { setInst(world.cover, c, wx(px + k * .12), gy, wz(py + (k % 2) * .1), .015, .22 + k * .04, .015); world.cover.setColorAt(c++, tmpC.set(k ? '#7a8a4a' : '#6b5a3a')); }
         else { setInst(world.cover, c, wx(px), gy - .03, wz(py), .14, .1, .12, j * 6); world.cover.setColorAt(c++, tmpC.set('#9c9a94')); } }
       world.cover.count = c; group.add(world.cover); }
@@ -3692,12 +4029,18 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     world.bolt = instanced(new THREE.BoxGeometry(.07, 1, .07).translate(0, .5, 0), new THREE.MeshBasicMaterial({ color: '#fffbe0' }), 4, false);
     world.rain.receiveShadow = world.flakes.receiveShadow = world.bolt.receiveShadow = false; group.add(world.rain, world.flakes, world.bolt);
     world.cloudSet = []; { const cr = Sim.rng(sim.seed ^ 77); for (let c = 0; c < 26; c++) { const n2 = (c % 3 === 0 ? 5 : 3) + Math.floor(cr() * 4), puffs = []; for (let k = 0; k < n2; k++) puffs.push([(cr() - .5) * 7, cr() * 1.2, (cr() - .5) * 3.5, 1.4 + cr() * 1.8]); world.cloudSet.push({ x: cr() * (W + 80) - 40, y: cr() * (H + 40) - 20, h: c % 3 === 0 ? 13 + cr() * 2 : 24 + cr() * 6, puffs, wet: c % 3 === 0, ph: cr() * 20 }); } }
-    world.herds = []; { const hr = Sim.rng(sim.seed ^ 991); for (let k = 0; k < 90 && world.herds.length < 34; k++) { const x = Math.floor(hr() * W), y = Math.floor(hr() * H), i = y * W + x; const b = sim.biome[i], kind = b === 1 ? 'camel' : b === 2 ? (hr() < .55 ? 'zebra' : 'elephant') : b === 4 || b === 5 ? 'reindeer' : hr() < .7 ? 'deer' : 'boar'; if (sim.terrain[i] === T.FOREST || sim.terrain[i] === T.GRASS || (b === 1 && sim.terrain[i] === T.SAND)) world.herds.push({ x, y, n: (kind === 'elephant' ? 2 : 3) + Math.floor(hr() * 4), kind }); } }
+    world.herds = []; { const hr = Sim.rng(sim.seed ^ 991); for (let k = 0; k < 90 && world.herds.length < 34; k++) { const x = Math.floor(hr() * W), y = Math.floor(hr() * H), i = y * W + x; const b = sim.biome[i], kind = b === 1 ? 'camel' : b === 2 ? (hr() < .55 ? 'zebra' : 'elephant') : b === 4 || b === 5 ? 'reindeer' : b === 7 ? 'horse' : b === 8 || b === 11 ? 'ibex' : b === 9 ? (hr() < .6 ? 'panda' : 'deer') : hr() < .7 ? 'deer' : 'boar'; if (sim.terrain[i] === T.FOREST || sim.terrain[i] === T.GRASS || (b === 1 && sim.terrain[i] === T.SAND)) world.herds.push({ x, y, n: (kind === 'elephant' ? 2 : 3) + Math.floor(hr() * 4), kind }); } }
     world.flocks = []; { const br = Sim.rng(sim.seed ^ 4242); for (let k = 0; k < 9; k++) world.flocks.push({ cx: br() * W, cy: br() * H, r: 6 + br() * 14, sp: (.04 + br() * .05) * (br() < .5 ? -1 : 1), ph: br() * 6.28, n: 5 + Math.floor(br() * 6), h: 4 + br() * 3 }); }
     world.walls = instanced(wallGeo, std({ color: '#a59d8c', roughness: 1 }), 4000);
     world.poles = instanced(poleGeo, std({ color: '#4a3a2a' }), 200);
     world.flags = instanced(flagGeo, std({ side: THREE.DoubleSide }), 200);
     world.flags.setColorAt(0, tmpC.set('#fff'));
+    // Low draws shadows only from towns, people and moving things; the ground and forests skip the shadow pass
+    if (Q.soft === false) {
+      group.traverse(o => { o.castShadow = false; });
+      for (const set of [world.bset, world.dset]) for (const k in set.meshes) set.meshes[k].castShadow = true;
+      for (const m of [world.torsos, world.heads, world.hats, world.garb, world.legs, world.arms, world.walls]) if (m) m.castShadow = true;
+    }
     group.add(world.walls, world.poles, world.flags);
     const flameGeo = new THREE.ConeGeometry(.22, .7, 6); flameGeo.translate(0, .35, 0);
     world.glow = instanced(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: '#ffd27a', transparent: true, opacity: 0, depthWrite: false }), 8000, false); world.glow.count = 0; group.add(world.glow);
@@ -3748,12 +4091,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       case 4: return { kind: 1, tw: 1, th: 1, fy: 0, sx: .85, sy: 1.15, col: [.38, .3, .14 + h1 * .05] };
       case 5: return { kind: 1, tw: .8, th: .7, fy: -.15, sx: .6, sy: .65, col: [.36, .2, .3] };
       case 6: return { kind: 0, tw: 1, th: 1.1, fy: -.05, sx: 1.25, sy: 1.15, col: [.17 + h1 * .04, .3, .22] }; // willow
+      case 7: return { kind: 0, tw: .7, th: 1.15, fy: .05, sx: .7, sy: .9, col: [.2 + h1 * .04, .4, .3] }; // birch groves
+      case 8: return { kind: 0, tw: .8, th: .6, fy: -.2, sx: .65, sy: .55, col: [.22, .25, .2] }; // juniper scrub
+      case 9: return h3 > .85 ? { kind: 0, tw: 1, th: 1.1, fy: 0, sx: 1.1, sy: 1, col: [.27, .5, .2] } : { kind: 4, tw: 0, th: 0, fy: 0, sx: .9 + h1 * .3, sy: 1 + h2 * .35, col: [.25 + h1 * .04, .5, .17 + h2 * .05] }; // bamboo
+      case 10: return { kind: 5, tw: .8, th: .9, fy: .12, sx: 1.05, sy: .85, col: [.27, .45, .15 + h1 * .04] }; // mangrove on stilt roots
+      case 11: return { kind: 1, tw: .8, th: .8, fy: -.1, sx: .7, sy: .85, col: [.36, .32, .15 + h1 * .04] }; // mountain fir
       default: return { kind: pineHi ? 1 : 0, tw: 1, th: 1, fy: 0, sx: 1, sy: 1, col: pineHi ? [.3 + h2 * .05, .38, .17 + h1 * .07] : [.2 + h1 * .1, .45 + h2 * .15, .22 + h3 * .1] };
     }
   }
   function placeTrees(i) {
     const x = i % W, y = (i / W) | 0, j = sim.jit[i], e = sim.elev[i], slots = [];
-    const count = Math.min(Q.trees, 2 + (j > .55 ? 1 : 0));
+    const count = sim.river && sim.river[i] ? 0 : Math.min(Q.trees, 2 + (j > .55 ? 1 : 0));
     for (let k = 0; k < count; k++) {
       const h1 = hash(i * 3.1 + k, k * 7.7), h2 = hash(k * 1.9, i * .37 + k), h3 = hash(i + k * 13.3, 2.2);
       const px = x + .15 + h1 * .7, py = y + .15 + h2 * .7, s = .75 + h3 * .6;
@@ -3785,9 +4133,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   }
 
   // ground tint per biome: plain, hills, strength
-  const BIOME_TINT = [null, ['#d8b675', '#b98f5a', .8], ['#b9a24e', '#9c8a5a', .6], ['#2e7a2c', '#4a6a3a', .45], ['#5f7a52', '#7d8478', .35], ['#d4d9d4', '#b4b8b4', .7], ['#55663a', '#5a5a44', .6]];
+  const BIOME_TINT = [null, ['#d8b675', '#b98f5a', .8], ['#b9a24e', '#9c8a5a', .6], ['#2e7a2c', '#4a6a3a', .45], ['#5f7a52', '#7d8478', .35], ['#d4d9d4', '#b4b8b4', .7], ['#55663a', '#5a5a44', .6],
+    ['#a9a25c', '#9a8f62', .6], ['#b8653c', '#a3512f', .8], ['#4d8d38', '#5a7a44', .45], ['#41633a', '#4f5c3c', .6], ['#6f9a48', '#7d9a5a', .55]];
   // how much winter snow each biome gets, and its year-round snow
-  const BIOME_SNOW = [[1, 0], [0, 0], [0, 0], [0, 0], [1.2, .15], [1, .5], [.6, 0]];
+  const BIOME_SNOW = [[1, 0], [0, 0], [0, 0], [0, 0], [1.2, .15], [1, .5], [.6, 0], [1.1, 0], [0, 0], [.4, 0], [0, 0], [1.3, .06]];
+  // red rock for the badlands, grassy slopes (less bare rock) for alpine meadows
+  const BIOME_ROCK = [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, -1];
   function tileColor(i) {
     const t = sim.terrain[i], j = sim.jit[i], e = sim.elev[i], x = i % W, y = (i / W) | 0;
     if (t === T.WATER) tc.copy(GROUND[0]).lerp(SEABED_DEEP, Math.min(1, -e * .6));
@@ -3799,7 +4150,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       if (t === T.MOUNTAIN) tc.lerp(SNOW, Math.min(1, Math.max(0, (e - 7.2) * .8)));
       const bi = sim.biome[i];
       if (t === T.SAND && e > .2 && bi !== 1) tc.lerp(GROUND[T.GRASS], .25);
-      if (bi && t !== T.MOUNTAIN) { const bt = BIOME_TINT[bi]; tc.lerp(tmpCol.set(t === T.HILLS ? bt[1] : bt[0]), bt[2] * (t === T.FOREST ? .6 : 1)); }
+      if (sim.river && sim.river[i]) tc.lerp(tmpCol.set('#4f6b34'), .3);
+      if (bi && (t !== T.MOUNTAIN || bi === 8)) { const bt = BIOME_TINT[bi]; tc.lerp(tmpCol.set(t === T.HILLS ? bt[1] : bt[0]), bt[2] * (t === T.FOREST ? .6 : 1)); }
       tc.offsetHSL(0, 0, (j - .5) * .03);
     }
     world.tileCol[i * 3] = tc.r; world.tileCol[i * 3 + 1] = tc.g; world.tileCol[i * 3 + 2] = tc.b;
@@ -3811,7 +4163,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const tx = x + dx, ty = y + dy; if (tx < 0 || ty < 0 || tx >= W || ty >= H) continue;
       const i = ty * W + tx; r += world.tileCol[i * 3]; g += world.tileCol[i * 3 + 1]; b += world.tileCol[i * 3 + 2]; n++;
     }
-    col[v * 3] = r / n; col[v * 3 + 1] = g / n; col[v * 3 + 2] = b / n;
+    const ao = world.vAO ? world.vAO[v] : 1;
+    col[v * 3] = r / n * ao; col[v * 3 + 1] = g / n * ao; col[v * 3 + 2] = b / n * ao;
   }
   function syncTiles() {
     if (!sim.dirty.size) return;
@@ -3883,7 +4236,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         const u0 = k / steps, u1 = (k + 1) / steps;
         const ax = x1 + (x2 - x1) * u0, ay = y1 + (y2 - y1) * u0, bx = x1 + (x2 - x1) * u1, by = y1 + (y2 - y1) * u1;
         if (!sim.passable(Math.floor(ax), Math.floor(ay)) || !sim.passable(Math.floor(bx), Math.floor(by))) continue;
-        const pts = [[ax + nx, ay + ny], [ax - nx, ay - ny], [bx + nx, by + ny], [bx - nx, by - ny]].map(([px, py]) => [wx(px), heightAt(px, py) + .035, wz(py)]);
+        const pts = [[ax + nx, ay + ny], [ax - nx, ay - ny], [bx + nx, by + ny], [bx - nx, by - ny]].map(([px, py]) => [wx(px), heightAt(px, py) + (sim.river && (sim.river[Math.floor(py) * W + Math.floor(px)] || sim.river[Math.floor(ay) * W + Math.floor(ax)]) ? .12 : .035), wz(py)]);
         for (const q of [pts[0], pts[1], pts[2], pts[2], pts[1], pts[3]]) { pos.push(q[0], q[1], q[2]); col.push(c.r, c.g, c.b); }
         const re = Math.min(t.era, o.era);
         if (re >= 3 && k % 3 === 1 && nlp < 1500) {
@@ -3940,12 +4293,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   const seasonName = () => SEASONS[Math.min(3, Math.floor(seasonFrac() * 4))];
 
   // ---------- per-frame updates
-  const SKIN = { steppe: ['#d9b18a', '#b88a63'], nordic: ['#f1d3bd', '#dfb597'], desert: ['#b98657', '#7f5232'], eastern: ['#ecc9a3', '#d3a67b'], med: ['#d8ab82', '#b2835b'], meso: ['#b8835a', '#87563a'] };
-  const PANTS = { steppe: '#5b4632', nordic: '#4b5563', desert: '#e8dcc4', eastern: '#2f3b4a', med: '#e2d8c2', meso: '#d8c9a3' };
-  const HAT = { steppe: [.13, .1, '#6b4a30'], nordic: [.11, .05, '#d9b26a'], desert: [.13, .09, '#efe8d8'], eastern: [.22, .06, '#d2b56a'], med: [.11, .04, '#3b2a20'], meso: [.04, .16, '#3f8a5a'] };
+  const SKIN = { steppe: ['#d9b18a', '#b88a63'], nordic: ['#f1d3bd', '#dfb597'], desert: ['#b98657', '#7f5232'], eastern: ['#ecc9a3', '#d3a67b'], med: ['#d8ab82', '#b2835b'], meso: ['#b8835a', '#87563a'], sahel: ['#6e4426', '#4e2e18'], indic: ['#a8754e', '#7d5235'], island: ['#b37a50', '#8a5a38'], arctic: ['#d1a07a', '#a87850'], slavic: ['#efd2bc', '#dcb49a'] };
+  const PANTS = { steppe: '#5b4632', nordic: '#4b5563', desert: '#e8dcc4', eastern: '#2f3b4a', med: '#e2d8c2', meso: '#d8c9a3', sahel: '#e8dcc4', indic: '#efe6d2', island: '#5a3a24', arctic: '#5a4634', slavic: '#3e4a5a' };
+  const HAT = { steppe: [.13, .1, '#6b4a30'], nordic: [.11, .05, '#d9b26a'], desert: [.13, .09, '#efe8d8'], eastern: [.22, .06, '#d2b56a'], med: [.11, .04, '#3b2a20'], meso: [.04, .16, '#3f8a5a'], sahel: [.12, .05, '#e0b030'], indic: [.14, .09, '#e8a030'], island: [.12, .03, '#e05a7a'], arctic: [.15, .13, '#e8dcc8'], slavic: [.12, .08, '#5a4030'] };
   const HELMET = [null, [.13, .09, '#b08d57'], [.13, .1, '#9a9a9a'], [.17, .06, '#1f1f22'], [.1, .14, '#1f2a44'], [.14, .07, '#4b5a3a'], [.14, .07, '#4a5040']];
   // traditional dress worn over the tunic: x, y, z, width, height, depth, tilt, color
-  const GARB = { steppe: [0, .13, 0, .135, .1, .088, 0, '#7a3b2a'], nordic: [0, .21, -.046, .13, .19, .018, .12, '#6b5a44'], desert: [0, .07, 0, .132, .2, .086, 0, '#efe8d8'], eastern: [0, .22, 0, .127, .03, .082, 0, '#c9452e'], med: [0, .28, 0, .13, .035, .082, .6, '#f2eee4'], meso: [0, .345, 0, .16, .03, .095, 0, '#3fa39a'] };
+  const GARB = { steppe: [0, .13, 0, .135, .1, .088, 0, '#7a3b2a'], nordic: [0, .21, -.046, .13, .19, .018, .12, '#6b5a44'], desert: [0, .07, 0, .132, .2, .086, 0, '#efe8d8'], eastern: [0, .22, 0, .127, .03, .082, 0, '#c9452e'], med: [0, .28, 0, .13, .035, .082, .6, '#f2eee4'], meso: [0, .345, 0, .16, .03, .095, 0, '#3fa39a'] , sahel: [0, .06, 0, .14, .22, .09, 0, '#2f6fb5'], indic: [0, .12, 0, .135, .17, .088, .35, '#d9822b'], island: [0, .05, 0, .135, .08, .088, 0, '#b5462f'], arctic: [0, .1, 0, .15, .2, .1, 0, '#c9b08a'], slavic: [0, .08, 0, .135, .18, .088, 0, '#b5302a'] };
   const MODERN_HAIR = [.11, .04, '#3b2f28'], ROBOT_CAP = [.02, .1, '#4fc3f7'];
   const STY = i => Sim.STYLES[i || 0].id;
   const skinC = new THREE.Color(), pantsC = new THREE.Color(), clothC = new THREE.Color();
@@ -4027,7 +4380,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       // a wet cloud showers on and off as it drifts; it turns grey while it does
       const cx = Math.round(c.x), cy = Math.round(c.y), inMap = cx >= 0 && cy >= 0 && cx < W && cy < H;
       const pour = c.wet && inMap ? Math.max(0, Math.min(1, (Math.sin(clock * .06 + c.ph) - .1) * 3)) : 0;
-      const bi = inMap ? sim.biome[cy * W + cx] : 0, cold = bi === 4 || bi === 5 || (world.snowAmt || 0) > .45 && bi !== 1 && bi !== 3 || (inMap && sim.elev[cy * W + cx] > 6.5);
+      const bi = inMap ? sim.biome[cy * W + cx] : 0, cold = bi === 4 || bi === 5 || bi === 11 || (world.snowAmt || 0) > .45 && bi !== 1 && bi !== 3 || (inMap && sim.elev[cy * W + cx] > 6.5);
       tmpC.setRGB(1 - pour * .45, 1 - pour * .43, 1 - pour * .38);
       for (const [ox, oy, oz, r] of c.puffs) { if (n >= 260) break; setInst(C, n, wx(c.x + ox), c.h + oy, wz(c.y + oz), r * 1.1, r * .45, r * .8); C.setColorAt(n++, tmpC); }
       if (pour <= 0 || bi === 1) continue;                                     // no showers over the desert
@@ -4069,7 +4422,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (let i = n; i < n + 60 && i < 900; i++) Sm.setColorAt(i, tmpC.set('#e6e4de'));
     Sm.count = n; Sm.instanceMatrix.needsUpdate = true; if (Sm.instanceColor) Sm.instanceColor.needsUpdate = true;
   }
-  const FLOCK = { steppe: 'sheep', nordic: 'sheep', med: 'sheep', desert: 'goat', eastern: 'cow', meso: 'llama' };
+  const FLOCK = { steppe: 'sheep', nordic: 'sheep', med: 'sheep', desert: 'goat', eastern: 'cow', meso: 'llama', sahel: 'cow', indic: 'cow', island: 'boar', arctic: 'reindeer', slavic: 'cow' };
   function animal(D, x, y, rot, kind, moving, seed) {
     if (!sim.passable(Math.floor(x), Math.floor(y))) return;
     const B = base(wx(x), heightAt(x, y), wz(y), rot), sw = moving ? Math.sin(clock * 10 + seed) * .45 : 0;
@@ -4078,12 +4431,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       deer: ['#8a5a34', .1, .14, .26, .1, .14, '#6e4628'], boar: ['#3e3029', .11, .07, .22, .1, .04, '#2e2420'], sheep: ['#efeae0', .13, .07, .2, .11, .05, '#3b3530'],
       goat: ['#d9c7a6', .08, .09, .18, .08, .08, '#9a8466'], camel: ['#c9a26a', .1, .17, .27, .1, .18, '#a8844f'], zebra: ['#e8e6e0', .1, .12, .25, .1, .12, '#2a2a2a'],
       elephant: ['#7f7b77', .22, .16, .38, .22, .04, '#6b6764'], reindeer: ['#7a6450', .1, .13, .24, .1, .13, '#5a4a3a'], cow: [seed % 2 ? '#3a3330' : '#8a5b3c', .13, .1, .28, .12, .06, '#2a2420'], llama: ['#e4d6bc', .08, .12, .18, .09, .2, '#c8b898'],
+      horse: [seed % 3 ? '#6b4428' : '#2e2622', .1, .16, .28, .1, .17, seed % 3 ? '#4a2e1c' : '#1e1a18'], ibex: ['#8f7a5e', .08, .1, .19, .08, .08, '#5f4e3c'], panda: ['#f0ede6', .14, .07, .22, .14, .03, '#1d1c1b'],
     }[kind];
     const [col, w, lh, len, bh, nk, lc] = sp, dark = kind === 'sheep' ? '#3b3530' : col, big = kind === 'elephant';
     // legs: upper and lower leg with a hoof, swinging from the hip
     for (const [lx, lz, k] of [[-w * .3, len * .3, 1], [w * .3, len * .3, -1], [-w * .3, -len * .32, -1], [w * .3, -len * .32, 1]]) {
       const lw = big ? .06 : .03;
-      part(D, 'cyl', B, lx, lh + bh * .2, lz, lw, lh + bh * .2, lw, kind === 'sheep' ? lc : col, Math.PI + sw * k, 0, 0);
+      part(D, 'cyl', B, lx, lh + bh * .2, lz, lw * (kind === 'panda' ? 1.6 : 1), lh + bh * .2, lw * (kind === 'panda' ? 1.6 : 1), kind === 'sheep' || kind === 'panda' ? lc : col, Math.PI + sw * k, 0, 0);
       part(D, 'cyl', B, lx, lh * .55, lz + sw * k * lh * .4, lw * .7, lh * .55, lw * .7, lc, Math.PI + sw * k * .6, 0, 0);
       if (!big) part(D, 'box', B, lx, 0, lz + sw * k * lh * .6, lw * .8, .018, lw * .9, '#2a2420');
     }
@@ -4110,6 +4464,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       part(D, 'cyl', B, x * .05, hy + .06, hz - .03, .007, .05, .007, '#d9c9a8', .4, 0, -x * 1.1);
       part(D, 'cyl', B, x * .055, hy + .07, hz - .05, .007, .045, .007, '#d9c9a8', -.6, 0, -x * .2);
     }
+    if (kind === 'panda') { part(D, 'sphere', B, 0, by + bh * .4, len * .12, w * 1.02, bh * .5, len * .2, '#1d1c1b'); for (const x of [-1, 1]) { part(D, 'sphere', B, x * .024, hy, hz + .035, .02, .022, .015, '#1d1c1b'); part(D, 'sphere', B, x * .04, hy + .045, hz - .01, .022, .022, .015, '#1d1c1b'); } }
+    if (kind === 'ibex') for (const x of [-1, 1]) { part(D, 'cyl', B, x * .02, hy + .01, hz - .02, .012, .1, .012, '#4a3e30', -.9, 0, -x * .25); part(D, 'cyl', B, x * .03, hy + .06, hz - .1, .009, .06, .009, '#4a3e30', -2, 0, -x * .25); }
+    if (kind === 'horse') { part(D, 'box', B, 0, ny + .08, nz + .02, .015, .14, .07, lc, ang, 0, 0); part(D, 'cyl', B, 0, by + bh * .6, -len * .48, .025, .16, .025, lc, Math.PI - .25 + sw * .3, 0, 0); }
     if (kind === 'camel') { part(D, 'sphere', B, 0, lh + bh * .55, -.02, .085, .13, .12, col); part(D, 'cone', B, 0, lh + bh * 1.4, -.02, .045, .05, .06, col); }
     if (kind === 'zebra') { for (const z of [-.1, -.05, 0, .05, .1]) part(D, 'cyl', B, 0, by + bh * .02, z, w * 1.04, bh * 1.04, .018, '#2a2a2a'); part(D, 'box', B, 0, ny + .02, nz + .02, .012, nk + .02, .02, '#2a2a2a', ang, 0, 0); }
     if (kind === 'llama' || kind === 'goat') part(D, 'sphere', B, 0, by + bh * .6, 0, w * .9, bh * .5, len * .7, kind === 'llama' ? '#efe4ce' : '#cdb894');
@@ -4953,14 +5310,24 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     let steps = 0; const p0 = performance.now();
     if (tps) { acc += dt * tps; while (acc >= 1 && steps < 30) { sim.step(); acc -= 1; steps++; } if (steps >= 30) acc = 0; }
     const alpha = tps && tps <= 40 ? Math.min(1, acc) : 1; const p1 = performance.now();
-    clock += dt; if (started) watchFps(dt); world.waterTex.offset.set(clock * .004, clock * .0025); if (world.waterU) { world.waterU.uTime.value = clock; world.waterU.uSkyCol.value.copy(sky.material.uniforms.mid.value); }
+    clock += dt; if (started) watchFps(dt); world.waterTex.offset.set(clock * .004, clock * .0025); if (world.riverTex) world.riverTex.offset.y = -clock * .35; if (world.waterU) { world.waterU.uTime.value = clock; world.waterU.uSkyCol.value.copy(sky.material.uniforms.mid.value); }
     syncTiles(); updateFields(); updateBorders(); applySeason(); applyDay(dt, tps); beginSet(world.dset); updatePeople(alpha); updateShips(alpha); if (Q.life) { updateAnimals(); updateBoats(); } updatePlanes(alpha); updateSites(alpha); updateClouds(dt); updateSmoke(); updateTech(); endSet(world.dset); world.smoke.instanceMatrix.needsUpdate = true; updateBuildings(); updateFires(); updateNight(); updateEffects(); updateSelection();
     if (follow) { const a = sim.byId.get(follow); if (a && a._wx !== undefined) focus = new THREE.Vector3(a._wx, a._wy, a._wz); else follow = 0; }
     if (focus) { tmpV.copy(focus).sub(controls.target).multiplyScalar(.08); controls.target.add(tmpV); camera.position.add(tmpV); if (tmpV.lengthSq() < 1e-5 && !follow) focus = null; }
     if (!started) { const r = Math.hypot(camera.position.x - controls.target.x, camera.position.z - controls.target.z); const a = Math.atan2(camera.position.z - controls.target.z, camera.position.x - controls.target.x) + dt * .05; camera.position.x = controls.target.x + Math.cos(a) * r; camera.position.z = controls.target.z + Math.sin(a) * r; }
     controls.update();
     // shadows are redrawn every other frame: half the shadow cost, and slow-moving shadows look the same
-    renderer.shadowMap.needsUpdate = !(frameNo++ & 1) || world.shake > 0;
+    // the shadow box follows the camera and tightens when zoomed in, so close-ups get crisp shadows from the same map
+    let shMoved = false;
+    if (Q.shadows) {
+      const d = camera.position.distanceTo(controls.target), sc = sun.shadow.camera, hs = Math.min(92, Math.max(12, Math.round(d * .8 / 4) * 4)), full = hs >= 92, step = hs * 16 / Q.map;
+      const tx = full ? 0 : Math.round(controls.target.x / step) * step, tz = full ? 0 : Math.round(controls.target.z / step) * step;
+      if (sc.right !== hs || sun.target.position.x !== tx || sun.target.position.z !== tz) {
+        Object.assign(sc, { left: -hs, right: hs, top: full ? 70 : hs, bottom: full ? -70 : -hs }); sc.updateProjectionMatrix();
+        sun.target.position.set(tx, 0, tz); sun.position.set(tx - 55, 75, tz + 38); sun.target.updateMatrixWorld(); shMoved = true;
+      }
+    }
+    renderer.shadowMap.needsUpdate = frameNo++ % (Q.every || 2) === 0 || world.shake > 0 || shMoved;
     const p2 = performance.now(); postFrame(); trimUploads(); const draw = () => composer ? composer.render() : renderer.render(scene, camera);
     if (world.shake) { tmpN.set(Math.random() - .5, Math.random() - .5, Math.random() - .5).multiplyScalar(world.shake * .9); camera.position.add(tmpN); draw(); camera.position.sub(tmpN); }
     else draw();
@@ -4977,7 +5344,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     plights = []; nearLamps = null;
     if (Q.life >= 2) for (let i = 0; i < 4; i++) { const l = new THREE.PointLight('#ffb060', 0, 4, 2); scene.add(l); plights.push(l); }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, Q.pr)); buildPost(); resize();
-    renderer.shadowMap.enabled = Q.shadows; sun.castShadow = Q.shadows;
+    renderer.shadowMap.enabled = Q.shadows; sun.castShadow = Q.shadows; renderer.shadowMap.type = Q.soft === false ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
     if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } sun.shadow.mapSize.set(Q.map, Q.map);
     scene.traverse(o => { if (o.material) { const ms = Array.isArray(o.material) ? o.material : [o.material]; for (const m of ms) m.needsUpdate = true; } });
     buildWorld(); world.buildKey = '';
@@ -4993,9 +5360,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   // on Auto, step down a level if the frame rate stays low
   let fpsT = 0, fpsN = 0, slow = 0;
   function watchFps(dt) {
-    if (gfxPick !== 'auto' || gfxLevel === 'low') return;
+    if (gfxPick !== 'auto' || gfxLevel === 'lowest') return;
     fpsT += dt; fpsN++;
-    if (fpsT >= 2) { const fps = fpsN / fpsT; fpsT = 0; fpsN = 0; slow = fps < 24 ? slow + 1 : 0; if (slow >= 3) { slow = 0; applyGfx(gfxLevel === 'high' ? 'medium' : 'low', 'Lowered to keep things smooth'); } }
+    if (fpsT >= 2) { const fps = fpsN / fpsT; fpsT = 0; fpsN = 0; slow = fps < 24 ? slow + 1 : 0; if (slow >= 3) { slow = 0; applyGfx(gfxLevel === 'high' ? 'medium' : gfxLevel === 'medium' ? 'low' : 'lowest', 'Lowered to keep things smooth'); } }
   }
   newWorld(+$('#seedIn').value, 0, false);
   buildPost(); resize();
