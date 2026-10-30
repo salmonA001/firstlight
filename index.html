@@ -498,11 +498,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       for (let k = 0, tries = 0; k < 5 && tries < 400; tries++) {
         const cx = 6 + r() * (W - 12), cy = 6 + r() * (H - 12), R = 1.4 + r() * 1.8, x0 = Math.round(cx), y0 = Math.round(cy), t0 = this.terrain[y0 * W + x0];
         if ((t0 !== T.GRASS && t0 !== T.FOREST) || this.elev[y0 * W + x0] > 1.1) continue;
-        let ok = true; for (let dy = -6; dy <= 6 && ok; dy++) for (let dx = -6; dx <= 6; dx++) { const t = this.terrain[(y0 + dy) * W + x0 + dx]; if (t === T.WATER || t === T.MOUNTAIN) { ok = false; break; } }
+        let ok = true; for (let dy = -6; dy <= 6 && ok; dy++) for (let dx = -6; dx <= 6; dx++) { const j = (y0 + dy) * W + x0 + dx, t = this.terrain[j]; if (t === T.WATER || t === T.MOUNTAIN || (Math.abs(dx) <= 4 && Math.abs(dy) <= 4 && this.elev[j] > 1.7)) { ok = false; break; } }
         if (!ok) continue; k++;
         for (let dy = -5; dy <= 5; dy++) for (let dx = -5; dx <= 5; dx++) {
           const x = x0 + dx, y = y0 + dy, i = y * W + x, f = 1 - Math.hypot(x - cx, y - cy) / R + (fbm(hn, x / 2.5 + 9, y / 2.5) - .5) * .5;
-          if (f > 0) { this.terrain[i] = T.WATER; this.elev[i] = -.35 - Math.min(1, f * 1.4) * .9; this.food[i] = this.wood[i] = this.stone[i] = 0; }
+          if (f > 0) { this.terrain[i] = T.WATER; this.elev[i] = -.25 - Math.min(1, f * 1.4) * .55; this.food[i] = this.wood[i] = this.stone[i] = 0; }
           else { if (this.terrain[i] !== T.WATER && this.terrain[i] !== T.MOUNTAIN) this.elev[i] = Math.min(this.elev[i], .12 - f * 1.3); if (f > -.25 && this.terrain[i] === T.FOREST && r() < .5) { this.terrain[i] = T.GRASS; this.wood[i] = 0; } }
         }
       }
@@ -580,7 +580,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
           if (nb < 0) break;
           path.push(nb); seen.add(nb); c = nb;
           if (this.terrain[nb] === T.WATER || this.river[nb]) { ok = true; break; }
-          if (this.elev[nb] > this.elev[path[path.length - 2]] - .01) this.elev[nb] = Math.max(.12, this.elev[path[path.length - 2]] - .03);   // cut through the ridge
+          if (this.elev[nb] > this.elev[path[path.length - 2]] - .01) this.elev[nb] = Math.max(.12, this.elev[path[path.length - 2]] - .03, this.elev[nb] - .9);   // cut a gorge through the ridge, not a pit
         }
         if (!ok || path.length < 10) continue;
         for (let k = 0; k < path.length; k++) {
@@ -3891,7 +3891,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     const season = world.seasonU = { uSnow: { value: 0 }, uAutumn: { value: 0 } };
     { const clim = new Float32Array(vcount * 3);
       for (let v = 0; v < vcount; v++) { const x = v % VW, y = (v / VW) | 0; let a = 0, b = 0, c = 0, k = 0; for (const [dx, dy] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) { const tx = x + dx, ty = y + dy; if (tx < 0 || ty < 0 || tx >= W || ty >= H) continue; const bi = sim.biome[ty * W + tx], bs = BIOME_SNOW[bi]; a += bs[0]; b += bs[1]; c += BIOME_ROCK[bi]; k++; } clim[v * 3] = k ? a / k : 1; clim[v * 3 + 1] = k ? b / k : 0; clim[v * 3 + 2] = k ? c / k : 0; }
-      world.terrain.geometry.setAttribute('aClim', new THREE.BufferAttribute(clim, 3)); }
+      world.terrain.geometry.setAttribute('aClim', new THREE.BufferAttribute(clim, 3)); world.climBase = clim.slice(); world.town = new Uint8Array(n); }
     world.terrain.material.onBeforeCompile = sh => {
       Object.assign(sh.uniforms, season);
       sh.vertexShader = 'attribute vec3 aClim; varying vec3 vClim; varying float vUpY; varying float vH; varying vec2 vWP;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vUpY = normal.y; vH = position.y; vClim = aClim; vWP = (modelMatrix * vec4(position, 1.0)).xz;');
@@ -4075,13 +4075,24 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         else { setInst(world.cover, c, wx(px), gy - .03, wz(py), .14, .1, .12, j * 6); world.cover.setColorAt(c++, tmpC.set('#9c9a94')); } }
       world.cover.count = c; group.add(world.cover); }
     // rocks on the hills
-    const rocks = []; for (let i = 0; i < n; i++) if (sim.terrain[i] === T.HILLS && sim.jit[i] < .5 && !(sim.river && sim.river[i])) rocks.push(i);
+    const rocks = []; for (let i = 0; i < n; i++) if (sim.terrain[i] === T.HILLS && sim.jit[i] < .32 && !(sim.river && sim.river[i])) rocks.push(i);
     const rockGeo = shadeY(tmerge([tshade(lumpy(new THREE.DodecahedronGeometry(.26, 1), .45, 1).scale(1, .7, 1.1).translate(0, .08, 0), 1),
       tshade(lumpy(new THREE.DodecahedronGeometry(.13, 0), .4, 2).translate(.2, .02, .12), 1), tshade(lumpy(new THREE.DodecahedronGeometry(.09, 0), .4, 3).translate(-.17, 0, -.14), 1)]), -.05, .26, .5, .95);
     world.rocks = instanced(rockGeo, new THREE.MeshStandardMaterial({ color: '#7a756c', roughness: .95, flatShading: true, vertexColors: true }), rocks.length);
     world.rockAt = new Int32Array(n).fill(-1);
-    rocks.forEach((i, k) => { const x = i % W, y = (i / W) | 0, j = sim.jit[i]; world.rockAt[i] = k; setInst(world.rocks, k, wx(x + .3 + j * .4), heightAt(x + .3 + j * .4, y + .7 - j * .4), wz(y + .7 - j * .4), .8 + j, .5 + j * .5, .8 + j, j * 6); });
+    rocks.forEach((i, k) => { const x = i % W, y = (i / W) | 0, j = sim.jit[i], h = hash(i, 3.3), sc = .55 + h * 1.25, px = x + .3 + h * .4, py = y + .7 - j * 1.2; world.rockAt[i] = k;
+      setInst(world.rocks, k, wx(px), heightAt(px, py) - .05 * sc, wz(py), sc * (.8 + j), sc * (.45 + hash(k, 9) * .5), sc * (.8 + hash(9, k) * .5), h * 6.3);
+      world.rocks.setColorAt(k, tmpC.set(sim.biome[i] === 8 ? '#c27a55' : '#ffffff').offsetHSL(0, 0, (h - .5) * .12)); });
     world.rocks.count = rocks.length;
+    // grass tufts scattered on the ground around wherever the camera looks (Medium and High)
+    { const bl = []; for (let k = 0; k < 8; k++) { const a = k * 2.4 + .3, lean = .2 + (k % 3) * .1, hh = .07 + (k % 4) * .015, g = new THREE.PlaneGeometry(.011, hh, 1, 2); g.translate(0, hh / 2, 0);
+        const p = g.attributes.position; for (let v = 0; v < p.count; v++) { const yy = p.getY(v); p.setZ(v, yy * yy * lean * 3); } g.rotateY(a); g.translate(Math.cos(a) * .035 * (k % 3), 0, Math.sin(a) * .035 * (k % 3)); const nn = g.attributes.normal; for (let v = 0; v < nn.count; v++) nn.setXYZ(v, 0, 1, 0);   // lit like the ground on both sides
+        const c = new Float32Array(p.count * 3); for (let v = 0; v < p.count; v++) c.fill(.5 + p.getY(v) * 5, v * 3, v * 3 + 3); g.setAttribute('color', new THREE.BufferAttribute(c, 3)); g.deleteAttribute('uv'); bl.push(g); }
+      const pos = [], nor = [], col = []; for (const g of bl) { const q = g.index ? g.toNonIndexed() : g, P = q.attributes.position.array, N = q.attributes.normal.array, C = q.attributes.color.array;
+        for (const back of [0, 1]) for (let t = 0; t < P.length / 9; t++) for (const v of back ? [0, 2, 1] : [0, 1, 2]) { const o = t * 9 + v * 3; pos.push(P[o], P[o + 1], P[o + 2]); nor.push(N[o], N[o + 1], N[o + 2]); col.push(C[o], C[o + 1], C[o + 2]); } }   // both faces, both lit from above
+      const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); gg.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); gg.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+      world.grass = instanced(gg, new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .9, vertexColors: true }), Q.life >= 2 ? 16000 : Q.post ? 8000 : 1, false);
+      world.grass.setColorAt(0, tmpC.set('#fff')); world.grassKey = ''; group.add(world.grass); }
     // crop fields as textured patches laid on the slope
     world.fieldTex = fieldTexture(); world.fieldTex.encoding = THREE.sRGBEncoding;
     const fieldGeo = new THREE.PlaneGeometry(.96, .96); fieldGeo.rotateX(-Math.PI / 2);
@@ -4262,6 +4273,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       if (t === T.SAND && e > .2 && bi !== 1) tc.lerp(GROUND[T.GRASS], .25);
       if (sim.river && sim.river[i]) tc.lerp(tmpCol.set('#4f6b34'), .3);
       if (bi && (t !== T.MOUNTAIN || bi === 8)) { const bt = BIOME_TINT[bi]; tc.lerp(tmpCol.set(t === T.HILLS ? bt[1] : bt[0]), bt[2] * (t === T.FOREST ? .6 : 1)); }
+      // trampled earth inside towns, packed and cobbled later, paved in modern cities
+      const tw = world.town ? world.town[i] : 0;
+      if (tw && t !== T.FARM) tc.lerp(tmpCol.set(tw === 3 ? '#8a8781' : tw === 2 ? '#8c7c60' : '#7c6a4c'), (tw === 3 ? .6 : .45) * (.8 + nz * .4));
       tc.offsetHSL(0, 0, (j - .5) * .03);
     }
     world.tileCol[i * 3] = tc.r; world.tileCol[i * 3 + 1] = tc.g; world.tileCol[i * 3 + 2] = tc.b;
@@ -4378,6 +4392,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     world.leaves.material.color.setRGB(1, 1, 1).lerp(LEAF_SPRING, spring * .5).lerp(LEAF_AUTUMN, autumn * .85).lerp(LEAF_WINTER, snow * .9);
     world.pines.material.color.setRGB(1, 1, 1).lerp(PINE_SNOW, snow * .55);
     world.acacias.material.color.setRGB(1, 1, 1).lerp(LEAF_SPRING, spring * .3).lerp(LEAF_AUTUMN, autumn * .25);
+    if (world.grass) { world.grass.material.color.setRGB(1, 1, 1).lerp(FIELD_SPRING, spring * .3).lerp(LEAF_AUTUMN, autumn * .35); world.grass.visible = snow < .5; }
     for (const m of world.crops) m.material.color.setRGB(1, 1, 1).lerp(FIELD_SPRING, spring * (m === world.fields ? .8 : .25)).lerp(FIELD_SNOW, snow * .9);
     world.water.material.color.copy(WATER_SUMMER).lerp(WATER_WINTER, snow * .6);
     sun.intensity = 1.7 - snow * .35; sun.color.setRGB(1, .95 - autumn * .05, .86 - autumn * .1);
@@ -4744,7 +4759,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateCamps(); updateRiverLife();
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateCamps(); updateRiverLife(); updateGrass();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -4954,6 +4969,42 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (const x of [-.13, .13]) { part(S, 'cyl', B, x * s, .05, 0, .07 * s, .8 * s, .07 * s, '#efefec'); part(S, 'cone', B, x * s, .05 + .8 * s, 0, .07 * s, .14 * s, .07 * s, '#efefec'); }
     for (let a = 0; a < 4; a++) part(S, 'box', B, Math.cos(a * 1.571) * .12, .05, Math.sin(a * 1.571) * .12, .02, .2, .1, '#3a3d42', 0, a * 1.571, 0);
   }
+  // the ground inside each town is worn to earth by feet and carts (and paved later), and snow there is cleared
+  function updateTownGround() {
+    const n = W * H, nt = new Uint8Array(n), VW = W + 1;
+    for (const t of sim.tribes.values()) {
+      const R = (world.ext.get(t.id) || 1.5) + .4, cx = t.camp.x + .5, cy = t.camp.y + .5, v = t.era >= 5 ? 3 : t.era >= 2 ? 2 : 1;
+      for (let y = Math.floor(cy - R); y <= cy + R; y++) for (let x = Math.floor(cx - R); x <= cx + R; x++) {
+        if (x < 0 || y < 0 || x >= W || y >= H || Math.hypot(x + .5 - cx, y + .5 - cy) > R) continue;
+        const i = y * W + x, tt = sim.terrain[i]; if (tt !== T.WATER && tt !== T.MOUNTAIN) nt[i] = Math.max(nt[i], v);
+      }
+    }
+    const verts = new Set();
+    for (let i = 0; i < n; i++) if (nt[i] !== world.town[i]) { world.town[i] = nt[i]; tileColor(i); const x = i % W, y = (i / W) | 0; for (const v of [y * VW + x, y * VW + x + 1, (y + 1) * VW + x, (y + 1) * VW + x + 1]) verts.add(v); }
+    if (!verts.size) return;
+    const clim = world.terrain.geometry.attributes.aClim;
+    for (const v of verts) {
+      paintVertex(v); const x = v % VW, y = (v / VW) | 0; let tn = 0;
+      for (const [dx, dy] of [[-1, -1], [0, -1], [-1, 0], [0, 0]]) { const tx = x + dx, ty = y + dy; if (tx >= 0 && ty >= 0 && tx < W && ty < H && world.town[ty * W + tx]) tn++; }
+      clim.array[v * 3] = world.climBase[v * 3] * (1 - tn * .17); clim.array[v * 3 + 1] = world.climBase[v * 3 + 1] * (1 - tn * .22);
+    }
+    clim.needsUpdate = true; world.terrain.geometry.attributes.color.needsUpdate = true;
+  }
+  const GRASS_COL = [['#5f8a34', '#7a9a3c'], ['#a8945a', '#b9a46a'], ['#a89a4e', '#c0aa5c'], ['#3f7a2c', '#4f8a34'], ['#6a7a4a', '#7a8a5a'], ['#9aa08a', '#b0b49c'], ['#5a6a34', '#6f7a3c'], ['#a8a050', '#bcb062'], ['#9a7a4a', '#a88a5a'], ['#4f8a38', '#5f9a40'], ['#4a6a34', '#5a7a3c'], ['#6f9a48', '#86aa52']];
+  function updateGrass() {
+    const G = world.grass; if (!G || G.instanceMatrix.count <= 1) return;
+    const d = camera.position.distanceTo(controls.target), tx = controls.target.x + W / 2, ty = controls.target.z + H / 2;
+    if (d > 55) { G.count = 0; return; }
+    const R = Math.min(16, Math.max(5, d * .38)), key = Math.round(tx / 2) + ',' + Math.round(ty / 2) + ',' + Math.round(R) + ',' + sim.ownerVersion; if (key === world.grassKey) return; world.grassKey = key;
+    const tiles = []; for (let y = Math.floor(ty - R); y <= ty + R; y++) for (let x = Math.floor(tx - R); x <= tx + R; x++) {
+      if (x < 0 || y < 0 || x >= W || y >= H || Math.hypot(x + .5 - tx, y + .5 - ty) > R) continue; const i = y * W + x, t = sim.terrain[i];
+      if ((t === T.GRASS || t === T.FOREST || t === T.HILLS) && !(world.town && world.town[i]) && !(sim.river && sim.river[i]) && !(world.siteClear && world.siteClear.has(i))) tiles.push(i); }
+    const per = Math.max(1, Math.min(40, Math.floor(G.instanceMatrix.count / Math.max(1, tiles.length)))); let c = 0;
+    for (const i of tiles) { const x = i % W, y = (i / W) | 0, gc = GRASS_COL[sim.biome[i]] || GRASS_COL[0], m = sim.terrain[i] === T.HILLS ? Math.ceil(per / 2) : per;
+      for (let k = 0; k < m && c < G.instanceMatrix.count; k++) { const px = x + hash(i, k * 1.7), py = y + hash(k * 2.3, i), h = hash(i + k, 5.5);
+        setInst(G, c, wx(px), heightAt(px, py) - .01, wz(py), .8 + h * .9, .7 + h * .8, .8 + h * .9, h * 6.3); G.setColorAt(c++, tmpC.set(gc[k % 2]).offsetHSL(0, 0, (h - .5) * .08)); } }
+    G.count = c; G.instanceMatrix.needsUpdate = true; if (G.instanceColor) G.instanceColor.needsUpdate = true;
+  }
   function updateBuildings() {
     let key = ''; for (const t of sim.tribes.values()) key += t.id + ':' + (t.wars.size ? 1 : 0) + ':' + t.port + ':' + t.huts + ':' + t.era + ':' + (t.walls ? 1 : 0) + ':' + t.wonders.length + ':' + t.faith + ':' + (t.grave ? Math.min(16, Math.ceil(t.deaths / 4)) : 0) + ':' + specialsFor(t).join(',') + ':' + (t.techs.has('flight') ? 1 : 0) + (t.techs.has('railways') ? 1 : 0) + (t.era >= 6 && t.techs.has('flight') ? 1 : 0) + ';';
     if (key === world.buildKey) return;
@@ -5118,6 +5169,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (const t of sim.tribes.values()) { const o = t.members.size >= 8 && obsSite(t); if (o) for (const i of o.tiles) world.siteClear.add(i); }                   // and for observatories               // and for the shipyard
     for (const i of oldClear) if (!world.siteClear.has(i)) showTrees(i, sim.terrain[i] === T.FOREST);
     for (const i of world.siteClear) if (!oldClear.has(i)) showTrees(i, false);
+    updateTownGround();
     endSet(S); G.count = gn; G.instanceMatrix.needsUpdate = true;
     for (const k in M) { const m = world[k]; m.count = M[k]; m.instanceMatrix.needsUpdate = true; if (m.instanceColor) m.instanceColor.needsUpdate = true; }
   }
@@ -5439,6 +5491,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         sun.target.position.set(tx, 0, tz); sun.position.set(tx - 55, 75, tz + 38); sun.target.updateMatrixWorld(); shMoved = true;
       }
     }
+    { const d = camera.position.distanceTo(controls.target); scene.fog.near = Math.min(160, 30 + d * .9); scene.fog.far = Math.min(470, 160 + d * 2.6); }
     renderer.shadowMap.needsUpdate = frameNo++ % (Q.every || 2) === 0 || world.shake > 0 || shMoved;
     const p2 = performance.now(); postFrame(); trimUploads(); const draw = () => composer ? composer.render() : renderer.render(scene, camera);
     if (world.shake) { tmpN.set(Math.random() - .5, Math.random() - .5, Math.random() - .5).multiplyScalar(world.shake * .9); camera.position.add(tmpN); draw(); camera.position.sub(tmpN); }

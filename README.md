@@ -104,6 +104,10 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 
   ![Rocky mountains with snow caps above forests and towns](docs/mountains.png)
 - **Realistic finish:** on Medium and High the picture gets a filmic color grade and a soft glow on bright lights. High also adds ambient occlusion, which shades creases and the ground under buildings.
+- **Close-up ground:** zoom in on Medium or High and the land is covered in tufts of grass whose color follows the biome and season (green meadows, golden steppe, tan savanna), thinning on rocky hills. Town grounds are worn to bare earth by feet and carts, packed and cobbled in later eras and paved in modern cities, and the snow there gets cleared. Hill boulders vary in size, sit half buried and are rarer. Distant land fades into a soft haze that grows as you zoom out, and lakes are shallower and sit only in low ground instead of deep pits.
+
+  ![Grass tufts among boulders by a pine forest, and a town on worn earth](docs/grass.png)
+
 - **Low for weak devices:** Low now has crisp shadows from towns and people (the shadow area follows the camera and tightens as you zoom in), building details, a color grade with a soft vignette built into the normal draw, and baked shading in valleys, all without an extra post-processing pass. A new Lowest setting keeps the old plain look for very old devices, and Auto drops to it if the frame rate stays low.
 
   ![The Low setting with shadows and details](docs/low.png)
