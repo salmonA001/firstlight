@@ -118,6 +118,10 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 
   ![Rice paddies, vineyards and root fields beside three towns](docs/crops.png)
 
+- **River traffic and dams:** boats work the rivers that run past a nation's land, and they change with its era: dugout canoes with paddlers, keelboats with a square sail and cargo, white paddle steamers with smoking stacks and a turning stern wheel, then motor barges stacked with containers and, in the 2000s, glass-roofed river cruise boats. From the 1900s a nation dams a nearby river for hydro power, with a concrete wall, a foaming spillway, a power house and a pylon.
+
+  ![A paddle steamer on a river, and a hydro dam with its spillway](docs/river.png)
+
 - **Army camps:** armies pitch a camp while they muster outside their own town, and a siege camp outside the enemy's walls. Camps have tents that change by era (hide tents, canvas tents, bell tents, military tents), a command tent with the nation's banner, cook fires with smoke and supply carts or trucks. Siege camps bring engines facing the town: a battering ram, a trebuchet with a swinging arm, cannon, and later tanks.
 
   ![An army camp with tents, cook fires and a banner outside a town](docs/camp.png)
