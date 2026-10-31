@@ -130,6 +130,10 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 
   ![An army camp with tents, cook fires and a banner outside a town](docs/camp.png)
 
+- **Border walls:** when a walled nation of antiquity, the Middle Ages or the 1700s goes to war with a neighbor, it raises a long wall across the border between them, with watchtowers flying its colors, torches at night and a gate on the road. The wall is built in the nation's own style (timber palisade, mud brick, sandstone, stone battlements, log walls) and it stays after the war. From the 1800s it weathers into a broken ruin.
+
+  ![A long white wall with red-roofed towers crossing the land between two nations](docs/borderwall.png)
+
 - **Wartime forts:** a nation at war fortifies the side of town facing its nearest enemy, with its colors flying. It starts as a timber watchtower behind a palisade, then becomes a stone tower with battlements, a star fort with cannon, an earthwork redoubt with a field gun, a zigzag trench line with a concrete pillbox and barbed wire, and finally an air defense post with a turning radar and missile launcher.
 
   ![A stone watchtower flying its nation's flag outside a town at war](docs/fort.png)
