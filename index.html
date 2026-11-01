@@ -2038,7 +2038,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const agents = this.agents.filter(a => a.alive).map(a => { const o = {}; for (const k in a) if (k[0] !== '_') o[k] = a[k]; return o; });
       return JSON.stringify({ v: 1, seed: this.seed, startEra: this.startEra, tick: this.tick, nextId: this.nextId, tribeCount: this.tribeCount,
         terrain: arr(this.terrain), elev: arr(this.elev), food: arr(this.food), wood: arr(this.wood), stone: arr(this.stone), jit: arr(this.jit), waterRegion: arr(this.waterRegion), biome: arr(this.biome), fert: arr(this.fert),
-        regionSize: this.regionSize, cultureSeeds: this.cultureSeeds, rivers: this.rivers || [], usedNames: [...this.usedNames], agents, tribes, wars, ships: this.ships.filter(x => x.alive), armies: this.armies.filter(r => !r.dead), planes: this.planes.filter(p => p.alive), links: this.links, seaSites: this.seaSites, rockets: this.rockets || [],
+        regionSize: this.regionSize, cultureSeeds: this.cultureSeeds, rivers: this.rivers || [], ruins: this.ruins || [], usedNames: [...this.usedNames], agents, tribes, wars, ships: this.ships.filter(x => x.alive), armies: this.armies.filter(r => !r.dead), planes: this.planes.filter(p => p.alive), links: this.links, seaSites: this.seaSites, rockets: this.rockets || [],
         fires: [...this.fires], popHistory: this.popHistory, religions: [...this.religions.values()], history: this.history.slice(-300) });
     }
     static load(json) {
@@ -2049,7 +2049,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
         jit: Float32Array.from(d.jit), waterRegion: Int32Array.from(d.waterRegion), biome: d.biome ? Uint8Array.from(d.biome) : new Uint8Array(W * H), fert: d.fert ? Float32Array.from(d.fert) : new Float32Array(W * H).fill(1), regionSize: d.regionSize, cultureSeeds: d.cultureSeeds, usedNames: new Set(d.usedNames),
         listeners: [], effects: [], dirty: new Set(), deadCount: 0, ownerVersion: 0, ships: d.ships, armies: d.armies || [], planes: d.planes || [], links: d.links || [], seaSites: d.seaSites || [], rockets: d.rockets || [], fires: new Map(d.fires), popHistory: d.popHistory,
         religions: new Map(d.religions.map(r => [r.id, r])), history: d.history, agents: d.agents, byId: new Map(), tribes: new Map() });
-      s.rivers = d.rivers || []; s.river = new Uint8Array(W * H); for (const p of s.rivers) for (const i of p) if (s.terrain[i] !== T.WATER) s.river[i] = 1;
+      s.ruins = d.ruins || []; s.rivers = d.rivers || []; s.river = new Uint8Array(W * H); for (const p of s.rivers) for (const i of p) if (s.terrain[i] !== T.WATER) s.river[i] = 1;
       s.computeLand();
       for (const a of s.agents) s.byId.set(a.id, a);
       for (const t of d.tribes) {
@@ -2094,6 +2094,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       for (const s of this.ships) if (s.tribe === t.id) s.alive = false;
       const yrs = Math.max(1, Math.round((this.tick - t.founded) / YEAR));
       this.emit('fall', `The ${t.name} are no more. They lasted ${yrs} year${yrs === 1 ? '' : 's'}.`, { tribe: t.id, x: t.camp.x, y: t.camp.y });
+      // a settled nation leaves its ruins behind
+      if (t.era >= 1 || (t.peak || 0) >= 12) { this.ruins = this.ruins || []; this.ruins.push({ x: t.camp.x, y: t.camp.y, era: t.era, style: t.style, size: Math.max(t.huts || 0, t.peak || 0), walls: !!t.walls, wonder: t.wonders.length, name: t.name, year: this.year() }); if (this.ruins.length > 24) this.ruins.shift(); }
       for (const o of this.tribes.values()) { o.rel.delete(t.id); o.wars.delete(t.id); o.allies.delete(t.id); }
       this.tribes.delete(t.id);
     }
@@ -4759,7 +4761,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateCamps(); updateRiverLife(); updateGrass();
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -4968,6 +4970,44 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     part(S, 'cyl', B, 0, .05 + .9 * s, 0, .165 * s, .05, .165 * s, '#202326'); part(S, 'box', B, 0, .05 + 1.1 * s, .081 * s, .05, .14, .01, col);
     for (const x of [-.13, .13]) { part(S, 'cyl', B, x * s, .05, 0, .07 * s, .8 * s, .07 * s, '#efefec'); part(S, 'cone', B, x * s, .05 + .8 * s, 0, .07 * s, .14 * s, .07 * s, '#efefec'); }
     for (let a = 0; a < 4; a++) part(S, 'box', B, Math.cos(a * 1.571) * .12, .05, Math.sin(a * 1.571) * .12, .02, .2, .1, '#3a3d42', 0, a * 1.571, 0);
+  }
+  // fallen nations leave ruins: broken wall stubs and roofless house walls in their own building style, tumbled stones,
+  // the stump of a wonder, and bushes and young trees growing through it all, until a new town is built over them
+  function updateRuins() {
+    const D = world.dset; if (!sim.ruins || !sim.ruins.length) return;
+    for (const r of sim.ruins) {
+      const cx = r.x + .5, cy = r.y + .5; let built = false;
+      for (const t of sim.tribes.values()) if (Math.hypot(t.camp.x + .5 - cx, t.camp.y + .5 - cy) < (world.ext && world.ext.get(t.id) || 2) + 2) { built = true; break; }
+      if (built) continue;
+      const style = STY(r.style), wall = WALL_C[style] || '#b89a72', stone = r.era >= 4 ? '#8d8478' : '#9a948a', seed = r.x * 131 + r.y * 17, R = 1.6 + Math.min(20, r.size) * .07;
+      if (r.walls) for (let k = 0, segs = Math.round(Math.PI * 2 * R / .56); k < segs; k++) {
+        const h = hash(seed, k); if (h < .4) continue; const a = k / segs * 6.283, bx = cx + Math.cos(a) * R, by = cy + Math.sin(a) * R;
+        if (!sim.passable(Math.floor(bx), Math.floor(by))) continue;
+        const B = base(wx(bx), heightAt(bx, by) - .04, wz(by), Math.atan2(cx - bx, cy - by));
+        part(D, 'box', B, 0, 0, 0, .54, .1 + h * .28, .2, stone); if (h > .8) part(D, 'sphere', B, .2, 0, .25, .12, .08, .1, stone);
+      }
+      const nh = Math.min(10, 3 + Math.floor(r.size / 3));
+      for (let k = 0; k < nh; k++) {
+        const a = hash(seed, k * 7.1) * 6.283, d = .5 + hash(k, seed) * (R - .6), hx = cx + Math.cos(a) * d, hy = cy + Math.sin(a) * d;
+        if (!sim.passable(Math.floor(hx), Math.floor(hy))) continue;
+        const B = base(wx(hx), heightAt(hx, hy) - .03, wz(hy), a * 2), h1 = hash(k * 3.3, seed), c = r.era >= 4 ? '#9a8f80' : wall;
+        if (r.era === 0) { for (let q = 0; q < 6; q++) part(D, 'sphere', B, Math.cos(q) * .22, 0, Math.sin(q) * .22, .1, .08, .1, '#8a8378'); continue; }
+        // three roofless walls of differing height, one fallen over
+        part(D, 'box', B, 0, 0, -.2, .46, .12 + h1 * .2, .05, c); part(D, 'box', B, -.21, 0, 0, .05, .08 + h1 * .14, .4, c); part(D, 'box', B, .21, 0, .02, .05, .04 + h1 * .1, .36, c);
+        part(D, 'box', B, .1, 0, .3, .3, .04, .12, c, 0, .4, 0); part(D, 'sphere', B, -.1, 0, .12, .07, .06, .07, stone);
+        if (h1 > .45) { part(D, 'cyl', B, .05, 0, -.05, .025, .16, .025, '#5a4632'); part(D, 'sphere', B, .05, .12, -.05, .2, .17, .2, '#4f6e35'); }
+        else part(D, 'sphere', B, -.05, 0, -.02, .16, .1, .16, '#5a7a3c');
+      }
+      if (r.wonder) {
+        const B = base(wx(cx), heightAt(cx, cy) - .05, wz(cy), seed % 6);
+        part(D, 'box', B, 0, 0, 0, 1.5, .25, 1.2, stone); part(D, 'box', B, 0, .25, 0, 1.1, .12, .8, stone);
+        for (let q = 0; q < 6; q++) { const hh = .2 + hash(seed, q + 40) * .7; part(D, 'cyl', B, -.5 + q * .2, .37, -.25 + (q % 2) * .5, .1, hh, .1, '#c9c2b2'); }
+        part(D, 'cyl', B, .7, .02, .5, .1, .7, .1, '#c9c2b2', 0, 0, Math.PI / 2 - .05);
+        part(D, 'sphere', B, -.4, .37, .1, .4, .22, .3, '#4f6e35');
+      }
+      for (let q = 0; q < 5; q++) { const a = hash(seed, q + 90) * 6.283, d = hash(q + 90, seed) * R, px = cx + Math.cos(a) * d, py = cy + Math.sin(a) * d; if (!sim.passable(Math.floor(px), Math.floor(py))) continue;
+        const B = base(wx(px), heightAt(px, py) - .02, wz(py), 0); part(D, 'cyl', B, 0, 0, 0, .03, .3, .03, '#5a4632'); part(D, 'sphere', B, 0, .22, 0, .26, .26, .26, q % 2 ? '#3f6a2c' : '#4f7a34'); }
+    }
   }
   // walled nations that go to war with a neighbor raise a long wall across the border between them, with watchtowers
   // and a gate on the road; it stands in their own building style, and after the age of gunpowder it weathers into a ruin
@@ -5419,6 +5459,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   window.addEventListener('focusScar', e => { const sc = (world.scars || []).filter(c => c.n >= 3).sort((a, b) => b.last - a.last), c = sc[(e.detail.i || 0) % Math.max(1, sc.length)]; window.__scar = sc.length + ' ' + (c ? c.n + ' era ' + c.era : ''); if (c) window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, d: e.detail.d || .35 } })); });
   window.addEventListener('focusFront', e => { const ts = [...sim.tribes.values()].filter(t => t.wars.size && t.members.size >= 5 && frontSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__front = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = frontSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x + Math.sin(st.head) * .5, y: st.y + Math.cos(st.head) * .5, h: st.h, d: e.detail.d || .35 } })); });
   window.addEventListener('focusBorder', e => { const ws = borderWalls(), w = ws[(e.detail.i || 0) % Math.max(1, ws.length)]; window.__border = ws.length; if (!w) return; const x = w.t.camp.x + .5 + (w.o.camp.x - w.t.camp.x) * .55, y = w.t.camp.y + .5 + (w.o.camp.y - w.t.camp.y) * .55; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x, y, d: e.detail.d || .8 } })); });
+  window.addEventListener('focusRuin', e => { const rs = sim.ruins || [], r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__ruins = rs.length; if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: r.x + .5, y: r.y + .5, d: e.detail.d || .8 } })); });
   window.addEventListener('focusDam', e => { const ts = [...sim.tribes.values()].filter(t => damSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__dam = ts.length + (t ? ' ' + t.name : ''); if (!t) return; const d = damSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: d.x, y: d.y, h: d.h, d: e.detail.d || .45 } })); });
   window.addEventListener('focusObs', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 8 && obsSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__obs = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = obsSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y + .3, h: st.h, d: e.detail.d || .35 } })); });
   window.addEventListener('focusCamp', e => { const rs = sim.armies.filter(r => !r.dead && (r.state === 'siege' || (!e.detail.siege && r.state === 'muster')) && campOf(r)), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__camp = rs.length + (r ? ' ' + r.state + ' era ' + sim.tribes.get(r.tribe).era : ''); if (!r) return; const c = campOf(r); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y + .3, d: e.detail.d || .35 } })); });
