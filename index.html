@@ -3645,6 +3645,106 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     }
     part(D, 'cyl', B, -.4, -.02, .4, .015, .55, .015, '#3a3a3a'); part(D, 'box', B, -.31, .48, .4, .18, .1, .01, col, 0, Math.sin(clock * 3 + k) * .25, 0);
   }
+  // woodcutters work a logging camp in the nearest forest: felling trees, stacking logs and later sawing them into lumber,
+  // from axes and a lean-to, to sawpits and an ox hauling logs, to a smoking steam sawmill, to a yellow harvester and log trucks
+  function lumberSite(t) {
+    if (!world.ext) return null;
+    world.lumberAt = world.lumberAt || new Map();
+    const ext = (world.ext.get(t.id) || 2) + (t.walls ? 1.4 : .7), key = sim.ownerVersion + ':' + Math.round(ext * 2) + ':' + (world.sites || []).length + ':' + t.era, c = world.lumberAt.get(t.id);
+    if (c && c.v === key) return c.site;
+    const avoid = (world.sites || []).map(st => [st.x, st.y, (st.len || 2) / 2 + 1]);
+    for (const f of [mineSite(t), yardSite(t), t.members.size >= 8 && obsSite(t)]) if (f) avoid.push([f.x, f.y, 1.8]);
+    for (const o of sim.tribes.values()) if (o !== t) avoid.push([o.camp.x + .5, o.camp.y + .5, (world.ext.get(o.id) || 2) + 1]);
+    let best = null, bs = 1e9;
+    for (let dy = -9; dy <= 9; dy++) for (let dx = -9; dx <= 9; dx++) {
+      const x = t.camp.x + dx, y = t.camp.y + dy, d = Math.hypot(dx, dy); if (d < ext || d > ext + 6 || x < 1 || y < 1 || x >= W - 1 || y >= H - 1) continue;
+      const i = y * W + x; if (sim.terrain[i] !== T.FOREST || (sim.owner[i] && sim.owner[i] !== t.id) || (sim.river && sim.river[i])) continue;
+      if (avoid.some(([ux, uy, ur]) => Math.hypot(x + .5 - ux, y + .5 - uy) < ur)) continue;
+      let wood = 0; for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (sim.terrain[i + a + b * W] === T.FOREST) wood++;
+      const score = d - wood * .6; if (score < bs) { bs = score; best = { x: x + .5, y: y + .5, head: Math.atan2(-dx, -dy), tiles: [i] }; }
+    }
+    if (best) {                                                                       // clear the tile and a working yard toward town
+      const fx = Math.sin(best.head), fz = Math.cos(best.head), cx = Math.floor(best.x), cy = Math.floor(best.y);
+      for (const [ox, oy] of [[Math.round(fx), Math.round(fz)], [Math.round(fx + fz * .7), Math.round(fz - fx * .7)], [Math.round(fx - fz * .7), Math.round(fz + fx * .7)]]) if (sim.inb(cx + ox, cy + oy)) best.tiles.push((cy + oy) * W + cx + ox);
+      best.x += fx * .35; best.y += fz * .35; best.h = heightAt(best.x, best.y);
+    }
+    world.lumberAt.set(t.id, { v: key, site: best }); return best;
+  }
+  function lumberCamp(D, B, era, col, k) {
+    const bark = '#5a4030', cut = '#d8b98a', leaf = '#3f6a32', sk = '#c9a07a';
+    const stump = (x, z, r) => { part(D, 'cyl', B, x, -.03, z, r, .07, r, bark); part(D, 'cyl', B, x, .035, z, r * .9, .008, r * .9, cut); };
+    for (const [x, z, r] of [[.42, .3, .05], [-.4, .38, .045], [.15, .48, .04], [-.15, -.42, .05], [.45, -.2, .04], [-.48, -.05, .045], [.3, .05, .035]]) stump(x, z, r);
+    const logs = (x, z, n, len, r, ry) => { let q = 0; for (let row = 0; q < n; row++) for (let j = 0; j < n - row * 2 && q < n; j++, q++) {
+      const M = B.clone().multiply(tmpM.makeRotationY(ry)); part(D, 'cyl', M, x + (j - (n - row * 2 - 1) / 2) * r * 2.05, r + row * r * 1.75 - .03, z, r, len, r, q % 3 ? bark : '#664a36', Math.PI / 2, 0, 0); } };
+    const man = (x, z, ry, sw) => {                                                                   // a woodcutter swinging an axe
+      part(D, 'box', B, x, .05, z, .05, .09, .035, col); part(D, 'sphere', B, x, .125, z, .028, .03, .028, sk);
+      const M = B.clone().multiply(tmpM.makeTranslation(x, .12, z)).multiply(tmpM.makeRotationY(ry)).multiply(tmpM.makeRotationX(sw));
+      part(D, 'box', M, 0, 0, .05, .008, .008, .1, '#7a5a3a'); part(D, 'box', M, 0, 0, .1, .006, .03, .02, '#9aa0a6');
+    };
+    // a tree that slowly topples over, again and again, with a woodcutter chopping at its foot
+    const ph = (clock * .12 + k * .37) % 1, fall = ph < .55 ? 0 : Math.min(1, (ph - .55) / .25), ang = fall * fall * Math.PI / 2 * .97;
+    if (era >= 6) { part(D, 'cyl', B, -.2, -.03, .1, .045, .07, .045, bark); }
+    else {
+      const Tm = B.clone().multiply(tmpM.makeTranslation(-.2, 0, .1)).multiply(tmpM.makeRotationZ(-ang));
+      part(D, 'cyl', Tm, 0, -.03, 0, .04, .5, .04, bark); part(D, 'cone', Tm, 0, .3, 0, .17, .35, .17, leaf); part(D, 'cone', Tm, 0, .48, 0, .12, .25, .12, '#4a7a3a');
+      man(-.08, .12, -Math.PI / 2, fall ? -.4 : Math.sin(clock * 6 + k) * .9 - .2);
+    }
+    if (era <= 1) {
+      // a lean-to of poles and bark, a log stack and a woodcutter splitting firewood
+      part(D, 'prism', B, .1, -.03, -.22, .36, .22, .26, '#6a5240', .35, 0, 0); part(D, 'box', B, .1, -.02, -.12, .3, .02, .14, '#4a3a2c');
+      logs(-.3, -.2, 6, .32, .03, .4); stump(.25, .2, .04); part(D, 'box', B, .25, .055, .2, .025, .02, .05, cut);
+      man(.32, .2, -Math.PI / 2, Math.sin(clock * 5 + k * 2) * .9 - .2);
+      return;
+    }
+    if (era <= 3) {
+      // a sawpit trestle with two sawyers working a log into planks, and an ox dragging a log in from the forest
+      part(D, 'box', B, .2, .1, -.15, .5, .02, .06, '#7a5a3a'); for (const x of [0, .4]) for (const z of [-.18, -.12]) part(D, 'box', B, x, -.02, z, .02, .13, .02, '#5a4030');
+      part(D, 'cyl', B, .2, .135, -.15, .03, .44, .03, bark, 0, 0, Math.PI / 2);
+      const sy = Math.sin(clock * 4 + k) * .04;
+      part(D, 'box', B, .2, .14 + sy, -.15, .004, .16, .03, '#9aa0a6');
+      part(D, 'box', B, .2, .25, -.15, .05, .09, .035, col); part(D, 'sphere', B, .2, .32, -.15, .028, .03, .028, sk);
+      part(D, 'box', B, .2, .02, -.24, .05, .09, .035, col); part(D, 'sphere', B, .2, .095, -.24, .028, .03, .028, sk);
+      for (let q = 0; q < 4; q++) part(D, 'box', B, .55, -.02 + q * .018, -.3, .3, .016, .07, q % 2 ? cut : '#c9a978', 0, .3, 0);   // stacked planks
+      logs(-.32, -.25, 6, .36, .033, .3);
+      const u = (Math.sin(clock * .25 + k) + 1) / 2, oz = -.05 + u * .5, ox = .55;                           // ox and dragged log
+      part(D, 'box', B, ox, .06, oz, .07, .07, .16, '#6a4a32'); part(D, 'box', B, ox, .08, oz - .1, .05, .05, .06, '#5a3e2a');
+      for (const [a, b] of [[-.025, -.05], [.025, -.05], [-.025, .05], [.025, .05]]) part(D, 'box', B, ox + a, -.02, oz + b, .015, .07, .015, '#4a3424');
+      part(D, 'cyl', B, ox, .0, oz + .22, .025, .26, .025, bark, Math.PI / 2, 0, 0);
+      return;
+    }
+    // a sawmill shed with a spinning saw and lumber stacks; steam engine stack in the 1800s, power lines later
+    const shedC = era >= 5 ? '#b8b4aa' : '#8a6a4a', roofC = era >= 5 ? '#5a6068' : '#4a3a30';
+    part(D, 'box', B, .22, -.03, -.22, .5, .24, .3, shedC); part(D, 'prism', B, .22, .21, -.22, .54, .12, .32, roofC);
+    part(D, 'box', B, .22, .02, -.065, .3, .15, .01, '#2a2420');
+    const a = clock * 12 + k; part(D, 'cyl', B, .22, .09, -.03, .06, .006, .06, '#c0c4c8', 0, 0, Math.PI / 2); part(D, 'box', B, .22, .09, -.03, .004, .1, .01, '#80868c', a, 0, 0);
+    part(D, 'box', B, .22, .03, .05, .06, .03, .2, '#5a4030'); part(D, 'cyl', B, .22, .065, .08 + Math.sin(clock * .8 + k) * .05, .025, .2, .025, bark, Math.PI / 2, 0, 0);
+    if (era === 4) { part(D, 'cyl', B, .4, .2, -.3, .035, .35, .035, '#5a3a2a'); for (let p = 0; p < 3; p++) { const q = (clock * .3 + p / 3 + k) % 1; part(D, 'sphere', B, .4 + q * .1, .58 + q * .5, -.3, .04 + q * .09, .04 + q * .09, .04 + q * .09, '#8a8680'); } }
+    for (let s = 0; s < 2; s++) for (let q = 0; q < 5; q++) part(D, 'box', B, -.32 + s * .2, -.02 + q * .03, -.28, .16, .028, .26, q % 2 ? cut : '#caa878');
+    logs(-.25, .05, 10, .38, .03, Math.PI / 2 + .1);
+    if (era >= 5) {
+      // a log truck coming and going, and in modern times a harvester machine cutting in the forest
+      const u = (Math.sin(clock * .2 + k * 1.3) + 1) / 2, tz = .1 + u * .45, tx = .6;
+      part(D, 'box', B, tx, .03, tz - .13, .12, .1, .1, era >= 6 ? '#c8402a' : '#3a5a7a'); part(D, 'box', B, tx, .045, tz + .07, .12, .02, .28, '#3a3a3a');
+      for (const zz of [.0, .05, .1, .15]) part(D, 'cyl', B, tx, .07 + (zz * 10 % 2) * .0, tz + .07, .03, .3, .03, bark, Math.PI / 2, 0, 0);
+      for (const [wx2, wz2] of [[-.065, -.13], [.065, -.13], [-.065, .1], [.065, .1], [-.065, .18], [.065, .18]]) part(D, 'cyl', B, tx + wx2, .01, tz + wz2, .035, .02, .035, '#1a1a1a', 0, 0, Math.PI / 2);
+    }
+    if (era >= 6) {
+      const hx = -.42, hz = .3, sw = Math.sin(clock * .6 + k) * .7;
+      part(D, 'box', B, hx, .02, hz, .14, .08, .22, '#e0b020'); part(D, 'box', B, hx, .1, hz - .05, .1, .08, .08, '#2a3038');
+      for (const [a2, b2] of [[-.075, -.07], [.075, -.07], [-.075, .07], [.075, .07]]) part(D, 'cyl', B, hx + a2, .015, hz + b2, .045, .025, .045, '#1a1a1a', 0, 0, Math.PI / 2);
+      const M = B.clone().multiply(tmpM.makeTranslation(hx, .12, hz)).multiply(tmpM.makeRotationY(sw));
+      part(D, 'box', M, 0, .04, .14, .02, .02, .28, '#e0b020', -.3, 0, 0); part(D, 'box', M, 0, .1, .28, .05, .06, .04, '#3a3a3a');
+      part(D, 'cyl', M, 0, .04, .3, .03, .3, .03, bark, 0, 0, Math.PI / 2 * fall);
+    }
+  }
+  function updateLumber() {
+    const D = world.dset;
+    for (const t of sim.tribes.values()) {
+      if (t.members.size < 5) continue;
+      const st = lumberSite(t); if (!st) continue;
+      lumberCamp(D, base(wx(st.x), st.h, wz(st.y), st.head, 1.45), Math.min(6, t.era), t.color, t.id);
+    }
+  }
   function updateObs() {
     const D = world.dset;
     for (const t of sim.tribes.values()) {
@@ -4761,7 +4861,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -5236,7 +5336,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (const t of sim.tribes.values()) { const m = t.era >= 1 && t.members.size >= 6 && mineSite(t); if (m) for (const i of m.tiles) world.siteClear.add(i); }   // trees make way for the mine
     for (const t of sim.tribes.values()) { const y = t.era >= 2 && t.members.size >= 8 && yardSite(t); if (y) for (const i of y.tiles) world.siteClear.add(i); }
     for (const t of sim.tribes.values()) { const f = t.wars.size && t.members.size >= 5 && frontSite(t); if (f) for (const i of f.tiles) world.siteClear.add(i); }   // and for wartime forts
-    for (const t of sim.tribes.values()) { const o = t.members.size >= 8 && obsSite(t); if (o) for (const i of o.tiles) world.siteClear.add(i); }                   // and for observatories               // and for the shipyard
+    for (const t of sim.tribes.values()) { const o = t.members.size >= 8 && obsSite(t); if (o) for (const i of o.tiles) world.siteClear.add(i); }
+    for (const t of sim.tribes.values()) { const l = t.members.size >= 5 && lumberSite(t); if (l) for (const i of l.tiles) world.siteClear.add(i); }   // and a clearing for the logging camp
+                      // and for observatories               // and for the shipyard
     for (const bw of borderWalls()) drawBorderWall(S, bw, lamps);
     for (const i of oldClear) if (!world.siteClear.has(i)) showTrees(i, sim.terrain[i] === T.FOREST);
     for (const i of world.siteClear) if (!oldClear.has(i)) showTrees(i, false);
@@ -5461,6 +5563,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   window.addEventListener('focusBorder', e => { const ws = borderWalls(), w = ws[(e.detail.i || 0) % Math.max(1, ws.length)]; window.__border = ws.length; if (!w) return; const x = w.t.camp.x + .5 + (w.o.camp.x - w.t.camp.x) * .55, y = w.t.camp.y + .5 + (w.o.camp.y - w.t.camp.y) * .55; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x, y, d: e.detail.d || .8 } })); });
   window.addEventListener('focusRuin', e => { const rs = sim.ruins || [], r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__ruins = rs.length; if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: r.x + .5, y: r.y + .5, d: e.detail.d || .8 } })); });
   window.addEventListener('focusDam', e => { const ts = [...sim.tribes.values()].filter(t => damSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__dam = ts.length + (t ? ' ' + t.name : ''); if (!t) return; const d = damSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: d.x, y: d.y, h: d.h, d: e.detail.d || .45 } })); });
+  window.addEventListener('focusLumber', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 5 && lumberSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__lumber = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = lumberSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y + .3, h: st.h, d: e.detail.d || .35 } })); });
   window.addEventListener('focusObs', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 8 && obsSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__obs = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = obsSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y + .3, h: st.h, d: e.detail.d || .35 } })); });
   window.addEventListener('focusCamp', e => { const rs = sim.armies.filter(r => !r.dead && (r.state === 'siege' || (!e.detail.siege && r.state === 'muster')) && campOf(r)), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__camp = rs.length + (r ? ' ' + r.state + ' era ' + sim.tribes.get(r.tribe).era : ''); if (!r) return; const c = campOf(r); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y + .3, d: e.detail.d || .35 } })); });
   window.addEventListener('focusHerd', e => { const h = world.herds[e.detail.i % world.herds.length]; const t = clock * .05 + h.x; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: h.x + 1.1 + Math.sin(t) * 1.6, y: h.y + .5 + Math.cos(t * .8) * 1.3, d: e.detail.d || .5 } })); window.__herd = h.kind; });
