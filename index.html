@@ -3737,6 +3737,77 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       part(D, 'cyl', M, 0, .04, .3, .03, .3, .03, bark, 0, 0, Math.PI / 2 * fall);
     }
   }
+  // warning beacons on the highest hill near town, lit when the nation is at war: a stone cairn with a signal fire,
+  // a watch tower with an iron brazier, a semaphore tower waving its arms, then an air-raid siren and a radar dome
+  function beaconSite(t) {
+    if (!world.ext) return null;
+    world.beaconAt = world.beaconAt || new Map();
+    const ext = (world.ext.get(t.id) || 2) + (t.walls ? 1.6 : 1), key = sim.ownerVersion + ':' + Math.round(ext * 2) + ':' + (world.sites || []).length + ':' + t.techs.size, c = world.beaconAt.get(t.id);
+    if (c && c.v === key) return c.site;
+    const avoid = (world.sites || []).map(st => [st.x, st.y, (st.len || 2) / 2 + 1]);
+    for (const f of [mineSite(t), yardSite(t), t.members.size >= 8 && obsSite(t), t.members.size >= 5 && lumberSite(t)]) if (f) avoid.push([f.x, f.y, 2]);
+    for (const o of sim.tribes.values()) if (o !== t) avoid.push([o.camp.x + .5, o.camp.y + .5, (world.ext.get(o.id) || 2) + 1]);
+    let best = null, bh = -1e9;
+    for (let dy = -10; dy <= 10; dy++) for (let dx = -10; dx <= 10; dx++) {
+      const x = t.camp.x + dx, y = t.camp.y + dy, d = Math.hypot(dx, dy); if (d < ext + .5 || d > ext + 7 || !sim.passable(x, y)) continue;
+      const i = y * W + x; if ((sim.owner[i] && sim.owner[i] !== t.id) || (sim.river && sim.river[i])) continue;
+      if (avoid.some(([ux, uy, ur]) => Math.hypot(x + .5 - ux, y + .5 - uy) < ur)) continue;
+      const h = sim.elev[i] - d * .08; if (h > bh) { bh = h; best = { x: x + .5, y: y + .5, head: Math.atan2(-dx, -dy), tiles: [i] }; }
+    }
+    if (best) best.h = heightAt(best.x, best.y);
+    world.beaconAt.set(t.id, { v: key, site: best }); return best;
+  }
+  function beacon(D, B, era, col, lit, k, fires) {
+    const stone = '#8f877a', dark = '#2a2622', wood = '#5e4430';
+    const flame = (x, y, z, f) => {                                                     // a flickering fire with rising smoke, glowing at night
+      const q = f * (.85 + Math.sin(clock * 17 + k) * .1 + Math.sin(clock * 29 + k * 3) * .06);
+      part(D, 'cone', B, x, y, z, .13 * q, .32 * q, .13 * q, '#ff8a2a'); part(D, 'cone', B, x, y, z, .08 * q, .42 * q, .08 * q, '#ffd060');
+      for (let p = 0; p < 4; p++) { const u = (clock * .25 + p / 4 + k * .13) % 1, r = (.06 + u * .16) * f; part(D, 'sphere', B, x + u * .35, y + .35 + u * 1.3 * f, z + u * .1, r, r, r, u < .2 ? '#5a5048' : '#8a8580'); }
+      tmpP.set(x, y + .15, z).applyMatrix4(B); fires.push([tmpP.x, tmpP.y, tmpP.z, f, 0, B.elements[13]]);
+    };
+    const flag = (x, h) => { part(D, 'cyl', B, x, -.02, -.25, .012, h, .012, '#3a3a3a'); part(D, 'box', B, x + .08, h - .08, -.25, .16, .09, .01, col, 0, Math.sin(clock * 3 + k) * .25, 0); };
+    if (era <= 2) {
+      // a stone cairn with a stacked wood pile on top; a sentry keeps watch
+      part(D, 'cone', B, 0, -.04, 0, .3, .22, .3, stone); part(D, 'cyl', B, 0, .16, 0, .17, .06, .17, '#7d7568');
+      if (lit) flame(0, .2, 0, 1); else for (let j = 0; j < 4; j++) part(D, 'cyl', B, 0, .22 + j * .015, 0, .02, .26, .02, wood, Math.PI / 2, j * .8, 0);
+      part(D, 'box', B, .3, .04, .1, .05, .1, .035, col); part(D, 'sphere', B, .3, .12, .1, .028, .03, .028, '#c9a07a'); part(D, 'cyl', B, .34, .0, .1, .008, .22, .008, wood);
+      flag(-.3, .45); return;
+    }
+    if (era === 3) {
+      // a square stone watch tower with battlements and an iron brazier on the roof
+      part(D, 'box', B, 0, -.04, 0, .3, .62, .3, stone); for (const [x, z] of [[-.12, -.12], [.12, -.12], [-.12, .12], [.12, .12]]) part(D, 'box', B, x, .58, z, .07, .08, .07, '#9a9284');
+      part(D, 'box', B, 0, .05, .151, .08, .14, .01, dark); part(D, 'box', B, 0, .34, .151, .04, .08, .01, dark);
+      part(D, 'cyl', B, 0, .6, 0, .02, .1, .02, dark); part(D, 'cyl', B, 0, .7, 0, .1, .05, .06, '#3a3632');
+      if (lit) flame(0, .74, 0, .8);
+      flag(.22, .95); return;
+    }
+    if (era === 4) {
+      // a semaphore telegraph tower: a mast with a crossbar and two arms signalling to the next hill
+      part(D, 'box', B, 0, -.04, 0, .3, .26, .3, '#c9bca4'); part(D, 'prism', B, 0, .22, 0, .32, .1, .32, '#6b4a3a');
+      part(D, 'box', B, 0, .3, 0, .025, .55, .025, dark);
+      const a = lit ? Math.sin(clock * 2.2 + k) * 1.2 : .0, b = lit ? Math.cos(clock * 1.7 + k) * 1.2 : 0;
+      const M = B.clone().multiply(tmpM.makeTranslation(0, .82, .02)).multiply(tmpM.makeRotationZ(lit ? Math.sin(clock * .9 + k) * .6 : 0));
+      part(D, 'box', M, 0, -.015, 0, .4, .03, .015, dark);
+      for (const [sx, r] of [[-.2, a], [.2, b]]) { const N = M.clone().multiply(tmpM.makeTranslation(sx, 0, 0)).multiply(tmpM.makeRotationZ(r)); part(D, 'box', N, 0, -.01, .01, .015, .14, .012, dark); }
+      if (lit) flame(.3, -.04, .25, .45);
+      flag(-.22, .6); return;
+    }
+    // modern: an air-raid siren on a pole (and from the 2000s an early-warning radar dome), with a red light while at war
+    part(D, 'box', B, 0, -.04, 0, .34, .2, .26, era >= 6 ? '#d8d6d0' : '#a8a49a'); part(D, 'box', B, 0, .16, 0, .36, .03, .28, '#5a5a5a');
+    part(D, 'cyl', B, .25, -.02, .15, .02, .7, .02, '#7a7a7a');
+    const sp = lit ? clock * 3 + k : k; for (let j = 0; j < 3; j++) part(D, 'cone', B, .25, .7, .15, .04, .12, .04, '#b8bcc0', Math.PI / 2, sp + j * 2.09, 0);
+    if (era >= 6) { part(D, 'cyl', B, -.15, .19, -.02, .1, .12, .1, '#e8e8e4'); part(D, 'sphere', B, -.15, .38, -.02, .2, .2, .2, '#f2f2ef'); }
+    if (lit && Math.sin(clock * 5 + k) > 0) { part(D, 'sphere', B, .25, .78, .15, .03, .03, .03, '#ff3020'); tmpP.set(.25, .78, .15).applyMatrix4(B); fires.push([tmpP.x, tmpP.y, tmpP.z, .25, 1, B.elements[13]]); }
+    flag(-.3, .6);
+  }
+  function updateBeacons() {
+    const D = world.dset, fires = world.beaconFires = [];
+    for (const t of sim.tribes.values()) {
+      if (t.era < 1 || t.members.size < 6) continue;
+      const st = beaconSite(t); if (!st) continue;
+      beacon(D, base(wx(st.x), st.h, wz(st.y), st.head, 1.3), Math.min(6, t.era), t.color, t.wars.size > 0, t.id, fires);
+    }
+  }
   function updateLumber() {
     const D = world.dset;
     for (const t of sim.tribes.values()) {
@@ -4861,7 +4932,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -4921,6 +4992,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       if (!s.alive || (s.sub && !(s.surf > 0))) continue;
       add(wx(s.x), wz(s.y), -.02, .55, s.era >= 4 ? LAMP_C.led : LAMP_C.ship, s.era < 4, .42, .035);
     }
+    for (const [x, y, z, f, red, g] of world.beaconFires || []) add(x, z, g, red ? .5 : 1.1 * f, red ? LAMP_C.red : LAMP_C.fire, !red, y, red ? .04 : .07 * f);
     for (const [x, z, g, h] of world.carLights) add(x + Math.sin(h) * .25, z + Math.cos(h) * .25, g, .3, LAMP_C.led, false, 0, 0);
     for (const p of sim.planes || []) if (p.alive && p.alt > .2 && Math.sin(clock * 6 + (p.id || 0)) > .6 && nb < 2000) {
       const x = wx(p.x), z = wz(p.y), y = Math.max(.3, heightAt(p.x, p.y)) + 4.5 * p.alt + .6;
@@ -5337,7 +5409,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (const t of sim.tribes.values()) { const y = t.era >= 2 && t.members.size >= 8 && yardSite(t); if (y) for (const i of y.tiles) world.siteClear.add(i); }
     for (const t of sim.tribes.values()) { const f = t.wars.size && t.members.size >= 5 && frontSite(t); if (f) for (const i of f.tiles) world.siteClear.add(i); }   // and for wartime forts
     for (const t of sim.tribes.values()) { const o = t.members.size >= 8 && obsSite(t); if (o) for (const i of o.tiles) world.siteClear.add(i); }
-    for (const t of sim.tribes.values()) { const l = t.members.size >= 5 && lumberSite(t); if (l) for (const i of l.tiles) world.siteClear.add(i); }   // and a clearing for the logging camp
+    for (const t of sim.tribes.values()) { const l = t.members.size >= 5 && lumberSite(t); if (l) for (const i of l.tiles) world.siteClear.add(i); }
+    for (const t of sim.tribes.values()) { const b = t.era >= 1 && t.members.size >= 6 && beaconSite(t); if (b) for (const i of b.tiles) world.siteClear.add(i); }   // and the hilltop beacon   // and a clearing for the logging camp
                       // and for observatories               // and for the shipyard
     for (const bw of borderWalls()) drawBorderWall(S, bw, lamps);
     for (const i of oldClear) if (!world.siteClear.has(i)) showTrees(i, sim.terrain[i] === T.FOREST);
@@ -5564,10 +5637,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   window.addEventListener('focusRuin', e => { const rs = sim.ruins || [], r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__ruins = rs.length; if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: r.x + .5, y: r.y + .5, d: e.detail.d || .8 } })); });
   window.addEventListener('focusDam', e => { const ts = [...sim.tribes.values()].filter(t => damSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__dam = ts.length + (t ? ' ' + t.name : ''); if (!t) return; const d = damSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: d.x, y: d.y, h: d.h, d: e.detail.d || .45 } })); });
   window.addEventListener('focusLumber', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 5 && lumberSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__lumber = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = lumberSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y + .3, h: st.h, d: e.detail.d || .35 } })); });
+  window.addEventListener('focusBeacon', e => { const ts = [...sim.tribes.values()].filter(t => t.era >= 1 && t.members.size >= 6 && beaconSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__beacon = ts.length + (t ? ' ' + t.name + ' era ' + t.era + ' war ' + t.wars.size : ''); if (!t) return; const st = beaconSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y, h: st.h + .3, d: e.detail.d || .4, a: st.head } })); });
   window.addEventListener('focusObs', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 8 && obsSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__obs = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = obsSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y + .3, h: st.h, d: e.detail.d || .35 } })); });
   window.addEventListener('focusCamp', e => { const rs = sim.armies.filter(r => !r.dead && (r.state === 'siege' || (!e.detail.siege && r.state === 'muster')) && campOf(r)), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__camp = rs.length + (r ? ' ' + r.state + ' era ' + sim.tribes.get(r.tribe).era : ''); if (!r) return; const c = campOf(r); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y + .3, d: e.detail.d || .35 } })); });
   window.addEventListener('focusHerd', e => { const h = world.herds[e.detail.i % world.herds.length]; const t = clock * .05 + h.x; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: h.x + 1.1 + Math.sin(t) * 1.6, y: h.y + .5 + Math.cos(t * .8) * 1.3, d: e.detail.d || .5 } })); window.__herd = h.kind; });
-  window.addEventListener('focusTile', e => { const { x, y, h, d = 1 } = e.detail; const tgt = new THREE.Vector3(wx(x), h ?? Math.max(0, heightAt(x, y)), wz(y)); controls.target.copy(tgt); camera.position.copy(tgt).add(new THREE.Vector3(0, 4.5 * d, 6 * d)); focus = null; follow = 0; });
+  window.addEventListener('focusTile', e => { const { x, y, h, d = 1, a } = e.detail; const tgt = new THREE.Vector3(wx(x), h ?? Math.max(0, heightAt(x, y)), wz(y)); controls.target.copy(tgt); camera.position.copy(tgt).add(a == null ? new THREE.Vector3(0, 4.5 * d, 6 * d) : new THREE.Vector3(Math.sin(a) * 5 * d, 5.5 * d, Math.cos(a) * 5 * d)); focus = null; follow = 0; });
   function drawPop() {
     const c = $('#popChart'), w = c.clientWidth; if (!w) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1); if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(54 * dpr); }
