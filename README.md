@@ -150,6 +150,10 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 
   ![Terraced hill farms](docs/terraces.png)
 
+- **Mountain expeditions:** from the 1700s each nation sends a roped party of climbers up the highest peak near home, and its flag flies on a summit cairn. A stone mountain hut appears part way up in the 1800s, a cable car with pylons runs from the valley to a summit station in the 1900s, and a weather station joins it in the 2000s.
+
+  ![Mountain summit](docs/summit.png)
+
 - **Wartime forts:** a nation at war fortifies the side of town facing its nearest enemy, with its colors flying. It starts as a timber watchtower behind a palisade, then becomes a stone tower with battlements, a star fort with cannon, an earthwork redoubt with a field gun, a zigzag trench line with a concrete pillbox and barbed wire, and finally an air defense post with a turning radar and missile launcher.
 
   ![A stone watchtower flying its nation's flag outside a town at war](docs/fort.png)
