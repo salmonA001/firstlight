@@ -154,6 +154,10 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 
   ![Mountain summit](docs/summit.png)
 
+- **Refugees:** while a town is under siege, its people flee out the far side, away from the attackers: families with bundles on their backs, children and goats, pushing handcarts, then ox carts and horse wagons, and in modern times cars piled with belongings. They gather in a tent camp with a cook fire at the end of the road (white relief tents and a blue flag in the 2000s).
+
+  ![Refugees](docs/refugees.png)
+
 - **Wartime forts:** a nation at war fortifies the side of town facing its nearest enemy, with its colors flying. It starts as a timber watchtower behind a palisade, then becomes a stone tower with battlements, a star fort with cannon, an earthwork redoubt with a field gun, a zigzag trench line with a concrete pillbox and barbed wire, and finally an air defense post with a turning radar and missile launcher.
 
   ![A stone watchtower flying its nation's flag outside a town at war](docs/fort.png)
