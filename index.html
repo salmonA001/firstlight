@@ -5142,6 +5142,40 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     LP.set(x, y, z).applyMatrix4(B);
     list.push({ x: LP.x, y: LP.y, z: LP.z, g: gy ?? (LP.y - y), r, c: LAMP_C[kind], b: bulb, fire, fl: kind === 'fire' || kind === 'torch', torch: kind === 'torch' });
   }
+  // festival nights light up the sky: early peoples send sparks up from a great bonfire, later towns launch fireworks that
+  // climb on a trail and burst into rings of colour (sky lanterns drift up in eastern lands), lighting the ground below
+  const FW_COLS = ['#ff4a4a', '#ffd23a', '#4ad8ff', '#7aff6a', '#ff7af0', '#ffffff', '#ff9a2a'].map(c => new THREE.Color(c));
+  const FW_TMP = new THREE.Color();
+  function festivalLights(add) {
+    for (const t of sim.tribes.values()) {
+      if (!(t.festival > 0) || t.members.size < 4) continue;
+      const cx = t.camp.x + .5, cy = t.camp.y + .5, X = wx(cx), Z = wz(cy), G = heightAt(cx, cy), k = t.id * 1.37;
+      if (t.era <= 1) {                                                                  // a bonfire throwing sparks into the night
+        add(X, Z, G, 2.4, LAMP_C.fire, true, G + .3, .12);
+        for (let q = 0; q < 14; q++) { const u = (clock * .5 + q / 14 + k) % 1, a = q * 2.4 + k; add(X + Math.sin(a) * u * .3, Z + Math.cos(a) * u * .3, 0, 0, LAMP_C.fire, true, G + .3 + u * 2.2, .03 * (1 - u)); }
+        continue;
+      }
+      const lantern = STY(t.style) === 'eastern' || STY(t.style) === 'indic';
+      if (lantern) for (let q = 0; q < 10; q++) {                                         // sky lanterns drifting upward
+        const u = (clock * .04 + q / 10 + k) % 1, a = q * 1.9 + k;
+        add(X + Math.sin(a) * (.6 + u * 1.5) + u * .8, Z + Math.cos(a) * (.6 + u * 1.5), 0, 0, LAMP_C.window, true, G + .5 + u * 5, .06 * (1 - u * .6));
+      }
+      const N = 2 + Math.min(3, t.era - 1), P = 3.2;                                     // bursts per cycle grows with the era
+      for (let b = 0; b < N; b++) {
+        const ph = ((clock + b * P / N + k) % P) / P, seed = Math.floor((clock + b * P / N + k) / P) * 7 + b * 13 + t.id;
+        const ox = (hash(seed, 1) - .5) * 2.4, oz = (hash(seed, 2) - .5) * 2.4, top = G + 3 + hash(seed, 3) * 2, col = FW_COLS[Math.floor(hash(seed, 4) * FW_COLS.length)];
+        if (ph < .3) { const u = ph / .3; add(X + ox * u, Z + oz * u, 0, 0, LAMP_C.gas, true, G + .2 + (top - G - .2) * u, .045); continue; }   // the rocket climbing
+        const u = (ph - .3) / .7, R = (1 - (1 - u) ** 3) * (.9 + hash(seed, 5) * .6), fade = 1 - u, drop = u * u * .8;
+        FW_TMP.copy(col).multiplyScalar(.4 + fade * .9);
+        if (u < .25) add(X + ox, Z + oz, G, 3.2 * (1 - u * 4), FW_TMP, false, top, 0);                                       // the flash lights the town below
+        const n = 24;
+        for (let q = 0; q < n; q++) {
+          const th = q / n * Math.PI * 2, el = (hash(seed, q + 10) - .5) * 2.4, cr = Math.cos(el);
+          add(X + ox + Math.cos(th) * cr * R, Z + oz + Math.sin(th) * cr * R, 0, 0, FW_TMP, false, top + Math.sin(el) * R * .8 - drop, .06 * fade + .02);
+        }
+      }
+    }
+  }
   function updateNight() {
     const night = world.night || 0, Hh = world.halo, Bu = world.bulbs, Au = world.aura, on = night > .03;
     Hh.visible = Bu.visible = Au.visible = world.beams.visible = on;
@@ -5160,6 +5194,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       if (!s.alive || (s.sub && !(s.surf > 0))) continue;
       add(wx(s.x), wz(s.y), -.02, .55, s.era >= 4 ? LAMP_C.led : LAMP_C.ship, s.era < 4, .42, .035);
     }
+    festivalLights(add);
     for (const [x, y, z, f, red, g] of world.beaconFires || []) add(x, z, g, red ? .5 : 1.1 * f, red ? LAMP_C.red : LAMP_C.fire, !red, y, red ? .04 : .07 * f);
     for (const [x, z, g, h] of world.carLights) add(x + Math.sin(h) * .25, z + Math.cos(h) * .25, g, .3, LAMP_C.led, false, 0, 0);
     for (const p of sim.planes || []) if (p.alive && p.alt > .2 && Math.sin(clock * 6 + (p.id || 0)) > .6 && nb < 2000) {
@@ -5810,6 +5845,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   window.addEventListener('focusTerrace', e => { const ts = [...sim.tribes.values()].filter(t => terraceSites(t).length), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__terr = ts.length + (t ? ' ' + t.name + ' era ' + t.era + ' n ' + terraceSites(t).length + ' kind ' + terraceSites(t)[0].kind : ''); if (!t) return; const st = terraceSites(t)[0]; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y, h: heightAt(st.x, st.y), d: e.detail.d || .45, a: st.head } })); });
   window.addEventListener('focusSummit', e => { const ts = [...sim.tribes.values()].filter(t => t.era >= 3 && t.members.size >= 8 && summitSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__summit = ts.length + (t ? ' ' + t.name + ' era ' + t.era + ' len ' + summitSite(t).len.toFixed(1) : ''); if (!t) return; const st = summitSite(t), u = e.detail.u ?? .5; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x + (st.fx - st.x) * u, y: st.y + (st.fy - st.y) * u, h: heightAt(st.x + (st.fx - st.x) * u, st.y + (st.fy - st.y) * u), d: e.detail.d || .6, a: st.head + .6 } })); });
   window.addEventListener('focusRefugees', e => { const rs = sim.armies.filter(r => !r.dead && refugeeRoute(r)), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__ref = rs.length + (r ? ' ' + sim.tribes.get(r.target).name : ''); if (!r) return; const R = refugeeRoute(r), u = R.len * (e.detail.u ?? .5); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: R.sx + R.hx * u, y: R.sy + R.hy * u, d: e.detail.d || .45, a: R.head + 1.2 } })); });
+  window.addEventListener('focusFestival', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 4 && t.era >= (e.detail.era ?? 0)).sort((a, b) => b.members.size - a.members.size), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; if (!t) return; t.festival = 120; t.festName = t.festName || 'festival'; window.__fest = t.name + ' era ' + t.era + ' ' + STY(t.style); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: t.camp.x + .5, y: t.camp.y + .5, h: heightAt(t.camp.x + .5, t.camp.y + .5) + 2.5, d: e.detail.d || 1.1 } })); });
   window.addEventListener('focusObs', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 8 && obsSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__obs = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = obsSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y + .3, h: st.h, d: e.detail.d || .35 } })); });
   window.addEventListener('focusCamp', e => { const rs = sim.armies.filter(r => !r.dead && (r.state === 'siege' || (!e.detail.siege && r.state === 'muster')) && campOf(r)), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__camp = rs.length + (r ? ' ' + r.state + ' era ' + sim.tribes.get(r.tribe).era : ''); if (!r) return; const c = campOf(r); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y + .3, d: e.detail.d || .35 } })); });
   window.addEventListener('focusHerd', e => { const h = world.herds[e.detail.i % world.herds.length]; const t = clock * .05 + h.x; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: h.x + 1.1 + Math.sin(t) * 1.6, y: h.y + .5 + Math.cos(t * .8) * 1.3, d: e.detail.d || .5 } })); window.__herd = h.kind; });
