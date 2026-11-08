@@ -162,6 +162,10 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 
   ![Festival fireworks](docs/fireworks.png)
 
+- **Victory monuments:** when a war ends and one side is clearly stronger, the winner raises a monument outside town facing the beaten foe, and the Chronicle records it. It starts as a trophy of captured shields and spears, then becomes a carved victory stone, a triumphal arch, a tall column crowned with a statue, a war memorial with an eternal flame and wreaths, and finally a dark memorial wall with a row of flags. Each nation keeps its four latest, and they are kept in saves.
+
+  ![Victory monument](docs/victory.png)
+
 - **Wartime forts:** a nation at war fortifies the side of town facing its nearest enemy, with its colors flying. It starts as a timber watchtower behind a palisade, then becomes a stone tower with battlements, a star fort with cannon, an earthwork redoubt with a field gun, a zigzag trench line with a concrete pillbox and barbed wire, and finally an air defense post with a turning radar and missile launcher.
 
   ![A stone watchtower flying its nation's flag outside a town at war](docs/fort.png)
