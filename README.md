@@ -166,6 +166,10 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 
   ![Victory monument](docs/victory.png)
 
+- **Oil fields:** from the 1800s many nations drill the flat, dry land outside town (deserts, steppe, savanna, badlands and tundra, plus a lucky few elsewhere). Timber derricks with barrels and the odd gusher come first, then steel derricks, nodding pumpjacks and white storage tanks, and in the 2000s a small refinery with a flare stack that burns and glows at night.
+
+  ![Oil field](docs/oil.png)
+
 - **Wartime forts:** a nation at war fortifies the side of town facing its nearest enemy, with its colors flying. It starts as a timber watchtower behind a palisade, then becomes a stone tower with battlements, a star fort with cannon, an earthwork redoubt with a field gun, a zigzag trench line with a concrete pillbox and barbed wire, and finally an air defense post with a turning radar and missile launcher.
 
   ![A stone watchtower flying its nation's flag outside a town at war](docs/fort.png)
