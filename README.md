@@ -170,6 +170,10 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 
   ![Oil field](docs/oil.png)
 
+- **Border crossings:** where a trade road passes from one nation into the next, a checkpoint flies both nations' flags. It starts as a timber gate with a log barrier and a guard hut, then becomes a stone gatehouse with an arch, a customs house with striped barriers that swing up to let traffic through, and finally modern booths under a canopy with cars queueing on both sides. In wartime the barriers stay shut and the guards are doubled.
+
+  ![Border crossing](docs/crossing.png)
+
 - **Wartime forts:** a nation at war fortifies the side of town facing its nearest enemy, with its colors flying. It starts as a timber watchtower behind a palisade, then becomes a stone tower with battlements, a star fort with cannon, an earthwork redoubt with a field gun, a zigzag trench line with a concrete pillbox and barbed wire, and finally an air defense post with a turning radar and missile launcher.
 
   ![A stone watchtower flying its nation's flag outside a town at war](docs/fort.png)

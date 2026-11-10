@@ -4128,6 +4128,72 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       oilField(D, base(wx(st.x), st.h, wz(st.y), st.head, 1.35), Math.min(6, t.era), t.color, t.id, fires);
     }
   }
+  // border crossings where a trade road passes from one nation into the next: a guarded pole gate, then a stone gatehouse,
+  // a customs house with a striped barrier, and modern checkpoints with booths, a canopy and a queue of traffic.
+  // Both nations fly their flags; in wartime the barrier stays shut and the guards are doubled
+  function crossingOf(r) {
+    if (r.era < 2 || r.L < 4) return null;
+    let prev = 0, at = -1;
+    for (let u = .1; u <= .9; u += .02) { const x = r.x1 + (r.x2 - r.x1) * u, y = r.y1 + (r.y2 - r.y1) * u, o = sim.owner[Math.floor(y) * W + Math.floor(x)] || 0;
+      if (prev && o && o !== prev) { at = u - .01; break; } if (o) prev = o; }
+    if (at < 0) return null;
+    const x = r.x1 + (r.x2 - r.x1) * at, y = r.y1 + (r.y2 - r.y1) * at; const i = Math.floor(y) * W + Math.floor(x); if (!sim.passable(Math.floor(x), Math.floor(y)) || (sim.river && sim.river[i]) || (world.town && world.town[i])) return null;
+    if ((world.sites || []).some(st => Math.hypot(st.x - x, st.y - y) < (st.len || 2) / 2 + 1)) return null;
+    for (const t of [r.a, r.b]) for (const f of [mineSite(t), oilSite(t), lumberSite(t), beaconSite(t), ...victorySpots(t)]) if (f && Math.hypot(f.x - x, f.y - y) < 1.4) return null;
+    return { x, y, h: heightAt(x, y), head: Math.atan2(r.x2 - r.x1, r.y2 - r.y1) };
+  }
+  function crossing(D, B, era, ca, cb, war, k) {
+    const sk = '#c9a07a';
+    const guard = (x, z, c, ry) => { part(D, 'box', B, x, .02, z, .05, .09, .035, c, 0, ry, 0); part(D, 'sphere', B, x, .105, z, .026, .028, .026, sk); part(D, 'cyl', B, x + .035, .0, z, .006, .16, .006, era >= 4 ? '#2a2a2a' : '#6a5a4a'); };
+    const flag = (x, z, c) => { part(D, 'cyl', B, x, -.02, z, .01, .5, .01, '#3a3a3a'); part(D, 'box', B, x + .07, .4, z, .14, .08, .01, c, 0, Math.sin(clock * 3 + k + x) * .25, 0); };
+    const open = !war && Math.sin(clock * .7 + k) > .2, lift = open ? Math.min(1, (Math.sin(clock * .7 + k) - .2) * 4) : 0;
+    const barrier = (z, len, c1, c2, y = .12) => {                                          // a pole across the road that swings up to let traffic through
+      const M = B.clone().multiply(tmpM.makeTranslation(-len / 2, y, z)).multiply(tmpM.makeRotationZ(lift * 1.3));
+      for (let q = 0; q < 6; q++) part(D, 'box', M, len * (q + .5) / 6, 0, 0, len / 6, .025, .025, q % 2 ? c2 : c1);
+      part(D, 'box', B, -len / 2, -.02, z, .05, y + .03, .05, '#5a5a5a');
+    };
+    flag(-.38, -.08, ca); flag(.38, .08, cb);
+    if (era <= 2) {
+      // a timber gate: two posts, a log barrier and a little guard hut
+      for (const x of [-.22, .22]) part(D, 'box', B, x, -.02, 0, .05, .3, .05, '#5e4430');
+      part(D, 'box', B, 0, .27, 0, .5, .04, .05, '#5e4430'); barrier(0, .42, '#6a4a30', '#6a4a30', .1);
+      part(D, 'box', B, .32, -.02, -.22, .16, .14, .14, '#7a5a3a'); part(D, 'prism', B, .32, .12, -.22, .18, .07, .16, '#4a3626');
+      guard(-.15, -.12, ca); guard(.15, .12, cb); if (war) { guard(-.05, -.16, ca); guard(.05, .16, cb); }
+      return;
+    }
+    if (era === 3) {
+      // a stone gatehouse with an arch over the road and battlements
+      for (const x of [-.25, .25]) part(D, 'box', B, x, -.02, 0, .16, .4, .22, '#a8a090');
+      part(D, 'box', B, 0, .3, 0, .66, .12, .22, '#a8a090'); for (const x of [-.27, -.09, .09, .27]) part(D, 'box', B, x, .42, 0, .07, .06, .22, '#9a9284');
+      barrier(.14, .34, '#c8402a', '#e8e4dc', .1);
+      guard(-.12, .2, ca); guard(.12, -.2, cb); if (war) { guard(-.05, .26, ca); guard(.05, -.26, cb); }
+      return;
+    }
+    // a customs house beside a striped barrier; from the 1900s, booths under a canopy and traffic waiting its turn
+    barrier(-.12, .4, '#d82a2a', '#f2f0ea'); barrier(.12, .4, '#d82a2a', '#f2f0ea');
+    if (era === 4) { part(D, 'box', B, .36, -.02, 0, .22, .2, .2, '#c9b9a0'); part(D, 'prism', B, .36, .18, 0, .24, .08, .22, '#6b4a3a'); part(D, 'box', B, -.32, -.02, -.15, .07, .14, .07, '#3a5a3a'); }
+    else {
+      part(D, 'box', B, 0, .32, 0, .7, .03, .4, era >= 6 ? '#e8e8e4' : '#c8c4bc'); for (const [x, z] of [[-.32, -.18], [.32, -.18], [-.32, .18], [.32, .18]]) part(D, 'box', B, x, -.02, z, .03, .34, .03, '#8a8a8a');
+      for (const x of [-.26, .26]) { part(D, 'box', B, x, -.02, 0, .09, .16, .1, '#e8e4dc'); part(D, 'box', B, x, .06, 0, .095, .05, .105, '#9ac4e0'); }
+      part(D, 'box', B, 0, .35, .21, .4, .05, .01, '#2a5aa0');                                           // sign board
+      if (!war) for (let q = 0; q < 3; q++) {                                                            // cars queueing on both sides
+        for (const side of [-1, 1]) { const z = side * (.32 + q * .2) + side * (lift > .5 && q === 0 ? -.1 : 0), x = side * .07, c = ['#c84a3a', '#4a6a9a', '#d8d4cc', '#3a3a3a'][(q + k + (side > 0 ? 2 : 0)) % 4];
+          part(D, 'box', B, x, .0, z, .08, .045, .14, c); part(D, 'box', B, x, .045, z - side * .01, .07, .035, .07, '#2a3038'); }
+      }
+    }
+    guard(-.15, .16, ca); guard(.15, -.16, cb); if (war) { guard(-.08, .2, ca); guard(.08, -.2, cb); guard(-.2, .25, ca); guard(.2, -.25, cb); }
+  }
+  function updateCrossings() {
+    const D = world.dset; if (!world.tradeRoads) return;
+    const seen = new Set();
+    for (const r of world.tradeRoads) {
+      const key = Math.min(r.a.id, r.b.id) + ':' + Math.max(r.a.id, r.b.id); if (seen.has(key)) continue; seen.add(key);
+      if (r.c === undefined || r.cv !== sim.ownerVersion + ':' + (world.sites || []).length) { r.c = crossingOf(r); r.cv = sim.ownerVersion + ':' + (world.sites || []).length; }
+      if (!r.c) continue;
+      const war = r.a.wars.has(r.b.id), era = Math.min(6, Math.max(r.a.era, r.b.era));
+      crossing(D, base(wx(r.c.x), r.c.h, wz(r.c.y), r.c.head, 1.4), era, r.a.color, r.b.color, war, r.a.id + r.b.id);
+    }
+  }
   function updateLumber() {
     const D = world.dset;
     for (const t of sim.tribes.values()) {
@@ -5252,7 +5318,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -5768,7 +5834,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (const t of sim.tribes.values()) { const b = t.era >= 1 && t.members.size >= 6 && beaconSite(t); if (b) for (const i of b.tiles) world.siteClear.add(i); }
     for (const t of sim.tribes.values()) for (const tr of terraceSites(t)) world.siteClear.add(tr.i);
     for (const t of sim.tribes.values()) for (const m of victorySpots(t)) world.siteClear.add(Math.floor(m.y) * W + Math.floor(m.x));   // and victory monuments
-    for (const t of sim.tribes.values()) { const o = t.era >= 4 && t.members.size >= 8 && oilSite(t); if (o) for (const i of o.tiles) world.siteClear.add(i); }   // and oil fields   // and the terraced hillsides   // and the hilltop beacon   // and a clearing for the logging camp
+    for (const t of sim.tribes.values()) { const o = t.era >= 4 && t.members.size >= 8 && oilSite(t); if (o) for (const i of o.tiles) world.siteClear.add(i); }   // and oil fields
+    for (const r of world.tradeRoads || []) { const c = crossingOf(r); if (c) for (const [p, q] of [[0, 0], [.6, 0], [-.6, 0], [0, .6], [0, -.6]]) world.siteClear.add(Math.floor(c.y + q) * W + Math.floor(c.x + p)); }   // and border crossings   // and the terraced hillsides   // and the hilltop beacon   // and a clearing for the logging camp
                       // and for observatories               // and for the shipyard
     for (const bw of borderWalls()) drawBorderWall(S, bw, lamps);
     for (const i of oldClear) if (!world.siteClear.has(i)) showTrees(i, sim.terrain[i] === T.FOREST);
@@ -6002,6 +6069,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   window.addEventListener('focusFestival', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 4 && t.era >= (e.detail.era ?? 0)).sort((a, b) => b.members.size - a.members.size), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; if (!t) return; t.festival = 120; t.festName = t.festName || 'festival'; window.__fest = t.name + ' era ' + t.era + ' ' + STY(t.style); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: t.camp.x + .5, y: t.camp.y + .5, h: heightAt(t.camp.x + .5, t.camp.y + .5) + 2.5, d: e.detail.d || 1.1 } })); });
   window.addEventListener('focusVictory', e => { const ts = [...sim.tribes.values()].filter(t => victorySpots(t).length), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__vic = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const m = victorySpots(t)[0]; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: m.x, y: m.y, h: m.h + .4, d: e.detail.d || .32, a: m.head + .5 } })); });
   window.addEventListener('focusOil', e => { const ts = [...sim.tribes.values()].filter(t => t.era >= 4 && t.members.size >= 8 && oilSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__oil = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = oilSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y, h: st.h + .3, d: e.detail.d || .38, a: st.head + .4 } })); });
+  window.addEventListener('focusCrossing', e => { const rs = (world.tradeRoads || []).filter(r => (r.c = crossingOf(r))), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__cross = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era : ''); if (!r) return; if (e.detail.war) { const w = { since: sim.tick, deaths: 0 }; r.a.wars.set(r.b.id, w); r.b.wars.set(r.a.id, w); } window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: r.c.x, y: r.c.y, h: r.c.h + .2, d: e.detail.d || .33, a: r.c.head + 1.1 } })); });
   window.addEventListener('focusObs', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 8 && obsSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__obs = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = obsSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y + .3, h: st.h, d: e.detail.d || .35 } })); });
   window.addEventListener('focusCamp', e => { const rs = sim.armies.filter(r => !r.dead && (r.state === 'siege' || (!e.detail.siege && r.state === 'muster')) && campOf(r)), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__camp = rs.length + (r ? ' ' + r.state + ' era ' + sim.tribes.get(r.tribe).era : ''); if (!r) return; const c = campOf(r); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y + .3, d: e.detail.d || .35 } })); });
   window.addEventListener('focusHerd', e => { const h = world.herds[e.detail.i % world.herds.length]; const t = clock * .05 + h.x; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: h.x + 1.1 + Math.sin(t) * 1.6, y: h.y + .5 + Math.cos(t * .8) * 1.3, d: e.detail.d || .5 } })); window.__herd = h.kind; });
