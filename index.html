@@ -4194,6 +4194,128 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       crossing(D, base(wx(r.c.x), r.c.h, wz(r.c.y), r.c.head, 1.4), era, r.a.color, r.b.color, war, r.a.id + r.b.id);
     }
   }
+  // bridges: where a trade road meets a river it crosses on a bridge of its era: log trestles in the Stone Age and antiquity,
+  // stone arches in the Middle Ages, a balustraded three-arch span with lanterns in the 1700s, an iron truss in the 1800s,
+  // a suspension bridge in the 1900s and a white cable-stayed span with a single pylon in the 2000s, with traffic crossing
+  function bridgesOf(r) {
+    const out = [], rp = world.riverPaths; if (!rp) return out;
+    const dx = r.x2 - r.x1, dy = r.y2 - r.y1;
+    for (const pp of rp) for (let k = 0; k < pp.length - 1; k++) {
+      const a = pp[k], b = pp[k + 1], ex = b[0] - a[0], ey = b[1] - a[1], den = dx * ey - dy * ex; if (Math.abs(den) < 1e-6) continue;
+      const u = ((a[0] - r.x1) * ey - (a[1] - r.y1) * ex) / den, v = ((a[0] - r.x1) * dy - (a[1] - r.y1) * dx) / den;
+      if (u < .03 || u > .97 || v < 0 || v > 1) continue;
+      const x = r.x1 + dx * u, y = r.y1 + dy * u; if (out.some(o => Math.hypot(o.x - x, o.y - y) < 1.5)) continue;
+      const sn = Math.abs(den) / (Math.hypot(dx, dy) * Math.hypot(ex, ey)); if (sn < .3) continue;      // skip a road running along the river
+      const w = a[3] + (b[3] - a[3]) * v, yc = a[2] + (b[2] - a[2]) * v - .045, S = Math.min(2.6, Math.max(.9, 2 * w / sn + .55)), head = Math.atan2(dx, dy), L = Math.hypot(dx, dy);
+      const ex0 = x - dx / L * S / 2, ey0 = y - dy / L * S / 2, ex1 = x + dx / L * S / 2, ey1 = y + dy / L * S / 2;
+      if (!sim.passable(Math.floor(ex0), Math.floor(ey0)) || !sim.passable(Math.floor(ex1), Math.floor(ey1))) continue;
+      const hA = heightAt(ex0, ey0), hB = heightAt(ex1, ey1);
+      out.push({ x, y, yc, S, head, hA: hA - yc, hB: hB - yc, H: Math.max(.2, Math.max(hA, hB) + .05 - yc), ends: [[ex0, ey0], [ex1, ey1]] });
+    }
+    return out;
+  }
+  function bridge(D, B, era, br, rail, k) {
+    const { S, H } = br, h2 = S / 2, wd = rail ? .62 : era >= 4 ? .4 : .3, xc = rail ? -.14 : 0, dk = H - .04;
+    for (const [d, h] of [[-1, br.hA], [1, br.hB]]) { const rise = H - Math.max(h, 0) - .03; if (rise > .05) { const len = Math.min(.9, rise * 3.5);   // an approach ramp down to the bank
+      part(D, 'box', B, xc, H - .04 - rise / 2, d * (h2 + len / 2), wd, .04, Math.hypot(len, rise) + .02, era <= 1 ? '#7a5a3a' : era <= 3 ? '#a39a88' : '#55575b', d * Math.atan2(rise, len), 0, 0); } }
+    const deck = c => part(D, 'box', B, xc, dk, 0, wd, .04, S, c);
+    const abut = (c, w = wd + .06) => { for (const [z, h] of [[-h2 + .07, br.hA], [h2 - .07, br.hB]]) { const y0 = Math.min(h, 0) - .08; part(D, 'box', B, xc, y0, z, w, dk - y0, .16, c); } };
+    const walker = (z, c, cart) => { part(D, 'box', B, xc + .05, H, z, .04, .08, .03, c); part(D, 'sphere', B, xc + .05, H + .08, z, .025, .025, .025, '#c9a07a');
+      if (cart) { part(D, 'box', B, xc - .04, H + .03, z - .1, .1, .06, .14, '#7a5a3a'); for (const s of [-1, 1]) part(D, 'cyl', B, xc - .04 + s * .055, H, z - .1, .055, .012, .055, '#4a3626', 0, 0, Math.PI / 2); } };
+    const cars = (n, lane) => { for (let q = 0; q < n; q++) for (const side of [-1, 1]) { const f = ((clock * .12 * (1 + q * .13) + q / n + (side > 0 ? .37 : 0) + k * .1) % 1), z = side * (f * S - h2), c = ['#c84a3a', '#4a6a9a', '#d8d4cc', '#2f3a3a', '#d8b03a'][(q + k + (side > 0 ? 2 : 0)) % 5];
+      part(D, 'box', B, lane + side * .07, H, z, .08, .045, .14, c); part(D, 'box', B, lane + side * .07, H + .045, z - side * .01, .07, .035, .07, '#2a3038'); } };
+    const train = () => { const f = (clock * .05 + k * .31) % 1; if (f > .45) return; const z0 = (f / .45) * (S + 1.4) - h2 - .7;
+      for (let c = 0; c < 3; c++) { const z = z0 - c * .24; if (Math.abs(z) > h2 - .05) continue; part(D, 'box', B, -.3, H + .01, z, .1, .1, .21, c ? '#6a3a2a' : '#2a2a2a'); if (!c && era <= 4) part(D, 'cyl', B, -.3, H + .11, z + .06, .035, .06, .035, '#2a2a2a'); } };
+    const rails = () => { if (!rail) return; for (const s of [-1, 1]) part(D, 'box', B, -.3 + s * .035, H, 0, .012, .012, S, '#5a5a5a'); };
+    const lamp = (x, z, c, ht = .2) => { part(D, 'cyl', B, x, H, z, .015, ht, .015, '#2a2a2a'); part(D, 'box', B, x, H + ht, z, .035, .04, .035, c); };
+    // a stone arch from z0 to z1 springing at ys: a ring of voussoirs with masonry filled up to the deck above it
+    const arch = (z0, z1, ys, c, ring) => {
+      const r = (z1 - z0) / 2, zc = (z0 + z1) / 2, N = 9;
+      for (let q = 0; q < N; q++) { const a0 = Math.PI * q / N, a1 = Math.PI * (q + 1) / N, am = (a0 + a1) / 2;
+        part(D, 'box', B, xc, ys + r * Math.sin(am), zc - r * Math.cos(am), wd + .02, .05, r * (a1 - a0) * 1.08, ring, am - Math.PI / 2, 0, 0); }
+      const NS = 8; for (let q = 0; q < NS; q++) { const z = z0 + (q + .5) * (z1 - z0) / NS, dz = z - zc, y = ys + Math.sqrt(Math.max(0, r * r - dz * dz)); if (y < dk) part(D, 'box', B, xc, y, z, wd, dk - y, (z1 - z0) / NS + .002, c); }
+    };
+    if (era <= 1) {
+      // logs laid across trestles, with a rope handrail on posts
+      const wood = '#7a5a3a', dark = '#5a4028';
+      for (const s of [-1, 1]) part(D, 'cyl', B, xc + s * .1, dk - .03, -h2, .05, S, .05, dark, Math.PI / 2, 0, 0);
+      const NP = Math.round(S / .07); for (let q = 0; q < NP; q++) part(D, 'box', B, xc, dk + .01, -h2 + (q + .5) * S / NP, wd, .03, S / NP * .85, q % 3 ? wood : '#8a6a46');
+      for (const z of [-S / 4, S / 4]) for (const s of [-1, 1]) part(D, 'cyl', B, xc + s * .11, -.08, z, .035, dk + .08, .035, dark, 0, 0, s * .08);
+      for (let q = 0; q <= 4; q++) for (const s of [-1, 1]) part(D, 'cyl', B, xc + s * .14, H - .02, -h2 + q * S / 4, .018, .14, .018, dark);
+      for (const s of [-1, 1]) part(D, 'cyl', B, xc + s * .14, H + .1, -h2, .008, S, .008, '#a08a60', Math.PI / 2, 0, 0);
+      abut('#6a6258', wd + .02);
+      walker(((clock * .05 + k * .3) % 1) * S - h2, '#8a5a3a', false); walker(h2 - ((clock * .04 + k * .7) % 1) * S, '#6a7a4a', era === 1);
+      return;
+    }
+    if (era <= 3) {
+      // stone arches on piers with cutwaters; the 1700s add a third arch, a balustrade and lanterns
+      const c = era === 2 ? '#a39a88' : '#cfc6b0', ring = era === 2 ? '#8e8574' : '#b8ae96', n = era === 2 ? 2 : 3, sp = (S - .28) / n, ys = Math.min(.02, H - sp / 2 - .07);
+      for (let q = 0; q < n; q++) arch(-h2 + .14 + q * sp, -h2 + .14 + (q + 1) * sp, ys, c, ring);
+      for (let q = 1; q < n; q++) { const z = -h2 + .14 + q * sp; part(D, 'box', B, xc, -.08, z, wd, ys + .09, .06, ring); for (const s of [-1, 1]) part(D, 'cyl', B, xc + s * wd / 2, -.08, z, .07, ys + .12, .06, ring); }
+      deck(c); abut(c);
+      for (const s of [-1, 1]) { part(D, 'box', B, xc + s * (wd / 2 - .015), H, 0, .03, era === 2 ? .07 : .02, S, ring);
+        if (era === 3) { part(D, 'box', B, xc + s * (wd / 2 - .015), H + .07, 0, .035, .015, S, ring); const NB = Math.round(S / .06); for (let q = 0; q < NB; q++) part(D, 'cyl', B, xc + s * (wd / 2 - .015), H + .02, -h2 + (q + .5) * S / NB, .015, .05, .015, ring); } }
+      if (era === 3) for (const z of [-h2 + .12, h2 - .12]) for (const s of [-1, 1]) lamp(xc + s * (wd / 2 - .015), z, '#ffd68a', .17);
+      rails(); if (rail) train();
+      walker(((clock * .05 + k * .3) % 1) * S - h2, '#7a4a4a', true); walker(h2 - ((clock * .045 + k * .7) % 1) * S, '#4a5a7a', false);
+      return;
+    }
+    if (era === 4) {
+      // an iron truss on stone piers: top and bottom chords joined by posts and crossed diagonals
+      const iron = '#6a3a30', st = '#9a9284', TH = .26, NP = 6;
+      deck('#4a4a4a'); abut(st); if (S > 1.4) part(D, 'box', B, xc, -.08, 0, wd + .04, dk + .08, .12, st);
+      for (const s of [-1, 1]) { const x = xc + s * (wd / 2 + .01);
+        part(D, 'box', B, x, H - .01, 0, .03, .03, S, iron); part(D, 'box', B, x, H + TH, 0, .03, .03, S - .12, iron);
+        for (let q = 0; q <= NP; q++) { const z = -h2 + .06 + q * (S - .12) / NP; part(D, 'box', B, x, H, z, .025, TH, .025, iron);
+          if (q < NP) { const dz = (S - .12) / NP, ln = Math.hypot(dz, TH); part(D, 'box', B, x, H, z, .015, ln, .015, iron, Math.atan2(dz, TH), 0, 0); part(D, 'box', B, x, H, z + dz, .015, ln, .015, iron, -Math.atan2(dz, TH), 0, 0); } } }
+      for (let q = 0; q <= NP; q += 2) part(D, 'box', B, xc, H + TH, -h2 + .06 + q * (S - .12) / NP, wd + .02, .02, .02, iron);
+      for (const z of [-h2 + .04, h2 - .04]) lamp(xc + wd / 2 + .06, z, '#ffd68a', .24);
+      rails(); if (rail) train(); else walker(((clock * .06 + k * .3) % 1) * S - h2, '#3a3a3a', true);
+      cars(rail ? 0 : 1, xc);
+      return;
+    }
+    if (era === 5) {
+      // a suspension bridge: two towers, main cables sagging between them and hangers down to the deck
+      const red = k % 2 ? '#b8482a' : '#7a8288', tz = h2 * .62, TH = .62 + S * .08;
+      deck('#4a4c50'); abut('#8a8a86');
+      for (const z of [-tz, tz]) { for (const s of [-1, 1]) part(D, 'box', B, xc + s * (wd / 2 + .02), -.08, z, .05, H + TH + .08, .06, red);
+        for (const y of [H + TH * .55, H + TH - .03]) part(D, 'box', B, xc, y, z, wd + .09, .04, .05, red);
+        part(D, 'box', B, xc, -.08, z, wd + .12, .1, .1, '#8a8a86'); }
+      const cy = z => { const t = Math.abs(z) <= tz ? (z / tz) ** 2 : 1 - (Math.abs(z) - tz) / (h2 - tz); return Math.abs(z) <= tz ? H + .06 + (TH - .06) * t : H + .02 + (TH - .02) * t; };
+      const NC = 16; for (const s of [-1, 1]) { const x = xc + s * (wd / 2 + .02);
+        for (let q = 0; q < NC; q++) { const z0 = -h2 + q * S / NC, z1 = z0 + S / NC, y0 = cy(z0), y1 = cy(z1); part(D, 'box', B, x, y0, z0, .012, Math.hypot(S / NC, y1 - y0), .012, '#5a5e64', Math.atan2(S / NC, y1 - y0), 0, 0);
+          const zm = (z0 + z1) / 2, ym = cy(zm); if (ym > H + .04) part(D, 'box', B, x, H, zm, .006, ym - H, .006, '#6a6e74'); } }
+      for (const z of [-tz, tz]) part(D, 'sphere', B, xc, H + TH + .01, z, .03, .03, .03, '#ff3a2a');
+      for (const z of [-h2 * .3, h2 * .3]) for (const s of [-1, 1]) lamp(xc + s * (wd / 2 - .02), z, '#ffb860', .2);
+      rails(); if (rail) train(); cars(2, xc + (rail ? .14 : 0));
+      return;
+    }
+    // 2000s: a white cable-stayed span hung in fans from one tall pylon
+    const wh = '#e4e4e0', PH = .8 + S * .15;
+    deck('#d8d8d4'); abut('#c8c8c4'); part(D, 'box', B, xc, dk - .04, 0, wd + .06, .04, S, '#c0c0bc');
+    for (const s of [-1, 1]) part(D, 'box', B, xc + s * (wd / 2 + .03), -.08, 0, .06, H + PH + .08, .07, wh, 0, 0, s * .07);
+    part(D, 'box', B, xc, H + PH * .8, 0, wd * .5, .05, .06, wh); part(D, 'box', B, xc, -.08, 0, wd + .16, .12, .14, '#b0b0ac');
+    for (const s of [-1, 1]) { const x = xc + s * (wd / 2 - .01), top = H + PH - .02;
+      for (let q = 1; q <= 5; q++) for (const d of [-1, 1]) { const z = d * q * (h2 - .1) / 5, yt = top - q * .05, dy = yt - (H + .02), ln = Math.hypot(z, dy);
+        part(D, 'box', B, x, H + .02, z, .008, ln, .008, '#9aa0a8', Math.atan2(-z, dy), 0, 0); } }
+    part(D, 'sphere', B, xc, H + PH + .01, 0, .03, .03, .03, '#ff3a2a');
+    for (let q = -2; q <= 2; q++) if (q) lamp(xc + wd / 2 - .02, q * h2 * .4, '#f4f1e2', .18);
+    rails(); if (rail) train(); cars(3, xc + (rail ? .14 : 0));
+  }
+  function updateBridges() {
+    const D = world.dset; if (!world.tradeRoads || !world.riverPaths || !world.riverPaths.length) return;
+    const seen = new Set();
+    for (const r of world.tradeRoads) {
+      const key = Math.min(r.a.id, r.b.id) + ':' + Math.max(r.a.id, r.b.id); if (seen.has(key)) continue; seen.add(key);
+      if (r.br === undefined) { r.br = bridgesOf(r); r.lit = false; }
+      if (!r.br.length) continue;
+      const era = Math.min(6, r.era), rail = r.a.techs.has('railways') && r.b.techs.has('railways') && era >= 4;
+      for (let q = 0; q < r.br.length; q++) { const br = r.br[q]; const B = base(wx(br.x), br.yc, wz(br.y), br.head, 1); bridge(D, B, era, br, rail, r.a.id + r.b.id + q);
+        if (!r.lit && era >= 3 && world.roadLamps) { const c = era === 3 ? LAMP_C.gas : era <= 5 ? LAMP_C.sodium : LAMP_C.led, L = Math.hypot(r.x2 - r.x1, r.y2 - r.y1), ux = (r.x2 - r.x1) / L, uy = (r.y2 - r.y1) / L;
+          for (const f of [-.35, .35]) world.roadLamps.push({ x: wx(br.x + ux * br.S * f), y: br.yc + br.H + .2, z: wz(br.y + uy * br.S * f), g: br.yc + br.H, r: .8, c, b: .04 }); } }
+      r.lit = true;
+    }
+  }
   function updateLumber() {
     const D = world.dset;
     for (const t of sim.tribes.values()) {
@@ -5318,7 +5440,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -5835,7 +5957,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (const t of sim.tribes.values()) for (const tr of terraceSites(t)) world.siteClear.add(tr.i);
     for (const t of sim.tribes.values()) for (const m of victorySpots(t)) world.siteClear.add(Math.floor(m.y) * W + Math.floor(m.x));   // and victory monuments
     for (const t of sim.tribes.values()) { const o = t.era >= 4 && t.members.size >= 8 && oilSite(t); if (o) for (const i of o.tiles) world.siteClear.add(i); }   // and oil fields
-    for (const r of world.tradeRoads || []) { const c = crossingOf(r); if (c) for (const [p, q] of [[0, 0], [.6, 0], [-.6, 0], [0, .6], [0, -.6]]) world.siteClear.add(Math.floor(c.y + q) * W + Math.floor(c.x + p)); }   // and border crossings   // and the terraced hillsides   // and the hilltop beacon   // and a clearing for the logging camp
+    for (const r of world.tradeRoads || []) { const c = crossingOf(r); if (c) for (const [p, q] of [[0, 0], [.6, 0], [-.6, 0], [0, .6], [0, -.6]]) world.siteClear.add(Math.floor(c.y + q) * W + Math.floor(c.x + p)); }   // and border crossings
+    for (const r of world.tradeRoads || []) for (const br of bridgesOf(r)) for (const [ex, ey] of br.ends) for (const [p, q] of [[0, 0], [.5, 0], [-.5, 0], [0, .5], [0, -.5]]) world.siteClear.add(Math.floor(ey + q) * W + Math.floor(ex + p));   // and bridge ends
+      // and the terraced hillsides   // and the hilltop beacon   // and a clearing for the logging camp
                       // and for observatories               // and for the shipyard
     for (const bw of borderWalls()) drawBorderWall(S, bw, lamps);
     for (const i of oldClear) if (!world.siteClear.has(i)) showTrees(i, sim.terrain[i] === T.FOREST);
@@ -6069,6 +6193,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   window.addEventListener('focusFestival', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 4 && t.era >= (e.detail.era ?? 0)).sort((a, b) => b.members.size - a.members.size), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; if (!t) return; t.festival = 120; t.festName = t.festName || 'festival'; window.__fest = t.name + ' era ' + t.era + ' ' + STY(t.style); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: t.camp.x + .5, y: t.camp.y + .5, h: heightAt(t.camp.x + .5, t.camp.y + .5) + 2.5, d: e.detail.d || 1.1 } })); });
   window.addEventListener('focusVictory', e => { const ts = [...sim.tribes.values()].filter(t => victorySpots(t).length), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__vic = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const m = victorySpots(t)[0]; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: m.x, y: m.y, h: m.h + .4, d: e.detail.d || .32, a: m.head + .5 } })); });
   window.addEventListener('focusOil', e => { const ts = [...sim.tribes.values()].filter(t => t.era >= 4 && t.members.size >= 8 && oilSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__oil = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = oilSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y, h: st.h + .3, d: e.detail.d || .38, a: st.head + .4 } })); });
+  window.addEventListener('focusBridge', e => { const rs = []; for (const r of world.tradeRoads || []) { if (r.br === undefined) r.br = bridgesOf(r); for (const br of r.br) rs.push([r, br]); } if (e.detail.era !== undefined) { const f = rs.filter(([r]) => r.era === e.detail.era); if (f.length) rs.splice(0, rs.length, ...f); } const [r, br] = rs[(e.detail.i || 0) % Math.max(1, rs.length)] || []; window.__bridge = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era + ' S ' + br.S.toFixed(2) + ' H ' + br.H.toFixed(2) : ''); if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: br.x, y: br.y, h: br.yc + br.H * .5, d: e.detail.d || .33, a: br.head + 1.3 } })); });
   window.addEventListener('focusCrossing', e => { const rs = (world.tradeRoads || []).filter(r => (r.c = crossingOf(r))), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__cross = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era : ''); if (!r) return; if (e.detail.war) { const w = { since: sim.tick, deaths: 0 }; r.a.wars.set(r.b.id, w); r.b.wars.set(r.a.id, w); } window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: r.c.x, y: r.c.y, h: r.c.h + .2, d: e.detail.d || .33, a: r.c.head + 1.1 } })); });
   window.addEventListener('focusObs', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 8 && obsSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__obs = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = obsSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y + .3, h: st.h, d: e.detail.d || .35 } })); });
   window.addEventListener('focusCamp', e => { const rs = sim.armies.filter(r => !r.dead && (r.state === 'siege' || (!e.detail.siege && r.state === 'muster')) && campOf(r)), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__camp = rs.length + (r ? ' ' + r.state + ' era ' + sim.tribes.get(r.tribe).era : ''); if (!r) return; const c = campOf(r); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y + .3, d: e.detail.d || .35 } })); });
