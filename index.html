@@ -4316,6 +4316,103 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       r.lit = true;
     }
   }
+  // coastal defenses: a nation with a harbor fortifies the nearest headland while it is at war. A round sea tower with a
+  // catapult in the Middle Ages, a cannon battery behind angled walls in the 1700s, a squat Martello tower in the 1800s,
+  // a concrete gun battery with a rangefinder and searchlight in the 1900s, and an anti-ship missile battery with radar in the 2000s.
+  // The guns fire out to sea now and then, flashing and puffing smoke
+  function coastSite(t) {
+    if (!world.ext || t.port == null) return null;
+    world.coastAt = world.coastAt || new Map();
+    const ext = (world.ext.get(t.id) || 2) + (t.walls ? 1.3 : .6), key = sim.ownerVersion + ':' + t.port + ':' + Math.round(ext * 2) + ':' + (world.sites || []).length, c = world.coastAt.get(t.id);
+    if (c && c.v === key) return c.site;
+    const px = t.port % W, py = (t.port / W) | 0;
+    const used = [...sim.tribes.values()].filter(o => o !== t).map(o => [o.camp.x + .5, o.camp.y + .5, (world.ext.get(o.id) || 2) + 1]).concat((world.sites || []).map(st => [st.x, st.y, (st.len || 2) / 2 + .8]));
+    for (const f of [mineSite(t), yardSite(t), lumberSite(t), beaconSite(t), oilSite(t), ...victorySpots(t)]) if (f) used.push([f.x, f.y, 1.8]);
+    let best = null, bd = -1e9;
+    for (let dy = -7; dy <= 7; dy++) for (let dx = -7; dx <= 7; dx++) {
+      const x = px + dx, y = py + dy, d2 = dx * dx + dy * dy; if (x < 2 || y < 2 || x >= W - 2 || y >= H - 2 || d2 < 10 || d2 > 49) continue;
+      const i = y * W + x, tr = sim.terrain[i]; if (tr !== T.GRASS && tr !== T.SAND && tr !== T.FARM && tr !== T.FOREST && tr !== T.HILLS) continue;
+      if ((sim.owner[i] && sim.owner[i] !== t.id) || (sim.river && sim.river[i]) || (world.town && world.town[i]) || (x + .5 - t.camp.x - .5) ** 2 + (y + .5 - t.camp.y - .5) ** 2 < ext * ext) continue;
+      if (used.some(([ux, uy, ur]) => (x + .5 - ux) ** 2 + (y + .5 - uy) ** 2 < ur * ur)) continue;
+      // a headland: lots of open water around it, and the sea in front
+      let wn = 0, sx = 0, sy = 0; for (let ey = -3; ey <= 3; ey++) for (let ex = -3; ex <= 3; ex++) if ((ex || ey) && ex * ex + ey * ey <= 9 && isWater(x + ex + .5, y + ey + .5)) { wn++; sx += ex; sy += ey; }
+      const sl = Math.hypot(sx, sy) || 1; if (wn < 8 || !isWater(x + .5 + sx / sl * 1.2, y + .5 + sy / sl * 1.2)) continue;
+      const score = wn * 1.5 - d2 * .35 - (tr === T.FOREST ? 3 : 0); if (score > bd) { bd = score; best = { x: x + .5, y: y + .5, head: Math.atan2(sx, sy), tiles: [-1, 0, 1].flatMap(a => [-1, 0, 1].map(b => i + a * W + b)) }; }
+    }
+    if (best) best.h = Math.max(.02, heightAt(best.x, best.y));
+    world.coastAt.set(t.id, { v: key, site: best }); return best;
+  }
+  function coastFort(D, B, era, col, k, fire) {
+    const flag = (x, z, h = .55) => { part(D, 'cyl', B, x, 0, z, .012, h, .012, '#3a3a3a'); part(D, 'box', B, x + .07, h - .1, z, .14, .08, .01, col, 0, Math.sin(clock * 3 + k) * .25, 0); };
+    const blast = (x, y, z) => { if (fire <= 0) return; const s = fire;                                   // muzzle flash then a drifting smoke puff
+      if (s > .7) part(D, 'sphere', B, x, y - .05, z, .12 * s, .12 * s, .12 * s, '#ffcf5a');
+      part(D, 'sphere', B, x, y + (1 - s) * .25, z + (1 - s) * .25, .1 + (1 - s) * .2, .1 + (1 - s) * .2, .1 + (1 - s) * .2, '#c8c8c4'); };
+    const soldier = (x, z, c) => { part(D, 'box', B, x, 0, z, .05, .09, .035, c); part(D, 'sphere', B, x, .085, z, .028, .028, .028, '#c9a07a'); };
+    const fireAt = (x, z) => { if (fire > 0 && world.beaconFires && fire > .75) { const p = new THREE.Vector3(x, .3, z).applyMatrix4(B); world.beaconFires.push([p.x, p.y, p.z, 1, false, p.y - .3]); } };
+    if (era <= 2) {
+      // a round stone sea tower with battlements and a catapult on a walled platform
+      const st = '#a39a88';
+      part(D, 'cyl', B, -.2, -.05, -.15, .4, .75, .4, st); part(D, 'cyl', B, -.2, .7, -.15, .46, .06, .46, '#948b79');
+      for (let q = 0; q < 8; q++) { const a = q / 8 * Math.PI * 2; part(D, 'box', B, -.2 + Math.cos(a) * .2, .76, -.15 + Math.sin(a) * .2, .06, .06, .06, '#948b79'); }
+      part(D, 'box', B, .1, -.05, .15, .5, .14, .44, st); for (const x of [-.12, .1, .32]) part(D, 'box', B, x, .09, .36, .08, .06, .04, '#948b79');
+      part(D, 'box', B, .1, .09, .15, .16, .06, .2, '#6a4a30'); const arm = fire > 0 ? -1.2 + (1 - fire) * .4 : .9;                  // catapult arm flings forward when it fires
+      part(D, 'box', B, .1, .15, .1, .03, .3, .03, '#5a4028', arm, 0, 0); part(D, 'box', B, .1, .12, .1, .2, .03, .03, '#5a4028');
+      if (fire > .5) part(D, 'sphere', B, .1, .3 + (1 - fire) * .6, .4 + (1 - fire) * 1.2, .06, .06, .06, '#6a6258');
+      soldier(-.05, .05, col); soldier(.28, .05, col); flag(-.2, -.15, 1.05);
+      return;
+    }
+    if (era === 3) {
+      // a low battery behind angled stone walls, cannons on carriages pointing out to sea, and a powder magazine
+      const st = '#b8ae96';
+      part(D, 'box', B, 0, -.05, .25, .9, .17, .08, st); for (const s of [-1, 1]) part(D, 'box', B, s * .52, -.05, .1, .08, .17, .38, st, 0, s * .5, 0);
+      part(D, 'box', B, 0, -.05, 0, .9, .1, .5, '#9a9078');
+      for (let q = 0; q < 4; q++) { const x = -.32 + q * .21, rc = q === (k % 4) ? fire : 0;
+        part(D, 'box', B, x, .05, .05 - rc * .05, .09, .05, .14, '#5a4028'); part(D, 'cyl', B, x, .1, .05 - rc * .05, .045, .26, .045, '#2a2a2a', Math.PI / 2 - .05, 0, 0);
+        if (rc) blast(x, .12, .4), fireAt(x, .4); }
+      part(D, 'box', B, .3, .05, -.25, .22, .14, .16, '#9a9078'); part(D, 'prism', B, .3, .19, -.25, .24, .08, .18, '#5a4a3a');
+      soldier(-.2, -.12, col); soldier(.05, -.15, col); soldier(-.42, -.1, col); flag(-.4, -.25, .7);
+      return;
+    }
+    if (era === 4) {
+      // a squat Martello tower with one heavy gun turning on its roof, ringed by an earth rampart
+      part(D, 'cyl', B, 0, -.05, 0, .62, .1, .62, '#7a7a52'); part(D, 'cyl', B, 0, -.05, 0, .42, .55, .42, '#b0a890'); part(D, 'cyl', B, 0, .5, 0, .46, .05, .46, '#9a9278');
+      const ry = Math.sin(clock * .2 + k) * .4; part(D, 'cyl', B, 0, .55, 0, .12, .05, .12, '#3a3a3a');
+      part(D, 'cyl', B, 0, .6, 0, .05, .34, .05, '#2a2a2a', Math.PI / 2 - .1, ry, 0); if (fire > 0) blast(Math.sin(ry) * .36, .63, Math.cos(ry) * .36), fireAt(Math.sin(ry) * .36, Math.cos(ry) * .36);
+      part(D, 'box', B, -.04, .05, -.21, .08, .14, .02, '#3a2a1a'); soldier(-.12, -.12, col); flag(.15, -.12, .95);
+      return;
+    }
+    if (era === 5) {
+      // a concrete battery: two casemate guns, a rangefinder tower and a searchlight sweeping the water at night
+      const cc = '#9a9a92';
+      for (const s of [-1, 1]) { const x = s * .3, rc = (s > 0) === !!(k % 2) ? fire : 0;
+        part(D, 'box', B, x, -.05, 0, .32, .2, .36, cc); part(D, 'dome', B, x, .15, .02, .26, .12, .26, '#7a7a74');
+        part(D, 'cyl', B, x, .2, .1, .045, .4, .045, '#3a3a3a', Math.PI / 2 - .08, 0, 0); if (rc) blast(x, .23, .55), fireAt(x, .55); }
+      part(D, 'box', B, 0, -.05, -.32, .2, .55, .2, cc); part(D, 'box', B, 0, .5, -.32, .26, .08, .26, '#6a6a64'); part(D, 'box', B, 0, .58, -.32, .3, .04, .06, '#3a3a3a');
+      part(D, 'cyl', B, .22, -.05, -.32, .1, .18, .1, cc); part(D, 'cyl', B, .22, .13, -.3, .08, .08, .08, '#d8d8c8', Math.PI / 2 - .2, Math.sin(clock * .5 + k) * .6, 0);
+      if (world.night > .3 && world.beaconFires) { const p = new THREE.Vector3(.22 + Math.sin(Math.sin(clock * .5 + k) * .6) * .9, .02, -.3 + Math.cos(Math.sin(clock * .5 + k) * .6) * .9).applyMatrix4(B); world.beaconFires.push([p.x, p.y + .05, p.z, .8, false, p.y]); }
+      soldier(-.05, -.12, col); soldier(.08, -.15, col); flag(-.2, -.32, .85);
+      return;
+    }
+    // 2000s: truck-mounted anti-ship missile launchers, a radar dome and a command trailer behind a sandbag ring
+    for (let q = 0; q < 10; q++) { const a = q / 10 * Math.PI * 2; part(D, 'cyl', B, Math.cos(a) * .48, -.05, Math.sin(a) * .4, .12, .08, .12, '#b0a070'); }
+    for (const s of [-1, 1]) { const x = s * .26, rc = (s > 0) === !!(k % 2) ? fire : 0;
+      part(D, 'box', B, x, 0, 0, .16, .08, .42, '#5a6a4a'); part(D, 'box', B, x, .08, .14, .14, .08, .1, '#4a5a3a');
+      for (const w of [-.14, 0, .14]) for (const e of [-1, 1]) part(D, 'cyl', B, x + e * .08, 0, w, .06, .02, .06, '#2a2a2a', 0, 0, Math.PI / 2);
+      for (const e of [-1, 1]) part(D, 'cyl', B, x + e * .035, .1, -.12, .055, .32, .055, '#6a7a5a', Math.PI / 2 - .6, 0, 0);
+      if (rc) { blast(x, .35, .2); fireAt(x, .3); const f = 1 - rc; part(D, 'cyl', B, x, .3 + f * 1.4, .2 + f * 2, .03, .14, .03, '#e8e8e4', Math.PI / 2 - .6, 0, 0); } }
+    part(D, 'cyl', B, 0, -.05, -.32, .1, .3, .1, '#8a8a84'); part(D, 'sphere', B, 0, .22, -.32, .22, .22, .22, '#e8e8e4');
+    part(D, 'box', B, -.04, .26, -.32, .3, .02, .04, '#3a3a3a', 0, clock * 1.5 + k, 0);
+    part(D, 'box', B, .3, -.05, -.35, .2, .14, .28, '#6a7a5a'); soldier(.12, -.14, col); soldier(-.14, -.16, col); flag(-.4, -.3, .7);
+  }
+  function updateCoast() {
+    const D = world.dset;
+    for (const t of sim.tribes.values()) {
+      if (t.era < 2 || !t.wars.size || t.port == null || t.members.size < 6) continue;
+      const st = coastSite(t); if (!st) continue;
+      const cyc = (clock * .25 + t.id * .37) % 1, fire = cyc < .12 ? 1 - cyc / .12 : 0;   // a shot every few seconds
+      coastFort(D, base(wx(st.x), st.h, wz(st.y), st.head, 1.35), Math.min(6, t.era), t.color, t.id, fire);
+    }
+  }
   function updateLumber() {
     const D = world.dset;
     for (const t of sim.tribes.values()) {
@@ -5440,7 +5537,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCoast(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -5959,6 +6056,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (const t of sim.tribes.values()) { const o = t.era >= 4 && t.members.size >= 8 && oilSite(t); if (o) for (const i of o.tiles) world.siteClear.add(i); }   // and oil fields
     for (const r of world.tradeRoads || []) { const c = crossingOf(r); if (c) for (const [p, q] of [[0, 0], [.6, 0], [-.6, 0], [0, .6], [0, -.6]]) world.siteClear.add(Math.floor(c.y + q) * W + Math.floor(c.x + p)); }   // and border crossings
     for (const r of world.tradeRoads || []) for (const br of bridgesOf(r)) for (const [ex, ey] of br.ends) for (const [p, q] of [[0, 0], [.5, 0], [-.5, 0], [0, .5], [0, -.5]]) world.siteClear.add(Math.floor(ey + q) * W + Math.floor(ex + p));   // and bridge ends
+    for (const t of sim.tribes.values()) { const c = t.era >= 2 && t.port != null && coastSite(t); if (c) for (const i of c.tiles) world.siteClear.add(i); }   // and coastal forts
       // and the terraced hillsides   // and the hilltop beacon   // and a clearing for the logging camp
                       // and for observatories               // and for the shipyard
     for (const bw of borderWalls()) drawBorderWall(S, bw, lamps);
@@ -6193,6 +6291,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   window.addEventListener('focusFestival', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 4 && t.era >= (e.detail.era ?? 0)).sort((a, b) => b.members.size - a.members.size), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; if (!t) return; t.festival = 120; t.festName = t.festName || 'festival'; window.__fest = t.name + ' era ' + t.era + ' ' + STY(t.style); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: t.camp.x + .5, y: t.camp.y + .5, h: heightAt(t.camp.x + .5, t.camp.y + .5) + 2.5, d: e.detail.d || 1.1 } })); });
   window.addEventListener('focusVictory', e => { const ts = [...sim.tribes.values()].filter(t => victorySpots(t).length), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__vic = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const m = victorySpots(t)[0]; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: m.x, y: m.y, h: m.h + .4, d: e.detail.d || .32, a: m.head + .5 } })); });
   window.addEventListener('focusOil', e => { const ts = [...sim.tribes.values()].filter(t => t.era >= 4 && t.members.size >= 8 && oilSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__oil = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = oilSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y, h: st.h + .3, d: e.detail.d || .38, a: st.head + .4 } })); });
+  window.addEventListener('focusCoast', e => { const ts = [...sim.tribes.values()].filter(t => t.era >= 2 && t.port != null && t.members.size >= 6 && coastSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__coast = ts.length + '/' + [...sim.tribes.values()].filter(t => t.port != null).length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; if (!t.wars.size) { const o = [...sim.tribes.values()].find(x => x !== t); if (o) { const w = { since: sim.tick, deaths: 0 }; t.wars.set(o.id, w); o.wars.set(t.id, w); } } const c = coastSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .3, d: e.detail.d || .3, a: c.head + Math.PI + .9 } })); });
   window.addEventListener('focusBridge', e => { const rs = []; for (const r of world.tradeRoads || []) { if (r.br === undefined) r.br = bridgesOf(r); for (const br of r.br) rs.push([r, br]); } if (e.detail.era !== undefined) { const f = rs.filter(([r]) => r.era === e.detail.era); if (f.length) rs.splice(0, rs.length, ...f); } const [r, br] = rs[(e.detail.i || 0) % Math.max(1, rs.length)] || []; window.__bridge = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era + ' S ' + br.S.toFixed(2) + ' H ' + br.H.toFixed(2) : ''); if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: br.x, y: br.y, h: br.yc + br.H * .5, d: e.detail.d || .33, a: br.head + 1.3 } })); });
   window.addEventListener('focusCrossing', e => { const rs = (world.tradeRoads || []).filter(r => (r.c = crossingOf(r))), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__cross = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era : ''); if (!r) return; if (e.detail.war) { const w = { since: sim.tick, deaths: 0 }; r.a.wars.set(r.b.id, w); r.b.wars.set(r.a.id, w); } window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: r.c.x, y: r.c.y, h: r.c.h + .2, d: e.detail.d || .33, a: r.c.head + 1.1 } })); });
   window.addEventListener('focusObs', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 8 && obsSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__obs = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = obsSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y + .3, h: st.h, d: e.detail.d || .35 } })); });

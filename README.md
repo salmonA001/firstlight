@@ -178,6 +178,10 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 
   ![Bridges](docs/bridges.png)
 
+- **Coastal forts:** a nation with a harbor fortifies the nearest headland while it is at war: a round sea tower with a catapult in the Middle Ages, a cannon battery behind angled walls in the 1700s, a Martello tower with a turning gun in the 1800s, a concrete gun battery with a rangefinder and searchlight in the 1900s, and an anti-ship missile battery with radar in the 2000s. The guns fire out to sea now and then.
+
+  ![Coastal forts](docs/coastal.png)
+
 - **Wartime forts:** a nation at war fortifies the side of town facing its nearest enemy, with its colors flying. It starts as a timber watchtower behind a palisade, then becomes a stone tower with battlements, a star fort with cannon, an earthwork redoubt with a field gun, a zigzag trench line with a concrete pillbox and barbed wire, and finally an air defense post with a turning radar and missile launcher.
 
   ![A stone watchtower flying its nation's flag outside a town at war](docs/fort.png)
