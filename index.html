@@ -2014,7 +2014,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const st = STYLES[t.style], d = cap1(this.pick(st.syl) + this.pick(st.syl));
       const name = this.pick([`the Way of ${d}`, `the Children of ${d}`, `the Light of ${d}`, `the Order of ${d}`, `the Faith of ${d}`]);
       const id = this.nextId++, cols = ['#f6d365', '#c3aed6', '#9be7ff', '#ffb4a2', '#b8f2c2', '#f7a8d8'];
-      this.religions.set(id, { id, name, color: cols[this.religions.size % cols.length], founder: t.name, year: this.year() });
+      this.religions.set(id, { id, name, color: cols[this.religions.size % cols.length], founder: t.name, year: this.year(), cx: t.camp.x, cy: t.camp.y });
       t.faith = id;
       const l = this.byId.get(t.leader);
       this.emit('faith', `${l ? l.name + ' of the ' + t.name : 'The ' + t.name} founded a new faith: ${name}.`, { tribe: t.id });
@@ -4413,6 +4413,100 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       coastFort(D, base(wx(st.x), st.h, wz(st.y), st.head, 1.35), Math.min(6, t.era), t.color, t.id, fire);
     }
   }
+  // holy sites: every faith keeps a sacred place on high ground near the town that founded it. It begins as a ring of standing
+  // stones, becomes a shrine on a stepped platform, then a great domed temple inside a walled court, and in the modern eras gains
+  // a paved plaza and visitor buses. Pilgrims from every town of the faith walk there in lines, carrying banners in its color
+  function holySite(r) {
+    if (!world.ext) return null;
+    let cx = r.cx, cy = r.cy;
+    if (cx == null) { const t = [...sim.tribes.values()].find(o => o.faith === r.id); if (!t) return null; cx = r.cx = t.camp.x; cy = r.cy = t.camp.y; }
+    world.holyAt = world.holyAt || new Map();
+    const key = sim.ownerVersion + ':' + (world.sites || []).length, c = world.holyAt.get(r.id);
+    if (c && c.v === key) return c.site;
+    const used = [...sim.tribes.values()].map(o => [o.camp.x + .5, o.camp.y + .5, (world.ext.get(o.id) || 2) + 2.2]).concat((world.sites || []).map(st => [st.x, st.y, (st.len || 2) / 2 + .8]));
+    for (const t of sim.tribes.values()) for (const f of [mineSite(t), yardSite(t), lumberSite(t), beaconSite(t), obsSite(t), oilSite(t), ...victorySpots(t)]) if (f) used.push([f.x, f.y, 1.8]);
+    for (const [, o] of world.holyAt) if (o.site && o !== c && o.r !== r.id) used.push([o.site.x, o.site.y, 3]);
+    let best = null, bd = -1e9;
+    for (const pass of [0, 1]) { if (best) break; const RR = pass ? 13 : 9, rg = pass ? 1 : 2;           // a second, wider and less fussy search if the first finds nothing
+    for (let dy = -RR; dy <= RR; dy++) for (let dx = -RR; dx <= RR; dx++) {
+      const x = cx + dx, y = cy + dy, d2 = dx * dx + dy * dy; if (x < 3 || y < 3 || x >= W - 3 || y >= H - 3 || d2 < 9 || d2 > RR * RR) continue;
+      const i = y * W + x, tr = sim.terrain[i]; if (tr !== T.GRASS && tr !== T.SAND && tr !== T.FARM && tr !== T.HILLS && (tr !== T.FOREST || !pass)) continue;
+      if ((sim.river && sim.river[i]) || (world.town && world.town[i]) || used.some(([ux, uy, ur]) => (x + .5 - ux) ** 2 + (y + .5 - uy) ** 2 < ur * ur)) continue;
+      let flat = true; for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!sim.passable(x + ox, y + oy) || isWater(x + ox + .5, y + oy + .5)) flat = false; if (!flat) continue;
+      const ow = sim.owner[i]; if (ow && sim.tribes.get(ow) && sim.tribes.get(ow).faith !== r.id) continue;                  // on the faith's own land, or no one's
+      for (let ey = -rg; ey <= rg && flat; ey++) for (let ex = -rg; ex <= rg; ex++) { const j = (y + ey) * W + x + ex; if ((sim.owner[j] || 0) !== (ow || 0) || (Math.abs(ex) <= 1 && Math.abs(ey) <= 1 && world.rockAt && world.rockAt[j] >= 0)) { flat = false; break; } }   // clear of borders and boulders
+      if (!flat) continue;
+      const h = heightAt(x + .5, y + .5), score = h * 3 - d2 * .06 - (tr === T.FOREST ? 1.5 : 0) + (tr === T.HILLS ? 1 : 0);
+      if (score > bd) { bd = score; best = { x: x + .5, y: y + .5, h, head: Math.atan2(cx - x, cy - y), tiles: [-1, 0, 1].flatMap(a => [-1, 0, 1].map(b => i + a * W + b)) }; }
+    }
+    }
+    if (best) best.h = Math.min(...[[0, 0], [.5, 0], [-.5, 0], [0, .5], [0, -.5]].map(([a, b]) => heightAt(best.x + a, best.y + b))) - .02;
+    world.holyAt.set(r.id, { v: key, site: best, r: r.id }); return best;
+  }
+  function holyPlace(D, B, era, col, k, big) {
+    const stone = '#b2a894', pale = '#e8e0cc';
+    if (era <= 1) {
+      // a ring of standing stones around an altar, with a fire burning
+      const N = big ? 10 : 7; for (let q = 0; q < N; q++) { const a = q / N * Math.PI * 2; part(D, 'box', B, Math.cos(a) * .5, -.05, Math.sin(a) * .5, .12, .4 + (q % 3) * .08, .08, '#8a8478', 0, -a, (q % 2 - .5) * .08); }
+      if (big) for (let q = 0; q < N; q += 2) { const a = (q + .5) / N * Math.PI * 2; part(D, 'box', B, Math.cos(a) * .5, .43, Math.sin(a) * .5, .1, .06, .34, '#8a8478', 0, -a + Math.PI / 2, 0); }
+      part(D, 'box', B, 0, -.05, 0, .2, .12, .14, '#7a7468'); part(D, 'cone', B, 0, .07, 0, .07, .1 + Math.sin(clock * 9 + k) * .02, .07, '#ff9a3a');
+      part(D, 'cyl', B, .25, -.05, .1, .012, .4, .012, '#5a4028'); part(D, 'box', B, .29, .27, .1, .08, .1, .008, col);
+      return;
+    }
+    if (era === 2) {
+      // a shrine on a stepped platform: columns, a roof in the faith's color and a bell
+      for (let q = 0; q < 3; q++) part(D, 'box', B, 0, -.05 + q * .05, 0, .8 - q * .14, .05, .8 - q * .14, q % 2 ? pale : stone);
+      for (const [x, z] of [[-.2, -.2], [.2, -.2], [-.2, .2], [.2, .2]]) part(D, 'cyl', B, x, .1, z, .05, .3, .05, pale);
+      part(D, 'box', B, 0, .4, 0, .52, .04, .52, stone); part(D, 'pyr', B, 0, .44, 0, .62, .2, .62, col);
+      part(D, 'box', B, 0, .1, 0, .14, .12, .1, '#c8b890'); part(D, 'sphere', B, 0, .22, 0, .06, .06, .06, '#e8c060');
+      if (big) for (const s of [-1, 1]) { part(D, 'box', B, s * .55, -.05, .3, .06, .45, .06, '#7a4a30'); part(D, 'box', B, s * .55, .4, .3, .1, .04, .1, '#7a4a30'); }
+      return;
+    }
+    // a great temple in a walled court: a domed hall in the faith's color, a gate facing the founding town and towers when it is popular
+    const mod = era >= 5;
+    part(D, 'box', B, 0, -.05, 0, 1.3, .06, 1.3, mod ? '#d0ccc4' : stone);
+    for (const [x, z, sx, sz] of [[0, -.62, 1.3, .06], [-.62, 0, .06, 1.3], [.62, 0, .06, 1.3]]) part(D, 'box', B, x, 0, z, sx, .14, sz, pale);
+    for (const s of [-1, 1]) part(D, 'box', B, s * .4, 0, .62, .5, .14, .06, pale);
+    for (const s of [-1, 1]) part(D, 'box', B, s * .12, 0, .62, .08, .3, .08, stone); part(D, 'box', B, 0, .3, .62, .32, .06, .1, col);
+    part(D, 'box', B, 0, 0, -.15, .6, .36, .5, pale); part(D, 'cyl', B, 0, .36, -.15, .36, .1, .36, stone); part(D, 'dome', B, 0, .46, -.15, .38, .32, .38, col);
+    part(D, 'cyl', B, 0, .62, -.15, .03, .12, .03, '#e8c060'); part(D, 'sphere', B, 0, .72, -.15, .05, .05, .05, '#e8c060');
+    for (const s of [-1, 1]) for (let q = 0; q < 3; q++) part(D, 'box', B, s * .301, .08, -.3 + q * .15, .005, .14, .06, '#3a3a4a');
+    part(D, 'box', B, 0, 0, .1, .2, .24, .02, '#5a3a2a');
+    if (big) for (const s of [-1, 1]) { part(D, 'cyl', B, s * .5, 0, -.5, .1, .7, .1, pale); part(D, 'cone', B, s * .5, .7, -.5, .12, .2, .12, col); }
+    for (let q = 0; q < 6; q++) part(D, 'box', B, -.45 + q * .18, 0, .3, .05, .06, .05, '#6a7a4a');                 // hedges along the court
+    if (mod) {
+      // a paved plaza with parked buses and lamps outside the gate
+      part(D, 'box', B, 0, -.05, 1.0, 1.1, .055, .7, '#9a9a96');
+      for (let q = 0; q < 2; q++) { const x = -.3 + q * .6; part(D, 'box', B, x, 0, 1.1, .14, .12, .4, q ? '#d8b03a' : '#e8e8e4'); part(D, 'box', B, x, .07, 1.1, .145, .035, .38, '#2a3038'); }
+      for (const s of [-1, 1]) { part(D, 'cyl', B, s * .5, 0, .8, .012, .24, .012, '#2a2a2a'); part(D, 'box', B, s * .5, .24, .8, .04, .03, .04, '#f4f1e2'); }
+    }
+  }
+  function updateHoly() {
+    const D = world.dset; if (!sim.religions || !sim.religions.size) return;
+    const fires = world.beaconFires;
+    for (const r of sim.religions.values()) {
+      const fol = [...sim.tribes.values()].filter(t => t.faith === r.id); if (!fol.length) continue;
+      const st = holySite(r); if (!st) continue;
+      const era = Math.min(6, Math.max(...fol.map(t => t.era))), people = fol.reduce((s, t) => s + t.members.size, 0), big = people >= 40 || fol.length >= 3;
+      const B = base(wx(st.x), st.h, wz(st.y), st.head, 1.3); holyPlace(D, B, era, r.color, r.id, big);
+      if (fires && world.night > .3) { const p = new THREE.Vector3(0, .5, era <= 1 ? 0 : .62).applyMatrix4(B); fires.push([p.x, p.y, p.z, era <= 1 ? 1 : .7, false, st.h]); }
+      // pilgrims walk from each town of the faith that lies within reach over land
+      for (const t of fol) {
+        const x1 = t.camp.x + .5, y1 = t.camp.y + .5, L = Math.hypot(st.x - x1, st.y - y1); if (L < 3 || L > 34) continue;
+        let ok = true; for (let u = .1; u < .95; u += .05) { const x = x1 + (st.x - x1) * u, y = y1 + (st.y - y1) * u; if (isWater(x, y)) { ok = false; break; } } if (!ok) continue;
+        const head = Math.atan2(st.x - x1, st.y - y1), n = Math.min(6, 2 + Math.floor(t.members.size / 8));
+        for (let q = 0; q < n; q++) {
+          const f = (clock * .9 / L + q / n + t.id * .13) % 1, u = .12 + f * .8, x = x1 + (st.x - x1) * u, y = y1 + (st.y - y1) * u;
+          if (isWater(x, y)) continue;
+          const P = base(wx(x), heightAt(x, y), wz(y), head, 2), bob = Math.abs(Math.sin(clock * 6 + q)) * .006;
+          if (era >= 5 && q === 0) { part(D, 'box', P, 0, 0, 0, .07, .06, .18, '#e8e8e4'); part(D, 'box', P, 0, .035, 0, .072, .018, .17, '#2a3038'); continue; }   // a pilgrim bus
+          for (let m = 0; m < 3; m++) { const z = -m * .07, c = m === 0 ? r.color : ['#8a6a4a', '#e8e0cc', '#6a5a7a'][(q + m) % 3];
+            part(D, 'box', P, (m % 2 - .5) * .03, bob, z, .028, .05, .02, c); part(D, 'sphere', P, (m % 2 - .5) * .03, .05 + bob, z, .016, .016, .016, '#c9a07a');
+            if (m === 0) { part(D, 'cyl', P, .02, bob, z, .003, .11, .003, '#5a4028'); part(D, 'box', P, .035, .085 + bob, z, .03, .025, .003, r.color); } }
+        }
+      }
+    }
+  }
   function updateLumber() {
     const D = world.dset;
     for (const t of sim.tribes.values()) {
@@ -5537,7 +5631,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCoast(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCoast(); updateHoly(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -6057,6 +6151,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (const r of world.tradeRoads || []) { const c = crossingOf(r); if (c) for (const [p, q] of [[0, 0], [.6, 0], [-.6, 0], [0, .6], [0, -.6]]) world.siteClear.add(Math.floor(c.y + q) * W + Math.floor(c.x + p)); }   // and border crossings
     for (const r of world.tradeRoads || []) for (const br of bridgesOf(r)) for (const [ex, ey] of br.ends) for (const [p, q] of [[0, 0], [.5, 0], [-.5, 0], [0, .5], [0, -.5]]) world.siteClear.add(Math.floor(ey + q) * W + Math.floor(ex + p));   // and bridge ends
     for (const t of sim.tribes.values()) { const c = t.era >= 2 && t.port != null && coastSite(t); if (c) for (const i of c.tiles) world.siteClear.add(i); }   // and coastal forts
+    for (const r of (sim.religions || new Map()).values()) { const c = holySite(r); if (c) for (const i of c.tiles) world.siteClear.add(i); }   // and holy sites
       // and the terraced hillsides   // and the hilltop beacon   // and a clearing for the logging camp
                       // and for observatories               // and for the shipyard
     for (const bw of borderWalls()) drawBorderWall(S, bw, lamps);
@@ -6292,6 +6387,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   window.addEventListener('focusVictory', e => { const ts = [...sim.tribes.values()].filter(t => victorySpots(t).length), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__vic = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const m = victorySpots(t)[0]; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: m.x, y: m.y, h: m.h + .4, d: e.detail.d || .32, a: m.head + .5 } })); });
   window.addEventListener('focusOil', e => { const ts = [...sim.tribes.values()].filter(t => t.era >= 4 && t.members.size >= 8 && oilSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__oil = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = oilSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y, h: st.h + .3, d: e.detail.d || .38, a: st.head + .4 } })); });
   window.addEventListener('focusCoast', e => { const ts = [...sim.tribes.values()].filter(t => t.era >= 2 && t.port != null && t.members.size >= 6 && coastSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__coast = ts.length + '/' + [...sim.tribes.values()].filter(t => t.port != null).length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; if (!t.wars.size) { const o = [...sim.tribes.values()].find(x => x !== t); if (o) { const w = { since: sim.tick, deaths: 0 }; t.wars.set(o.id, w); o.wars.set(t.id, w); } } const c = coastSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .3, d: e.detail.d || .3, a: c.head + Math.PI + .9 } })); });
+  window.addEventListener('focusHoly', e => { if (!sim.religions.size && e.detail.found) { const t = [...sim.tribes.values()].sort((a, b) => b.members.size - a.members.size)[0]; sim.foundFaith(t); for (const o of sim.tribes.values()) if (o !== t && Math.hypot(o.camp.x - t.camp.x, o.camp.y - t.camp.y) < 25) o.faith = t.faith; } const rs = [...sim.religions.values()].filter(r => [...sim.tribes.values()].some(t => t.faith === r.id) && holySite(r)), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__holy = rs.length + '/' + sim.religions.size + (r ? ' ' + r.name : ''); if (!r) return; const c = holySite(r); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .3, d: e.detail.d || .33, a: c.head + .7 } })); });
   window.addEventListener('focusBridge', e => { const rs = []; for (const r of world.tradeRoads || []) { if (r.br === undefined) r.br = bridgesOf(r); for (const br of r.br) rs.push([r, br]); } if (e.detail.era !== undefined) { const f = rs.filter(([r]) => r.era === e.detail.era); if (f.length) rs.splice(0, rs.length, ...f); } const [r, br] = rs[(e.detail.i || 0) % Math.max(1, rs.length)] || []; window.__bridge = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era + ' S ' + br.S.toFixed(2) + ' H ' + br.H.toFixed(2) : ''); if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: br.x, y: br.y, h: br.yc + br.H * .5, d: e.detail.d || .33, a: br.head + 1.3 } })); });
   window.addEventListener('focusCrossing', e => { const rs = (world.tradeRoads || []).filter(r => (r.c = crossingOf(r))), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__cross = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era : ''); if (!r) return; if (e.detail.war) { const w = { since: sim.tick, deaths: 0 }; r.a.wars.set(r.b.id, w); r.b.wars.set(r.a.id, w); } window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: r.c.x, y: r.c.y, h: r.c.h + .2, d: e.detail.d || .33, a: r.c.head + 1.1 } })); });
   window.addEventListener('focusObs', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 8 && obsSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__obs = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = obsSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y + .3, h: st.h, d: e.detail.d || .35 } })); });

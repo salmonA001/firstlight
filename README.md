@@ -182,6 +182,10 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 
   ![Coastal forts](docs/coastal.png)
 
+- **Holy sites and pilgrims:** every faith keeps a sacred place on high ground near the town that founded it. It starts as a ring of standing stones around a fire, becomes a shrine on a stepped platform, then a great domed temple in a walled court with towers once the faith is popular, and gains a plaza with visitor buses in modern times. Pilgrims from every town of the faith walk there in lines behind banners in its color.
+
+  ![Holy sites](docs/holy.png)
+
 - **Wartime forts:** a nation at war fortifies the side of town facing its nearest enemy, with its colors flying. It starts as a timber watchtower behind a palisade, then becomes a stone tower with battlements, a star fort with cannon, an earthwork redoubt with a field gun, a zigzag trench line with a concrete pillbox and barbed wire, and finally an air defense post with a turning radar and missile launcher.
 
   ![A stone watchtower flying its nation's flag outside a town at war](docs/fort.png)
