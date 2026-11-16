@@ -4507,6 +4507,101 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       }
     }
   }
+  // roadside inns: halfway along a long trade road travelers stop for the night. A camp around a well with tents and pack
+  // animals early on, a walled caravanserai with corner towers in antiquity and the Middle Ages and the 1700s, a coaching inn with
+  // a stable and stagecoach in the 1800s, a gas station with pumps and a diner in the 1900s and a service area with EV chargers in the 2000s
+  function innOf(r) {
+    if (r.era < 1 || r.L < 9 || !world.ext) return null;
+    const dx = (r.x2 - r.x1) / r.L, dy = (r.y2 - r.y1) / r.L, px = dy, py = -dx;
+    const avoid = (world.sites || []).map(st => [st.x, st.y, (st.len || 2) / 2 + 1]);
+    if (r.c) avoid.push([r.c.x, r.c.y, 1.6]); for (const b of r.br || []) avoid.push([b.x, b.y, b.S / 2 + 1.2]);
+    for (const t of [r.a, r.b]) { avoid.push([t.camp.x + .5, t.camp.y + .5, (world.ext.get(t.id) || 2) + 1.6]); for (const f of [mineSite(t), oilSite(t), lumberSite(t), beaconSite(t), obsSite(t), ...victorySpots(t)]) if (f) avoid.push([f.x, f.y, 1.5]); }
+    for (const [, o] of world.holyAt || []) if (o.site) avoid.push([o.site.x, o.site.y, 2.2]);
+    let best = null;
+    for (const s of [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6]) {
+      const u = .5 + s * .03, ox = r.x1 + (r.x2 - r.x1) * u, oy = r.y1 + (r.y2 - r.y1) * u, x = ox + px * .8, y = oy + py * .8;
+      let ok = true;
+      for (const [a, b] of [[0, 0], [.45, 0], [-.45, 0], [0, .45], [0, -.45], [-.6 * px, -.6 * py]]) { const qx = x + a, qy = y + b, i = Math.floor(qy) * W + Math.floor(qx);
+        if (!sim.passable(Math.floor(qx), Math.floor(qy)) || isWater(qx, qy) || (sim.river && sim.river[i]) || (world.town && world.town[i]) || sim.terrain[i] === T.MOUNTAIN) { ok = false; break; } }
+      if (!ok || avoid.some(([ax, ay, ar]) => Math.hypot(ax - x, ay - y) < ar)) continue;
+      const hs = []; for (const a of [.55, .8, 1.05, 1.3, 1.55]) for (const b of [-.55, 0, .55]) hs.push(heightAt(ox + px * a + dx * b, oy + py * a + dy * b)); if (Math.max(...hs) - Math.min(...hs) > .4) continue;   // the whole yard, roughly level
+      best = { x: ox, y: oy, h: Math.min(...hs) + (Math.max(...hs) - Math.min(...hs)) * .35, head: Math.atan2(dx, dy), ix: x, iy: y }; break;
+    }
+    return best;
+  }
+  function inn(D, B, era, desert, ca, cb, k) {
+    const soldier = (x, z, c) => { part(D, 'box', B, x, 0, z, .05, .09, .035, c); part(D, 'sphere', B, x, .085, z, .028, .028, .028, '#c9a07a'); };
+    if (era <= 1) {
+      // a travelers' camp around a well: tents, a cookfire and pack animals resting
+      part(D, 'cyl', B, .8, 0, 0, .14, .07, .14, '#8a8478'); for (const z of [-.06, .06]) part(D, 'box', B, .8, .07, z, .02, .14, .02, '#5a4028'); part(D, 'box', B, .8, .2, 0, .02, .02, .16, '#5a4028');
+      for (const [x, z, c] of [[1.05, -.3, desert ? '#d8c8a0' : '#9a8a6a'], [1.1, .25, desert ? '#c8a878' : '#7a6a4a'], [.6, .4, '#b8a888']]) part(D, 'pyr', B, x, 0, z, .26, .22, .26, c);
+      part(D, 'cone', B, .6, 0, -.25, .06, .08 + Math.sin(clock * 9 + k) * .015, .06, '#ff9a3a');
+      for (const z of [-.1, .15]) caravan(D, B.clone().multiply(tmpM.makeTranslation(1.25, 0, z)), 1, desert, ca, k);
+      soldier(.55, -.15, ca); soldier(.68, .15, cb);
+      return;
+    }
+    if (era <= 3) {
+      // a caravanserai: a walled square with corner towers, a gate onto the road, arcades round a courtyard well
+      const wl = desert ? '#d8c4a0' : '#b8ae96', dk = desert ? '#c0a882' : '#9a9078', S = .92, c = .82;
+      for (const [x, z, sx, sz] of [[c + S / 2, 0, .06, S], [c, -S / 2, S, .06], [c, S / 2, S, .06]]) part(D, 'box', B, x, 0, z, sx, .2, sz, wl);
+      for (const s of [-1, 1]) part(D, 'box', B, c - S / 2, 0, s * .3, .06, .2, .32, wl);
+      part(D, 'box', B, c - S / 2, 0, 0, .1, .3, .08, dk, 0, 0, 0); part(D, 'box', B, c - S / 2 - .01, 0, 0, .08, .16, .1, '#3a2a1a');
+      for (const [x, z] of [[c - S / 2, -S / 2], [c - S / 2, S / 2], [c + S / 2, -S / 2], [c + S / 2, S / 2]]) { part(D, 'cyl', B, x, 0, z, .13, .3, .13, wl); part(D, 'cone', B, x, .3, z, .15, .1, .15, era === 3 ? '#a04a32' : dk); }
+      for (const [x, z, sx, sz] of [[c + .34, 0, .16, .7], [c, -.34, .7, .16], [c, .34, .7, .16]]) { part(D, 'box', B, x, 0, z, sx, .16, sz, dk); part(D, 'box', B, x, .16, z, sx + .02, .02, sz + .02, wl); }
+      part(D, 'cyl', B, c, 0, 0, .1, .05, .1, '#7a7468'); caravan(D, B.clone().multiply(tmpM.makeTranslation(c - .1, 0, .12)), 1, desert, cb, k);
+      part(D, 'cyl', B, c - S / 2 - .05, .3, 0, .01, .25, .01, '#3a3a3a'); part(D, 'box', B, c - S / 2 - .05 + .05, .45, 0, .1, .06, .01, ca, 0, Math.sin(clock * 3 + k) * .3, 0);
+      soldier(c - S / 2 - .12, -.12, ca);
+      return;
+    }
+    if (era === 4) {
+      // a coaching inn: a two-storey timber house with a hanging sign, a stable, and a stagecoach with its team at the door
+      part(D, 'box', B, .85, 0, -.05, .42, .38, .58, '#d8ccb0'); part(D, 'prism', B, .85, .38, -.05, .46, .2, .62, '#5a4a3a');
+      for (const z of [-.25, -.05, .15]) { part(D, 'box', B, .639, .24, z, .01, .07, .06, '#ffd68a'); part(D, 'box', B, .639, .08, z, .01, .07, .06, '#3a3a4a'); }
+      for (const z of [-.3, .2]) part(D, 'box', B, .64, 0, z, .01, .38, .02, '#4a3626');
+      part(D, 'cyl', B, .58, 0, .32, .015, .32, .015, '#4a3626'); part(D, 'box', B, .58, .26, .38, .01, .09, .12, '#7a3a2a');
+      part(D, 'box', B, 1.05, 0, .45, .3, .2, .3, '#8a6a46'); part(D, 'prism', B, 1.05, .2, .45, .32, .1, .34, '#5a4a3a');
+      // the stagecoach
+      part(D, 'box', B, .45, .06, -.1, .12, .1, .2, '#3a2a4a'); for (const [x, z] of [[.39, -.17], [.51, -.17], [.39, -.02], [.51, -.02]]) part(D, 'cyl', B, x, .07, z, .07, .015, .07, '#5a4028', 0, 0, Math.PI / 2);
+      for (const x of [.41, .49]) { part(D, 'box', B, x, .07, .12, .04, .05, .14, '#6a4a30'); for (const z of [.06, .18]) part(D, 'box', B, x, 0, z, .015, .07, .015, '#6a4a30'); }
+      soldier(.6, -.38, ca); soldier(.72, .32, cb);
+      return;
+    }
+    if (era === 5) {
+      // a gas station: pumps under a canopy, a diner with a neon sign and parked cars
+      
+      for (const [x, z] of [[.58, -.25], [.58, .25], [.9, -.25], [.9, .25]]) part(D, 'box', B, x, 0, z, .025, .3, .025, '#d8d8d4');
+      part(D, 'box', B, .74, .3, 0, .48, .05, .7, '#e8e4dc'); part(D, 'box', B, .74, .3, -.351, .48, .05, .005, '#c84a3a');
+      for (const z of [-.12, .12]) { part(D, 'box', B, .74, 0, z, .06, .14, .05, '#c84a3a'); part(D, 'box', B, .74, .1, z + .026, .04, .03, .005, '#e8e8e4'); }
+      part(D, 'box', B, 1.2, 0, -.05, .3, .2, .5, '#d8d4cc'); part(D, 'box', B, 1.049, .06, -.05, .01, .08, .4, '#9ac4e0'); part(D, 'box', B, 1.2, .2, -.05, .32, .03, .52, '#c84a3a');
+      part(D, 'cyl', B, 1.05, 0, .4, .015, .55, .015, '#5a5a5a'); part(D, 'box', B, 1.05, .5, .4, .03, .12, .2, '#f2d04a');
+      for (const [z, c] of [[-.12, '#4a6a9a'], [.12, '#d8b03a']]) { part(D, 'box', B, .62, 0, z, .14, .045, .08, c); part(D, 'box', B, .63, .045, z, .07, .035, .07, '#2a3038'); }
+      soldier(1.0, .1, ca);
+      return;
+    }
+    // 2000s: a service area with a glass shop, EV chargers under a solar canopy and a car park
+    
+    for (const [x, z] of [[.55, -.35], [.55, .35], [.9, -.35], [.9, .35]]) part(D, 'box', B, x, 0, z, .025, .28, .025, '#c8c8c4');
+    part(D, 'box', B, .72, .28, 0, .48, .03, .85, '#2a3a5a', 0, 0, .12); for (let q = 0; q < 4; q++) part(D, 'box', B, .72, .305, -.32 + q * .21, .44, .005, .005, '#8aa0c0', 0, 0, .12);
+    for (const z of [-.24, 0, .24]) { part(D, 'box', B, .72, 0, z, .04, .13, .04, '#e8e8e4'); part(D, 'box', B, .72, .08, z + .021, .025, .03, .003, '#4ae08a'); }
+    part(D, 'box', B, 1.2, 0, 0, .3, .22, .6, '#9ac4e0'); part(D, 'box', B, 1.2, .22, 0, .34, .03, .64, '#e8e8e4'); part(D, 'box', B, 1.049, .12, 0, .01, .06, .3, '#2a8a4a');
+    for (const [z, c] of [[-.24, '#e8e8e4'], [0, '#3a3a3a'], [.24, '#4a6a9a']]) { part(D, 'box', B, .6, 0, z, .14, .045, .08, c); part(D, 'box', B, .61, .045, z, .07, .035, .07, '#2a3038'); }
+    part(D, 'cyl', B, 1.0, 0, .48, .015, .6, .015, '#5a5a5a'); part(D, 'box', B, 1.0, .55, .48, .03, .1, .22, '#2a5aa0');
+    soldier(1.0, -.2, ca);
+  }
+  function updateInns() {
+    const D = world.dset; if (!world.tradeRoads) return;
+    const seen = new Set(), key = sim.ownerVersion + ':' + (world.sites || []).length;
+    for (const r of world.tradeRoads) {
+      const pk = Math.min(r.a.id, r.b.id) + ':' + Math.max(r.a.id, r.b.id); if (seen.has(pk)) continue; seen.add(pk);
+      if (r.br === undefined && world.riverPaths) r.br = bridgesOf(r);
+      if (r.inn === undefined || r.iv !== key) { r.inn = innOf(r); r.iv = key; }
+      if (!r.inn) continue;
+      const era = Math.min(6, r.era), B = base(wx(r.inn.x), r.inn.h, wz(r.inn.y), r.inn.head, 1.1);
+      if (era >= 2) part(D, 'box', B, .93, -.3, 0, 1.08, .305, 1.12, era <= 3 ? '#b8a888' : era === 4 ? '#8a8270' : '#5a5c60');   // a level yard cut into the slope
+      inn(D, B, era, STY(r.a.style) === 'desert', r.a.color, r.b.color, r.a.id + r.b.id);
+      if (world.night > .3 && world.beaconFires) { const p = new THREE.Vector3(era <= 1 ? .6 : era <= 3 ? .3 : era === 4 ? .58 : 1.05, era <= 1 ? .1 : .3, era <= 3 ? 0 : .35).applyMatrix4(B); world.beaconFires.push([p.x, p.y, p.z, era <= 1 ? 1 : .6, false, r.inn.h]); }
+    }
+  }
   function updateLumber() {
     const D = world.dset;
     for (const t of sim.tribes.values()) {
@@ -5631,7 +5726,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCoast(); updateHoly(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCoast(); updateHoly(); updateInns(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -6152,6 +6247,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (const r of world.tradeRoads || []) for (const br of bridgesOf(r)) for (const [ex, ey] of br.ends) for (const [p, q] of [[0, 0], [.5, 0], [-.5, 0], [0, .5], [0, -.5]]) world.siteClear.add(Math.floor(ey + q) * W + Math.floor(ex + p));   // and bridge ends
     for (const t of sim.tribes.values()) { const c = t.era >= 2 && t.port != null && coastSite(t); if (c) for (const i of c.tiles) world.siteClear.add(i); }   // and coastal forts
     for (const r of (sim.religions || new Map()).values()) { const c = holySite(r); if (c) for (const i of c.tiles) world.siteClear.add(i); }   // and holy sites
+    for (const r of world.tradeRoads || []) { const c = r.inn; if (c) for (const [a, b] of [[0, 0], [.5, 0], [-.5, 0], [0, .5], [0, -.5]]) world.siteClear.add(Math.floor(c.iy + b) * W + Math.floor(c.ix + a)); }   // and roadside inns
       // and the terraced hillsides   // and the hilltop beacon   // and a clearing for the logging camp
                       // and for observatories               // and for the shipyard
     for (const bw of borderWalls()) drawBorderWall(S, bw, lamps);
@@ -6388,6 +6484,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   window.addEventListener('focusOil', e => { const ts = [...sim.tribes.values()].filter(t => t.era >= 4 && t.members.size >= 8 && oilSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__oil = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = oilSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y, h: st.h + .3, d: e.detail.d || .38, a: st.head + .4 } })); });
   window.addEventListener('focusCoast', e => { const ts = [...sim.tribes.values()].filter(t => t.era >= 2 && t.port != null && t.members.size >= 6 && coastSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__coast = ts.length + '/' + [...sim.tribes.values()].filter(t => t.port != null).length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; if (!t.wars.size) { const o = [...sim.tribes.values()].find(x => x !== t); if (o) { const w = { since: sim.tick, deaths: 0 }; t.wars.set(o.id, w); o.wars.set(t.id, w); } } const c = coastSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .3, d: e.detail.d || .3, a: c.head + Math.PI + .9 } })); });
   window.addEventListener('focusHoly', e => { if (!sim.religions.size && e.detail.found) { const t = [...sim.tribes.values()].sort((a, b) => b.members.size - a.members.size)[0]; sim.foundFaith(t); for (const o of sim.tribes.values()) if (o !== t && Math.hypot(o.camp.x - t.camp.x, o.camp.y - t.camp.y) < 25) o.faith = t.faith; } const rs = [...sim.religions.values()].filter(r => [...sim.tribes.values()].some(t => t.faith === r.id) && holySite(r)), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__holy = rs.length + '/' + sim.religions.size + (r ? ' ' + r.name : ''); if (!r) return; const c = holySite(r); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .3, d: e.detail.d || .33, a: c.head + .7 } })); });
+  window.addEventListener('focusInn', e => { const seen = new Set(), rs = []; for (const r of world.tradeRoads || []) { const pk = Math.min(r.a.id, r.b.id) + ':' + Math.max(r.a.id, r.b.id); if (seen.has(pk)) continue; seen.add(pk); if (r.br === undefined && world.riverPaths) r.br = bridgesOf(r); r.inn = innOf(r); r.iv = sim.ownerVersion + ':' + (world.sites || []).length; if (r.inn) rs.push(r); } const r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__inn = rs.length + '/' + seen.size + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era + ' L ' + r.L.toFixed(1) : ''); if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: r.inn.ix, y: r.inn.iy, h: r.inn.h + .2, d: e.detail.d || .3, a: r.inn.head - 1.0 } })); });
   window.addEventListener('focusBridge', e => { const rs = []; for (const r of world.tradeRoads || []) { if (r.br === undefined) r.br = bridgesOf(r); for (const br of r.br) rs.push([r, br]); } if (e.detail.era !== undefined) { const f = rs.filter(([r]) => r.era === e.detail.era); if (f.length) rs.splice(0, rs.length, ...f); } const [r, br] = rs[(e.detail.i || 0) % Math.max(1, rs.length)] || []; window.__bridge = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era + ' S ' + br.S.toFixed(2) + ' H ' + br.H.toFixed(2) : ''); if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: br.x, y: br.y, h: br.yc + br.H * .5, d: e.detail.d || .33, a: br.head + 1.3 } })); });
   window.addEventListener('focusCrossing', e => { const rs = (world.tradeRoads || []).filter(r => (r.c = crossingOf(r))), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__cross = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era : ''); if (!r) return; if (e.detail.war) { const w = { since: sim.tick, deaths: 0 }; r.a.wars.set(r.b.id, w); r.b.wars.set(r.a.id, w); } window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: r.c.x, y: r.c.y, h: r.c.h + .2, d: e.detail.d || .33, a: r.c.head + 1.1 } })); });
   window.addEventListener('focusObs', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 8 && obsSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__obs = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = obsSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y + .3, h: st.h, d: e.detail.d || .35 } })); });

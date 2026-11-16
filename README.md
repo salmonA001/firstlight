@@ -186,6 +186,10 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 
   ![Holy sites](docs/holy.png)
 
+- **Roadside inns:** halfway along a long trade road travelers stop for the night: a camp around a well with tents and resting pack animals, then a walled caravanserai with corner towers, a coaching inn with a stable and stagecoach in the 1800s, a gas station with a diner in the 1900s, and a service area with EV chargers under a solar canopy in the 2000s. Their lights glow at night.
+
+  ![Roadside inns](docs/inns.png)
+
 - **Wartime forts:** a nation at war fortifies the side of town facing its nearest enemy, with its colors flying. It starts as a timber watchtower behind a palisade, then becomes a stone tower with battlements, a star fort with cannon, an earthwork redoubt with a field gun, a zigzag trench line with a concrete pillbox and barbed wire, and finally an air defense post with a turning radar and missile launcher.
 
   ![A stone watchtower flying its nation's flag outside a town at war](docs/fort.png)
