@@ -4602,6 +4602,53 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       if (world.night > .3 && world.beaconFires) { const p = new THREE.Vector3(era <= 1 ? .6 : era <= 3 ? .3 : era === 4 ? .58 : 1.05, era <= 1 ? .1 : .3, era <= 3 ? 0 : .35).applyMatrix4(B); world.beaconFires.push([p.x, p.y, p.z, era <= 1 ? 1 : .6, false, r.inn.h]); }
     }
   }
+  // tunnels: from the 1800s, where a trade road runs into a mountain it goes through it. Each end gets a portal of its era:
+  // a stone arch with a keystone and a date plaque in the 1800s, a concrete portal with lamps in the 1900s and twin lit bores
+  // with a sign gantry in the 2000s. Trains and traffic vanish in at one side and come out of the other
+  function tunnelsOf(r) {
+    const out = [], dx = (r.x2 - r.x1) / r.L, dy = (r.y2 - r.y1) / r.L, st = .1;
+    let inRun = false, start = 0, water = false;
+    for (let s = .6; s < r.L - .6; s += st) {
+      const x = r.x1 + dx * s, y = r.y1 + dy * s, X = Math.floor(x), Y = Math.floor(y), blocked = !sim.passable(X, Y);
+      if (blocked && !inRun) { inRun = true; start = s; water = false; }
+      if (blocked && sim.terrain[Y * W + X] === T.WATER) water = true;
+      if (!blocked && inRun) { inRun = false; const len = s - start;
+        if (!water && len >= .8 && len <= 9) for (const [p, d] of [[start - .05, 1], [s + .05, -1]]) { const px = r.x1 + dx * p, py = r.y1 + dy * p; out.push({ x: px, y: py, h: heightAt(px, py), head: Math.atan2(dx * d, dy * d), len }); } }
+    }
+    return out;
+  }
+  function portal(D, B, era, k) {
+    const dark = '#141414';
+    if (era === 4) {
+      const st = '#9a8e7a';
+      part(D, 'box', B, 0, -.1, .1, .78, .62, .14, st); part(D, 'box', B, 0, .52, .1, .84, .05, .16, '#86796a');
+      for (const s of [-1, 1]) { part(D, 'box', B, s * .5, -.1, .02, .26, .4, .1, st, 0, s * .5, 0); part(D, 'box', B, s * .27, -.1, .02, .07, .62, .17, '#86796a'); }
+      part(D, 'box', B, 0, -.02, .02, .32, .27, .02, dark); part(D, 'cyl', B, 0, .25, .02, .32, .02, .32, dark, Math.PI / 2, 0, 0);
+      for (let q = 0; q < 9; q++) { const a = q / 8 * Math.PI; part(D, 'box', B, -Math.cos(a) * .18, .25 + Math.sin(a) * .18, .025, .05, .04, .03, '#7a6e5c', 0, 0, a - Math.PI / 2); }
+      part(D, 'box', B, 0, .42, .015, .07, .06, .03, '#b8ac94'); part(D, 'box', B, 0, .47, .01, .2, .04, .01, '#d8ccb0');
+      return;
+    }
+    // 1900s concrete portal with lamps; 2000s twin bores, a gantry sign and lit edges
+    const cc = era >= 6 ? '#c8c8c4' : '#a8a8a2', bores = era >= 6 ? [-.22, .22] : [0], w = era >= 6 ? .34 : .4;
+    part(D, 'box', B, 0, -.1, .1, era >= 6 ? 1.0 : .82, .58, .14, cc); part(D, 'box', B, 0, .48, .06, era >= 6 ? 1.05 : .86, .05, .24, '#8a8a86');
+    for (const s of [-1, 1]) part(D, 'box', B, s * (era >= 6 ? .62 : .52), -.1, 0, .3, .36, .08, cc, 0, s * .45, 0);
+    for (const x of bores) { part(D, 'box', B, x, -.02, .02, w, .24, .02, dark); part(D, 'cyl', B, x, .22, .02, w, .02, w * .7, dark, Math.PI / 2, 0, 0);
+      if (era >= 6) for (const s of [-1, 1]) part(D, 'box', B, x + s * (w / 2 + .01), -.02, .015, .015, .26, .015, '#ffd040'); }
+    if (era >= 6) { for (const s of [-1, 1]) part(D, 'box', B, s * .55, -.1, -.35, .025, .62, .025, '#7a7a7a'); part(D, 'box', B, 0, .5, -.35, 1.12, .03, .03, '#7a7a7a');
+      for (const x of [-.22, .22]) { part(D, 'box', B, x, .38, -.35, .3, .1, .01, '#2a6a3a'); part(D, 'box', B, x, .42, -.355, .2, .02, .005, '#e8e8e4'); } }
+    else for (const s of [-1, 1]) { part(D, 'cyl', B, s * .3, .32, .02, .015, .08, .015, '#3a3a3a'); part(D, 'box', B, s * .3, .4, .02, .05, .04, .05, '#ffb860'); }
+  }
+  function updateTunnels() {
+    const D = world.dset; if (!world.tradeRoads) return;
+    const seen = new Set();
+    for (const r of world.tradeRoads) {
+      const pk = Math.min(r.a.id, r.b.id) + ':' + Math.max(r.a.id, r.b.id); if (seen.has(pk)) continue; seen.add(pk);
+      if (r.era < 4) continue;
+      if (r.tun === undefined) { r.tun = tunnelsOf(r);
+        if (r.tun.length && world.roadLamps && r.era >= 5) for (const p of r.tun) world.roadLamps.push({ x: wx(p.x), y: p.h + .45, z: wz(p.y), g: p.h, r: .8, c: r.era === 5 ? LAMP_C.sodium : LAMP_C.led, b: .04 }); }
+      for (let q = 0; q < r.tun.length; q++) { const p = r.tun[q]; portal(D, base(wx(p.x), p.h, wz(p.y), p.head, 1.1), Math.min(6, r.era), r.a.id + q); }
+    }
+  }
   function updateLumber() {
     const D = world.dset;
     for (const t of sim.tribes.values()) {
@@ -5726,7 +5773,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCoast(); updateHoly(); updateInns(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCoast(); updateHoly(); updateInns(); updateTunnels(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -6485,6 +6532,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   window.addEventListener('focusCoast', e => { const ts = [...sim.tribes.values()].filter(t => t.era >= 2 && t.port != null && t.members.size >= 6 && coastSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__coast = ts.length + '/' + [...sim.tribes.values()].filter(t => t.port != null).length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; if (!t.wars.size) { const o = [...sim.tribes.values()].find(x => x !== t); if (o) { const w = { since: sim.tick, deaths: 0 }; t.wars.set(o.id, w); o.wars.set(t.id, w); } } const c = coastSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .3, d: e.detail.d || .3, a: c.head + Math.PI + .9 } })); });
   window.addEventListener('focusHoly', e => { if (!sim.religions.size && e.detail.found) { const t = [...sim.tribes.values()].sort((a, b) => b.members.size - a.members.size)[0]; sim.foundFaith(t); for (const o of sim.tribes.values()) if (o !== t && Math.hypot(o.camp.x - t.camp.x, o.camp.y - t.camp.y) < 25) o.faith = t.faith; } const rs = [...sim.religions.values()].filter(r => [...sim.tribes.values()].some(t => t.faith === r.id) && holySite(r)), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__holy = rs.length + '/' + sim.religions.size + (r ? ' ' + r.name : ''); if (!r) return; const c = holySite(r); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .3, d: e.detail.d || .33, a: c.head + .7 } })); });
   window.addEventListener('focusInn', e => { const seen = new Set(), rs = []; for (const r of world.tradeRoads || []) { const pk = Math.min(r.a.id, r.b.id) + ':' + Math.max(r.a.id, r.b.id); if (seen.has(pk)) continue; seen.add(pk); if (r.br === undefined && world.riverPaths) r.br = bridgesOf(r); r.inn = innOf(r); r.iv = sim.ownerVersion + ':' + (world.sites || []).length; if (r.inn) rs.push(r); } const r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__inn = rs.length + '/' + seen.size + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era + ' L ' + r.L.toFixed(1) : ''); if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: r.inn.ix, y: r.inn.iy, h: r.inn.h + .2, d: e.detail.d || .3, a: r.inn.head - 1.0 } })); });
+  window.addEventListener('focusTunnel', e => { const seen = new Set(), ps = []; for (const r of world.tradeRoads || []) { const pk = Math.min(r.a.id, r.b.id) + ':' + Math.max(r.a.id, r.b.id); if (seen.has(pk)) continue; seen.add(pk); for (const p of tunnelsOf(r)) ps.push([r, p]); } const [r, p] = ps[(e.detail.i || 0) % Math.max(1, ps.length)] || []; window.__tun = ps.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era + ' len ' + p.len.toFixed(1) : ''); if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: p.x, y: p.y, h: p.h + .25, d: e.detail.d || .3, a: p.head + Math.PI + .5 } })); });
   window.addEventListener('focusBridge', e => { const rs = []; for (const r of world.tradeRoads || []) { if (r.br === undefined) r.br = bridgesOf(r); for (const br of r.br) rs.push([r, br]); } if (e.detail.era !== undefined) { const f = rs.filter(([r]) => r.era === e.detail.era); if (f.length) rs.splice(0, rs.length, ...f); } const [r, br] = rs[(e.detail.i || 0) % Math.max(1, rs.length)] || []; window.__bridge = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era + ' S ' + br.S.toFixed(2) + ' H ' + br.H.toFixed(2) : ''); if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: br.x, y: br.y, h: br.yc + br.H * .5, d: e.detail.d || .33, a: br.head + 1.3 } })); });
   window.addEventListener('focusCrossing', e => { const rs = (world.tradeRoads || []).filter(r => (r.c = crossingOf(r))), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__cross = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era : ''); if (!r) return; if (e.detail.war) { const w = { since: sim.tick, deaths: 0 }; r.a.wars.set(r.b.id, w); r.b.wars.set(r.a.id, w); } window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: r.c.x, y: r.c.y, h: r.c.h + .2, d: e.detail.d || .33, a: r.c.head + 1.1 } })); });
   window.addEventListener('focusObs', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 8 && obsSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__obs = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = obsSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y + .3, h: st.h, d: e.detail.d || .35 } })); });
