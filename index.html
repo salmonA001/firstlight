@@ -4649,6 +4649,70 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       for (let q = 0; q < r.tun.length; q++) { const p = r.tun[q]; portal(D, base(wx(p.x), p.h, wz(p.y), p.head, 1.1), Math.min(6, r.era), r.a.id + q); }
     }
   }
+  // orchards: farming towns plant fruit trees in rows just outside town, chosen by climate. Apple trees in temperate lands blossom
+  // white in spring, hang red fruit in autumn and stand bare in winter; olive groves in Mediterranean lands, date palms in deserts,
+  // citrus in the tropics. At harvest pickers climb ladders with baskets, and from the 1900s a tractor hauls the crates away
+  const ORCH = ['apple', 'date', 'citrus', 'citrus', null, null, 'citrus', 'apple', 'date', 'citrus', 'citrus', 'apple'];
+  function orchardSites(t) {
+    if (!world.ext || t.era < 1 || !t.fx.farms || t.members.size < 6) return [];
+    world.orchAt = world.orchAt || new Map();
+    const ext = (world.ext.get(t.id) || 2) + (t.walls ? 1.8 : .7), key = sim.ownerVersion + ':' + Math.round(ext * 2) + ':' + (world.sites || []).length + ':' + t.era + ':' + (t.members.size >= 20 ? 1 : 0), c = world.orchAt.get(t.id);
+    if (c && c.v === key) return c.list;
+    const avoid = (world.sites || []).map(st => [st.x, st.y, (st.len || 2) / 2 + .8]);
+    for (const f of [mineSite(t), t.members.size >= 8 && obsSite(t), lumberSite(t), beaconSite(t), oilSite(t), yardSite(t), ...victorySpots(t)]) if (f) avoid.push([f.x, f.y, 1.6]);
+    for (const tr of terraceSites(t)) avoid.push([tr.x, tr.y, 1.2]);
+    const med = STY(t.style) === 'med', cand = [];
+    for (let dy = -7; dy <= 7; dy++) for (let dx = -7; dx <= 7; dx++) {
+      const x = t.camp.x + dx, y = t.camp.y + dy, d = Math.hypot(dx, dy); if (d < ext || d > ext + 3.5 || x < 1 || y < 1 || x >= W - 1 || y >= H - 1) continue;
+      const i = y * W + x, tr = sim.terrain[i]; if ((tr !== T.GRASS && tr !== T.SAND) || sim.owner[i] !== t.id || (sim.river && sim.river[i]) || (world.town && world.town[i]) || (world.rockAt && world.rockAt[i] >= 0)) continue;
+      let kind = ORCH[sim.biome[i]]; if (!kind) continue; if (med && kind !== 'date') kind = 'olive';
+      if (avoid.some(([ux, uy, ur]) => Math.hypot(x + .5 - ux, y + .5 - uy) < ur)) continue;
+      const hs = [[.1, .1], [.9, .1], [.1, .9], [.9, .9]].map(([a, b]) => heightAt(x + a, y + b)); if (Math.max(...hs) - Math.min(...hs) > .3) continue;
+      cand.push({ i, x: x + .5, y: y + .5, d, kind, head: Math.atan2(t.camp.x - x, t.camp.y - y) });
+    }
+    cand.sort((a, b) => a.d - b.d);
+    const list = [], max = t.members.size >= 20 ? 3 : 2;
+    for (const o of cand) { if (list.length >= max) break; if (list.some(p => Math.hypot(p.x - o.x, p.y - o.y) < 1.5)) continue; list.push(o); }
+    world.orchAt.set(t.id, { v: key, list }); return list;
+  }
+  function orchard(D, o, era, k, sp, au, sn) {
+    const B = base(wx(o.x), 0, wz(o.y), o.head, 1), harvest = au > .35, N = 3, gap = .3;
+    for (let a = 0; a < N; a++) for (let b = 0; b < N; b++) {
+      const lx = (a - 1) * gap + ((b % 2) * .04), lz = (b - 1) * gap, j = (a * 7 + b * 3 + k) % 5, s = 1.05 + j * .06;
+      const p = new THREE.Vector3(lx, 0, lz).applyMatrix4(B), y = heightAt(p.x + W / 2, p.z + H / 2) - .01;
+      if (o.kind === 'date') {
+        part(D, 'cyl', B, lx, y, lz, .03, .42 * s, .03, '#8a6a4a');
+        for (let q = 0; q < 7; q++) { const ang = q / 7 * Math.PI * 2 + j; part(D, 'box', B, lx + Math.sin(ang) * .06, y + .4 * s, lz + Math.cos(ang) * .06, .03, .015, .16, q % 2 ? '#5a7a3a' : '#4a6a30', -.35, ang, 0); }
+        if (harvest || sp < .2) part(D, 'sphere', B, lx, y + .33 * s, lz, .06, .06, .06, '#c87a2a');
+        continue;
+      }
+      const trunk = o.kind === 'olive' ? '#7a6a5a' : '#6a4a32', th = o.kind === 'olive' ? .1 : .13;
+      part(D, 'cyl', B, lx, y, lz, .035, th * s, .035, trunk);
+      if (o.kind === 'apple' && sn > .5) { for (const r of [-.6, .6]) part(D, 'box', B, lx, y + th * s, lz, .012, .1, .012, trunk, r, j, 0); continue; }   // bare in winter
+      const leaf = o.kind === 'olive' ? '#8a9a6a' : o.kind === 'citrus' ? '#2f6a2a' : sp > .4 ? '#f2e8ee' : au > .5 ? '#9a8a3a' : '#4f7a34';
+      const cr = (o.kind === 'olive' ? .2 : .18) * s; part(D, 'sphere', B, lx, y + th * s - .02, lz, cr, cr * .8, cr, leaf);
+      if (o.kind === 'apple' && sp > .4) part(D, 'sphere', B, lx + .03, y + th * s + .02, lz, cr * .7, cr * .5, cr * .7, '#f4c8d8');
+      const fruit = o.kind === 'apple' ? '#c8322a' : o.kind === 'citrus' ? '#f0a020' : '#3a3a2a';
+      if ((o.kind === 'citrus' || au > .2) && sp < .3) for (let q = 0; q < 4; q++) { const ang = q * 1.7 + j; part(D, 'sphere', B, lx + Math.sin(ang) * cr * .48, y + th * s + cr * .2 - .02 + (q % 2) * .03, lz + Math.cos(ang) * cr * .48, .038, .038, .038, fruit); }
+    }
+    const g = heightAt(o.x, o.y) - .01, Bg = base(wx(o.x), g, wz(o.y), o.head, 1);
+    // a low wall or fence around the grove, open on the side facing town
+    const wallC = era <= 3 ? '#9a9078' : '#7a5a3a';
+    for (const [x, z, sx, sz] of [[0, -.47, .94, .04], [-.47, 0, .04, .94], [.47, 0, .04, .94]]) part(D, 'box', Bg, x, -.02, z, sx, era <= 3 ? .08 : .06, sz, wallC);
+    if (era >= 2) { part(D, 'box', Bg, .36, -.02, .38, .16, .12, .12, era >= 5 ? '#b8b0a0' : '#8a6a46'); part(D, 'prism', Bg, .36, .1, .38, .18, .06, .14, '#5a4a3a'); }   // a packing shed
+    if (!harvest) return;
+    // pickers on ladders with baskets of fruit, and from the 1900s a tractor and trailer of crates
+    for (let q = 0; q < 3; q++) { const x = (q - 1) * gap + .12, z = ((q + k) % 3 - 1) * gap - .1, bob = Math.abs(Math.sin(clock * 3 + q + k)) * .015;
+      part(D, 'box', Bg, x, .02, z, .04, .16, .01, '#a08050', -.25, 0, 0); part(D, 'box', Bg, x, .07 + bob, z + .03, .04, .06, .03, ['#6a7a9a', '#9a5a4a', '#7a8a5a'][q]); part(D, 'sphere', Bg, x, .13 + bob, z + .03, .025, .025, .025, '#c9a07a');
+      part(D, 'cyl', Bg, x + .06, -.01, z + .07, .05, .035, .05, '#a07a40'); }
+    if (era >= 5) { const tz = -.05 + Math.sin(clock * .3 + k) * .25; part(D, 'box', Bg, -.62, .01, tz, .1, .07, .14, era >= 6 ? '#3a6aa0' : '#c84a2a'); part(D, 'box', Bg, -.62, .08, tz - .03, .07, .05, .06, '#2a3038');
+      for (const s of [-1, 1]) part(D, 'cyl', Bg, -.62 + s * .055, .0, tz - .04, .06, .02, .06, '#2a2a2a', 0, 0, Math.PI / 2);
+      part(D, 'box', Bg, -.62, .02, tz + .17, .1, .03, .18, '#7a6a5a'); for (let q = 0; q < 3; q++) part(D, 'box', Bg, -.62, .05, tz + .11 + q * .06, .08, .04, .05, '#b08a50'); }
+  }
+  function updateOrchards() {
+    const D = world.dset, f = seasonFrac(), sp = peak(f, .12, .6), au = peak(f, .64, .6), sn = peak(f, .9, .55);
+    for (const t of sim.tribes.values()) for (const o of orchardSites(t)) orchard(D, o, Math.min(6, t.era), t.id, sp, au, sn);
+  }
   function updateLumber() {
     const D = world.dset;
     for (const t of sim.tribes.values()) {
@@ -5773,7 +5837,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCoast(); updateHoly(); updateInns(); updateTunnels(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCoast(); updateHoly(); updateInns(); updateTunnels(); updateOrchards(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -6295,6 +6359,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (const t of sim.tribes.values()) { const c = t.era >= 2 && t.port != null && coastSite(t); if (c) for (const i of c.tiles) world.siteClear.add(i); }   // and coastal forts
     for (const r of (sim.religions || new Map()).values()) { const c = holySite(r); if (c) for (const i of c.tiles) world.siteClear.add(i); }   // and holy sites
     for (const r of world.tradeRoads || []) { const c = r.inn; if (c) for (const [a, b] of [[0, 0], [.5, 0], [-.5, 0], [0, .5], [0, -.5]]) world.siteClear.add(Math.floor(c.iy + b) * W + Math.floor(c.ix + a)); }   // and roadside inns
+    for (const t of sim.tribes.values()) for (const o of orchardSites(t)) world.siteClear.add(o.i);   // and orchards
       // and the terraced hillsides   // and the hilltop beacon   // and a clearing for the logging camp
                       // and for observatories               // and for the shipyard
     for (const bw of borderWalls()) drawBorderWall(S, bw, lamps);
@@ -6533,6 +6598,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   window.addEventListener('focusHoly', e => { if (!sim.religions.size && e.detail.found) { const t = [...sim.tribes.values()].sort((a, b) => b.members.size - a.members.size)[0]; sim.foundFaith(t); for (const o of sim.tribes.values()) if (o !== t && Math.hypot(o.camp.x - t.camp.x, o.camp.y - t.camp.y) < 25) o.faith = t.faith; } const rs = [...sim.religions.values()].filter(r => [...sim.tribes.values()].some(t => t.faith === r.id) && holySite(r)), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__holy = rs.length + '/' + sim.religions.size + (r ? ' ' + r.name : ''); if (!r) return; const c = holySite(r); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .3, d: e.detail.d || .33, a: c.head + .7 } })); });
   window.addEventListener('focusInn', e => { const seen = new Set(), rs = []; for (const r of world.tradeRoads || []) { const pk = Math.min(r.a.id, r.b.id) + ':' + Math.max(r.a.id, r.b.id); if (seen.has(pk)) continue; seen.add(pk); if (r.br === undefined && world.riverPaths) r.br = bridgesOf(r); r.inn = innOf(r); r.iv = sim.ownerVersion + ':' + (world.sites || []).length; if (r.inn) rs.push(r); } const r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__inn = rs.length + '/' + seen.size + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era + ' L ' + r.L.toFixed(1) : ''); if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: r.inn.ix, y: r.inn.iy, h: r.inn.h + .2, d: e.detail.d || .3, a: r.inn.head - 1.0 } })); });
   window.addEventListener('focusTunnel', e => { const seen = new Set(), ps = []; for (const r of world.tradeRoads || []) { const pk = Math.min(r.a.id, r.b.id) + ':' + Math.max(r.a.id, r.b.id); if (seen.has(pk)) continue; seen.add(pk); for (const p of tunnelsOf(r)) ps.push([r, p]); } const [r, p] = ps[(e.detail.i || 0) % Math.max(1, ps.length)] || []; window.__tun = ps.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era + ' len ' + p.len.toFixed(1) : ''); if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: p.x, y: p.y, h: p.h + .25, d: e.detail.d || .3, a: p.head + Math.PI + .5 } })); });
+  window.addEventListener('focusOrchard', e => { const os = []; for (const t of sim.tribes.values()) for (const o of orchardSites(t)) os.push([t, o]); const [t, o] = os[(e.detail.i || 0) % Math.max(1, os.length)] || []; if (e.detail.season !== undefined) sim.tick = Math.floor(sim.tick / YEAR) * YEAR + Math.floor(e.detail.season * YEAR); window.__orch = os.length + (t ? ' ' + t.name + ' era ' + t.era + ' ' + o.kind : ''); if (!t) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: o.x, y: o.y, h: heightAt(o.x, o.y) + .15, d: e.detail.d || .25, a: o.head + 2.4 } })); });
   window.addEventListener('focusBridge', e => { const rs = []; for (const r of world.tradeRoads || []) { if (r.br === undefined) r.br = bridgesOf(r); for (const br of r.br) rs.push([r, br]); } if (e.detail.era !== undefined) { const f = rs.filter(([r]) => r.era === e.detail.era); if (f.length) rs.splice(0, rs.length, ...f); } const [r, br] = rs[(e.detail.i || 0) % Math.max(1, rs.length)] || []; window.__bridge = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era + ' S ' + br.S.toFixed(2) + ' H ' + br.H.toFixed(2) : ''); if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: br.x, y: br.y, h: br.yc + br.H * .5, d: e.detail.d || .33, a: br.head + 1.3 } })); });
   window.addEventListener('focusCrossing', e => { const rs = (world.tradeRoads || []).filter(r => (r.c = crossingOf(r))), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__cross = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era : ''); if (!r) return; if (e.detail.war) { const w = { since: sim.tick, deaths: 0 }; r.a.wars.set(r.b.id, w); r.b.wars.set(r.a.id, w); } window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: r.c.x, y: r.c.y, h: r.c.h + .2, d: e.detail.d || .33, a: r.c.head + 1.1 } })); });
   window.addEventListener('focusObs', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 8 && obsSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__obs = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = obsSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y + .3, h: st.h, d: e.detail.d || .35 } })); });
