@@ -198,6 +198,10 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 
   ![Orchards](docs/orchards.png)
 
+- **Plague camps:** while a town has an outbreak it sets up a quarantine camp outside its walls under a yellow flag: a healer's hut with smoking herb fires, then a fenced pest house with beak-masked plague doctors and a burning pit, a brick fever hospital in the 1800s, red-cross field tents and ambulances in the 1900s, and white isolation tents with medics in hazmat suits and a road checkpoint in the 2000s. The camp is struck once the plague passes.
+
+  ![Plague camps](docs/plague.png)
+
 - **Wartime forts:** a nation at war fortifies the side of town facing its nearest enemy, with its colors flying. It starts as a timber watchtower behind a palisade, then becomes a stone tower with battlements, a star fort with cannon, an earthwork redoubt with a field gun, a zigzag trench line with a concrete pillbox and barbed wire, and finally an air defense post with a turning radar and missile launcher.
 
   ![A stone watchtower flying its nation's flag outside a town at war](docs/fort.png)

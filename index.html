@@ -4713,6 +4713,95 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     const D = world.dset, f = seasonFrac(), sp = peak(f, .12, .6), au = peak(f, .64, .6), sn = peak(f, .9, .55);
     for (const t of sim.tribes.values()) for (const o of orchardSites(t)) orchard(D, o, Math.min(6, t.era), t.id, sp, au, sn);
   }
+  // plague camps: while a town has an outbreak it sets up a quarantine camp outside its walls under a yellow flag. A healer's hut
+  // with smoking herb fires early on, a walled pest house with beak-masked plague doctors and a burning pit in the Middle Ages and the
+  // 1700s, a brick fever hospital in the 1800s, red-cross field tents and ambulances in the 1900s and white isolation tents with
+  // hazmat-suited medics and a checkpoint in the 2000s. The camp is struck once the plague passes
+  function plagueSite(t) {
+    if (!world.ext) return null;
+    world.plagueAt = world.plagueAt || new Map();
+    const ext = (world.ext.get(t.id) || 2) + (t.walls ? 1.9 : .9), key = sim.ownerVersion + ':' + Math.round(ext * 2) + ':' + (world.sites || []).length, c = world.plagueAt.get(t.id);
+    if (c && c.v === key) return c.site;
+    const avoid = (world.sites || []).map(st => [st.x, st.y, (st.len || 2) / 2 + .8]).concat([...sim.tribes.values()].filter(o => o !== t).map(o => [o.camp.x + .5, o.camp.y + .5, (world.ext.get(o.id) || 2) + 1.5]));
+    for (const f of [mineSite(t), t.members.size >= 8 && obsSite(t), lumberSite(t), beaconSite(t), oilSite(t), yardSite(t), ...victorySpots(t)]) if (f) avoid.push([f.x, f.y, 1.7]);
+    for (const o of [...terraceSites(t), ...orchardSites(t)]) avoid.push([o.x, o.y, 1.2]);
+    let best = null, bd = 1e9;
+    for (let dy = -8; dy <= 8; dy++) for (let dx = -8; dx <= 8; dx++) {
+      const x = t.camp.x + dx, y = t.camp.y + dy, d = Math.hypot(dx, dy); if (d < ext || d > ext + 4 || x < 2 || y < 2 || x >= W - 2 || y >= H - 2) continue;
+      const i = y * W + x, tr = sim.terrain[i]; if ((tr !== T.GRASS && tr !== T.SAND && tr !== T.FOREST) || (sim.owner[i] && sim.owner[i] !== t.id) || (sim.river && sim.river[i]) || (world.town && world.town[i]) || (world.rockAt && world.rockAt[i] >= 0)) continue;
+      let ok = true; for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!sim.passable(x + ox, y + oy) || isWater(x + ox + .5, y + oy + .5)) ok = false; if (!ok) continue;
+      if (avoid.some(([ux, uy, ur]) => Math.hypot(x + .5 - ux, y + .5 - uy) < ur)) continue;
+      const hs = [[-.4, -.4], [.4, -.4], [-.4, .4], [.4, .4], [0, 0]].map(([a, b]) => heightAt(x + .5 + a, y + .5 + b)), sl = Math.max(...hs) - Math.min(...hs); if (sl > .3) continue;
+      const score = d + sl * 6 + (tr === T.FOREST ? 7 : 0); if (score < bd) { bd = score; best = { i, x: x + .5, y: y + .5, h: Math.min(...hs) + sl * .3, head: Math.atan2(t.camp.x - x, t.camp.y - y), tiles: [-1, 0, 1].flatMap(a => [-1, 0, 1].map(b => i + a * W + b)) }; }
+    }
+    world.plagueAt.set(t.id, { v: key, site: best }); return best;
+  }
+  function plagueCamp(D, B, era, col, k) {
+    const flag = (x, z, c, h = .55) => { part(D, 'cyl', B, x, 0, z, .012, h, .012, '#3a3a3a'); part(D, 'box', B, x + .07, h - .1, z, .14, .09, .01, c, 0, Math.sin(clock * 3 + k + x) * .25, 0); };
+    const sick = (x, z, c) => { part(D, 'box', B, x, .005, z, .08, .02, .2, '#d8ccb0'); part(D, 'box', B, x, .025, z + .02, .05, .025, .12, c); part(D, 'sphere', B, x, .02, z - .07, .03, .03, .03, '#c9a07a'); };
+    const person = (x, z, c, head = '#c9a07a', mask) => { const bob = Math.abs(Math.sin(clock * 4 + x * 9 + k)) * .008; part(D, 'box', B, x, bob, z, .05, .1, .035, c); part(D, 'sphere', B, x, .095 + bob, z, .03, .03, .03, head);
+      if (mask === 'beak') { part(D, 'cone', B, x, .1 + bob, z + .03, .015, .05, .015, '#d8ccb0', Math.PI / 2, 0, 0); part(D, 'cyl', B, x, .12 + bob, z, .06, .015, .06, '#1a1a1a'); part(D, 'cyl', B, x, .135 + bob, z, .035, .03, .035, '#1a1a1a'); } };
+    const yellow = '#e8c832';
+    if (era <= 1) {
+      // a healer's hut with herb fires smoking and the sick laid out on mats under an awning
+      part(D, 'cone', B, -.2, 0, -.15, .36, .32, .36, '#8a7a5a'); part(D, 'box', B, -.2, 0, .02, .1, .12, .03, '#3a2a1a');
+      part(D, 'box', B, .22, .2, .1, .4, .02, .4, '#b8a888'); for (const [x, z] of [[.03, -.09], [.41, -.09], [.03, .29], [.41, .29]]) part(D, 'cyl', B, x, 0, z, .015, .2, .015, '#5a4028');
+      for (const x of [.12, .3]) sick(x, .1, '#8a6a4a');
+      for (const [x, z] of [[-.25, .3], [.05, -.35]]) { part(D, 'cyl', B, x, 0, z, .1, .03, .1, '#5a5048'); part(D, 'cone', B, x, .03, z, .05, .07 + Math.sin(clock * 8 + x * 5) * .015, .05, '#ff9a3a');
+        for (let q = 0; q < 3; q++) { const f = (clock * .3 + q / 3 + x) % 1; part(D, 'sphere', B, x + f * .1, .12 + f * .45, z - f * .05, .05 + f * .12, .05 + f * .12, .05 + f * .12, '#a8b0a0'); } }
+      person(-.05, .05, '#6a5a3a'); flag(-.42, .3, yellow, .45);
+      return;
+    }
+    if (era <= 3) {
+      // a pest house in a fenced yard: plague doctors in beaked masks, the sick on pallets, a burning pit and a covered cart
+      for (const [x, z, sx, sz] of [[0, -.5, 1.0, .03], [-.5, 0, .03, 1.0], [.5, 0, .03, 1.0], [-.3, .5, .4, .03], [.3, .5, .4, .03]]) part(D, 'box', B, x, 0, z, sx, .12, sz, '#6a5038');
+      part(D, 'box', B, -.15, 0, -.25, .5, .26, .3, era === 3 ? '#c8bca0' : '#a89a80'); part(D, 'prism', B, -.15, .26, -.25, .54, .14, .34, '#5a4a3a');
+      for (const x of [-.32, -.15, .02]) part(D, 'box', B, x, .1, -.099, .05, .07, .01, '#2a2a2a'); part(D, 'box', B, -.15, .38, -.25, .04, .1, .04, '#7a7064');
+      for (const z of [.0, .2]) for (const x of [.1, .28]) sick(x, z, '#d8d0c0');
+      person(.2, -.05, '#1a1a1a', '#1a1a1a', 'beak'); person(-.25, .2, '#1a1a1a', '#1a1a1a', 'beak'); person(.38, .3, '#6a5a7a');
+      part(D, 'cyl', B, .32, -.01, -.32, .16, .03, .16, '#3a3028'); part(D, 'cone', B, .32, .02, -.32, .1, .1 + Math.sin(clock * 7 + k) * .02, .1, '#ff7a1e');
+      for (let q = 0; q < 3; q++) { const f = (clock * .25 + q / 3) % 1; part(D, 'sphere', B, .32 + f * .1, .14 + f * .5, -.32, .06 + f * .14, .06 + f * .14, .06 + f * .14, '#5a5a58'); }
+      part(D, 'box', B, -.62, .05, .2, .1, .08, .2, '#6a4a30'); part(D, 'dome', B, -.62, .13, .2, .1, .06, .2, '#d8ccb0'); for (const z of [.13, .27]) part(D, 'cyl', B, -.62, .05, z, .07, .015, .07, '#4a3626', 0, 0, Math.PI / 2);
+      flag(-.45, -.45, yellow, .6); flag(.45, .45, col, .5);
+      return;
+    }
+    if (era === 4) {
+      // a brick fever hospital with tall windows, nurses in white and a horse ambulance at the door
+      part(D, 'box', B, 0, 0, -.2, .8, .32, .3, '#9a4a3a'); part(D, 'prism', B, 0, .32, -.2, .84, .14, .34, '#4a4a4e');
+      for (let q = 0; q < 5; q++) part(D, 'box', B, -.32 + q * .16, .08, -.049, .06, .14, .01, '#e8d8a0');
+      for (const x of [-.4, .4]) part(D, 'box', B, x, .32, -.2, .06, .14, .06, '#7a3a2a');
+      part(D, 'box', B, 0, .22, -.04, .14, .1, .01, '#f2f0ea'); part(D, 'box', B, 0, .25, -.035, .08, .025, .005, '#c82a2a'); part(D, 'box', B, 0, .23, -.035, .025, .065, .005, '#c82a2a');
+      for (const x of [-.2, .1, .3]) sick(x, .2, '#e8e8e4');
+      person(-.05, .1, '#f2f0ea'); person(.42, .05, '#f2f0ea'); person(-.4, .3, '#2a2a3a');
+      part(D, 'box', B, .55, .06, .35, .12, .14, .22, '#2a2a2a'); part(D, 'box', B, .55, .14, .29, .125, .04, .04, '#c82a2a'); for (const z of [.27, .43]) part(D, 'cyl', B, .55, .06, z, .08, .015, .08, '#5a4028', 0, 0, Math.PI / 2);
+      flag(-.5, .4, yellow, .55);
+      return;
+    }
+    // 1900s: canvas field tents with red crosses and ambulances; 2000s: white isolation tents, hazmat medics and a road checkpoint
+    const modern = era >= 6, tent = modern ? '#f2f2ee' : '#8a8a6a';
+    for (const [x, z] of [[-.25, -.25], [.25, -.25], [-.25, .2]]) { part(D, modern ? 'dome' : 'prism', B, x, 0, z, .36, modern ? .2 : .22, .32, tent);
+      part(D, 'box', B, x, modern ? .17 : .16, z + .161, .08, .025, .005, '#c82a2a'); part(D, 'box', B, x, modern ? .16 : .15, z + .161, .025, .045, .005, '#c82a2a'); }
+    for (const x of [.15, .35]) sick(x, .2, modern ? '#9ac4e0' : '#e8e8e4');
+    const suit = modern ? '#e8e8e4' : '#f2f0ea', hd = modern ? '#e8e8e4' : '#c9a07a';
+    person(.05, .0, suit, hd); person(.45, -.05, suit, hd); person(-.5, 0, modern ? '#2a3a5a' : '#5a6a3a');
+    for (let q = 0; q < (modern ? 2 : 1); q++) { const x = .62, z = -.3 + q * .4; part(D, 'box', B, x, .01, z, .14, .12, .26, modern ? '#f2f0ea' : '#e8e4dc'); part(D, 'box', B, x, .09, z - .1, .145, .04, .06, '#2a3038');
+      part(D, 'box', B, x, .1, z + .02, .146, .03, .1, '#c82a2a'); for (const s of [-1, 1]) part(D, 'cyl', B, x + s * .07, 0, z - .07, .06, .02, .06, '#2a2a2a', 0, 0, Math.PI / 2);
+      if (modern) part(D, 'box', B, x, .13, z - .05, .08, .02, .03, Math.sin(clock * 10 + q) > 0 ? '#3a6aff' : '#ff3a3a'); }
+    if (modern) { for (const s of [-1, 1]) part(D, 'box', B, s * .15, 0, .55, .05, .12, .05, '#5a5a5a'); const M = B.clone().multiply(tmpM.makeTranslation(-.15, .1, .55));
+      for (let q = 0; q < 6; q++) part(D, 'box', M, (q + .5) * .05, 0, 0, .05, .02, .02, q % 2 ? '#f2f0ea' : '#d82a2a'); person(.25, .6, '#2a3a5a'); }
+    flag(-.55, -.45, yellow, .6); flag(-.62, .45, '#f2f0ea', .55);
+    part(D, 'box', B, -.62 + .07, .41, .45, .05, .015, .006, '#c82a2a'); part(D, 'box', B, -.62 + .07, .395, .45, .015, .045, .006, '#c82a2a');
+  }
+  function updatePlague() {
+    const D = world.dset, fires = world.beaconFires;
+    for (const t of sim.tribes.values()) {
+      if (!t.plague || t.members.size < 3) continue;
+      const st = plagueSite(t); if (!st) continue;
+      const era = Math.min(6, t.era), B = base(wx(st.x), st.h, wz(st.y), st.head, 1.3);
+      plagueCamp(D, B, era, t.color, t.id);
+      if (fires && world.night > .3 && era <= 3) { const p = new THREE.Vector3(era <= 1 ? -.25 : .32, .1, era <= 1 ? .3 : -.32).applyMatrix4(B); fires.push([p.x, p.y, p.z, .9, false, st.h]); }
+    }
+  }
   function updateLumber() {
     const D = world.dset;
     for (const t of sim.tribes.values()) {
@@ -5837,7 +5926,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCoast(); updateHoly(); updateInns(); updateTunnels(); updateOrchards(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCoast(); updateHoly(); updateInns(); updateTunnels(); updateOrchards(); updatePlague(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -6360,6 +6449,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (const r of (sim.religions || new Map()).values()) { const c = holySite(r); if (c) for (const i of c.tiles) world.siteClear.add(i); }   // and holy sites
     for (const r of world.tradeRoads || []) { const c = r.inn; if (c) for (const [a, b] of [[0, 0], [.5, 0], [-.5, 0], [0, .5], [0, -.5]]) world.siteClear.add(Math.floor(c.iy + b) * W + Math.floor(c.ix + a)); }   // and roadside inns
     for (const t of sim.tribes.values()) for (const o of orchardSites(t)) world.siteClear.add(o.i);   // and orchards
+    for (const t of sim.tribes.values()) { const c = t.plague && plagueSite(t); if (c) for (const i of c.tiles) world.siteClear.add(i); }   // and plague camps
       // and the terraced hillsides   // and the hilltop beacon   // and a clearing for the logging camp
                       // and for observatories               // and for the shipyard
     for (const bw of borderWalls()) drawBorderWall(S, bw, lamps);
@@ -6599,6 +6689,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   window.addEventListener('focusInn', e => { const seen = new Set(), rs = []; for (const r of world.tradeRoads || []) { const pk = Math.min(r.a.id, r.b.id) + ':' + Math.max(r.a.id, r.b.id); if (seen.has(pk)) continue; seen.add(pk); if (r.br === undefined && world.riverPaths) r.br = bridgesOf(r); r.inn = innOf(r); r.iv = sim.ownerVersion + ':' + (world.sites || []).length; if (r.inn) rs.push(r); } const r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__inn = rs.length + '/' + seen.size + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era + ' L ' + r.L.toFixed(1) : ''); if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: r.inn.ix, y: r.inn.iy, h: r.inn.h + .2, d: e.detail.d || .3, a: r.inn.head - 1.0 } })); });
   window.addEventListener('focusTunnel', e => { const seen = new Set(), ps = []; for (const r of world.tradeRoads || []) { const pk = Math.min(r.a.id, r.b.id) + ':' + Math.max(r.a.id, r.b.id); if (seen.has(pk)) continue; seen.add(pk); for (const p of tunnelsOf(r)) ps.push([r, p]); } const [r, p] = ps[(e.detail.i || 0) % Math.max(1, ps.length)] || []; window.__tun = ps.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era + ' len ' + p.len.toFixed(1) : ''); if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: p.x, y: p.y, h: p.h + .25, d: e.detail.d || .3, a: p.head + Math.PI + .5 } })); });
   window.addEventListener('focusOrchard', e => { const os = []; for (const t of sim.tribes.values()) for (const o of orchardSites(t)) os.push([t, o]); const [t, o] = os[(e.detail.i || 0) % Math.max(1, os.length)] || []; if (e.detail.season !== undefined) sim.tick = Math.floor(sim.tick / YEAR) * YEAR + Math.floor(e.detail.season * YEAR); window.__orch = os.length + (t ? ' ' + t.name + ' era ' + t.era + ' ' + o.kind : ''); if (!t) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: o.x, y: o.y, h: heightAt(o.x, o.y) + .15, d: e.detail.d || .25, a: o.head + 2.4 } })); });
+  window.addEventListener('focusPlague', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 3 && plagueSite(t)).sort((a, b) => a.id - b.id), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__plague = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; if (!t.plague) { t.plague = 300; t.plagueDeaths = 0; } const c = plagueSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .2, d: e.detail.d || .25, a: c.head + 2.3 } })); });
   window.addEventListener('focusBridge', e => { const rs = []; for (const r of world.tradeRoads || []) { if (r.br === undefined) r.br = bridgesOf(r); for (const br of r.br) rs.push([r, br]); } if (e.detail.era !== undefined) { const f = rs.filter(([r]) => r.era === e.detail.era); if (f.length) rs.splice(0, rs.length, ...f); } const [r, br] = rs[(e.detail.i || 0) % Math.max(1, rs.length)] || []; window.__bridge = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era + ' S ' + br.S.toFixed(2) + ' H ' + br.H.toFixed(2) : ''); if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: br.x, y: br.y, h: br.yc + br.H * .5, d: e.detail.d || .33, a: br.head + 1.3 } })); });
   window.addEventListener('focusCrossing', e => { const rs = (world.tradeRoads || []).filter(r => (r.c = crossingOf(r))), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__cross = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era : ''); if (!r) return; if (e.detail.war) { const w = { since: sim.tick, deaths: 0 }; r.a.wars.set(r.b.id, w); r.b.wars.set(r.a.id, w); } window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: r.c.x, y: r.c.y, h: r.c.h + .2, d: e.detail.d || .33, a: r.c.head + 1.1 } })); });
   window.addEventListener('focusObs', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 8 && obsSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__obs = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = obsSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y + .3, h: st.h, d: e.detail.d || .35 } })); });
