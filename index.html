@@ -4802,6 +4802,66 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       if (fires && world.night > .3 && era <= 3) { const p = new THREE.Vector3(era <= 1 ? -.25 : .32, .1, era <= 1 ? .3 : -.32).applyMatrix4(B); fires.push([p.x, p.y, p.z, .9, false, st.h]); }
     }
   }
+  // salt pans: coastal towns in warm, dry lands flood shallow ponds with seawater and let the sun dry them. The ponds run from
+  // blue through pink brine to white crust, workers rake the salt into heaps, a wind pump lifts the seawater from the 1800s
+  // and from the 1900s a conveyor loads the salt into trucks
+  const SALT_OK = new Set([0, 1, 2, 7, 8]);
+  function saltSite(t) {
+    if (!world.ext || t.era < 1 || t.members.size < 6) return null;
+    world.saltAt = world.saltAt || new Map();
+    const ext = (world.ext.get(t.id) || 2) + (t.walls ? 1.6 : .7), key = sim.ownerVersion + ':' + Math.round(ext * 2) + ':' + (world.sites || []).length, c = world.saltAt.get(t.id);
+    if (c && c.v === key) return c.site;
+    const avoid = (world.sites || []).map(st => [st.x, st.y, (st.len || 2) / 2 + .8]);
+    for (const f of [mineSite(t), lumberSite(t), beaconSite(t), oilSite(t), yardSite(t), t.port != null && t.wars.size && coastSite(t), ...victorySpots(t)]) if (f) avoid.push([f.x, f.y, 1.8]);
+    for (const o of [...terraceSites(t), ...orchardSites(t)]) avoid.push([o.x, o.y, 1.3]);
+    if (t.port != null) avoid.push([t.port % W + .5, ((t.port / W) | 0) + .5, 1.6]);
+    let best = null, bd = 1e9;
+    for (let dy = -8; dy <= 8; dy++) for (let dx = -8; dx <= 8; dx++) {
+      const x = t.camp.x + dx, y = t.camp.y + dy, d = Math.hypot(dx, dy); if (d < ext || d > ext + 5 || x < 2 || y < 2 || x >= W - 2 || y >= H - 2) continue;
+      const i = y * W + x, tr = sim.terrain[i]; if ((tr !== T.SAND && tr !== T.GRASS) || !SALT_OK.has(sim.biome[i]) || (sim.owner[i] && sim.owner[i] !== t.id) || (sim.river && sim.river[i]) || (world.town && world.town[i]) || (world.rockAt && world.rockAt[i] >= 0)) continue;
+      let sea = null; for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (isWater(x + .5 + ox * .9, y + .5 + oy * .9) && isWater(x + .5 + ox * 1.6, y + .5 + oy * 1.6)) sea = [ox, oy];
+      if (!sea) continue;
+      if (avoid.some(([ux, uy, ur]) => Math.hypot(x + .5 - ux, y + .5 - uy) < ur)) continue;
+      const hs = [[-.4, -.4], [.4, -.4], [-.4, .4], [.4, .4], [0, 0]].map(([a, b]) => heightAt(x + .5 + a, y + .5 + b)), sl = Math.max(...hs) - Math.min(...hs); if (sl > .22) continue;
+      const score = d + sl * 8 + (tr === T.GRASS ? .5 : 0); if (score < bd) { bd = score; best = { i, x: x + .5, y: y + .5, h: Math.max(.02, Math.min(...hs) + sl * .75), head: Math.atan2(sea[0], sea[1]) }; }
+    }
+    world.saltAt.set(t.id, { v: key, site: best }); return best;
+  }
+  function saltPans(D, B, era, k) {
+    const bank = era >= 5 ? '#b8b0a0' : '#a89878', N = 3, sz = .27;
+    part(D, 'box', B, 0, -.12, 0, .96, .13, .96, bank);
+    for (let a = 0; a < N; a++) for (let b = 0; b < N; b++) {
+      const x = (a - 1) * (sz + .04) - .05, z = (b - 1) * (sz + .04) - .05, stage = ((clock * .04 + (a * 3 + b) * .37 + k * .13) % 1);
+      const col = stage < .3 ? '#5a9ab0' : stage < .55 ? '#c89aa8' : stage < .8 ? '#e8dcd8' : '#f6f4ee';
+      part(D, 'box', B, x, .005, z, sz, .006, sz, col);
+      if (stage > .8) for (let q = 0; q < 2; q++) part(D, 'cone', B, x + (q - .5) * .1, .01, z, .07, .06 + (stage - .8) * .2, .07, '#f8f8f4');   // raked salt heaps
+    }
+    // a sluice channel from the sea side (+z) and the dykes between ponds
+    part(D, 'box', B, .4, -.01, .25, .05, .02, .5, '#4a8aa0');
+    for (let q = 0; q < 3; q++) { const x = -.35 + q * .3, z = -.1 + ((q + k) % 3) * .25, bob = Math.abs(Math.sin(clock * 4 + q)) * .01;
+      part(D, 'box', B, x, .01 + bob, z, .045, .09, .03, ['#e8e0cc', '#8a6a4a', '#5a7a9a'][q]); part(D, 'sphere', B, x, .1 + bob, z, .027, .027, .027, '#c9a07a');
+      part(D, 'cone', B, x, .125 + bob, z, .06, .025, .06, era >= 5 ? '#e8c832' : '#d8c8a0');
+      part(D, 'box', B, x + .04, .03, z + .02, .01, .13, .01, '#6a5038', .5, 0, 0); }
+    // the great salt mound under a thatch or tin roof beside the pans
+    part(D, 'cone', B, -.62, -.01, -.3, .34, .22, .34, '#f6f4ee');
+    if (era >= 2) { for (const [x, z] of [[-.78, -.46], [-.46, -.46], [-.78, -.14], [-.46, -.14]]) part(D, 'cyl', B, x, -.01, z, .02, .26, .02, '#5a4028'); part(D, 'pyr', B, -.62, .25, -.3, .46, .1, .46, era >= 5 ? '#9a9a96' : '#a08a5a'); }
+    if (era >= 4) {
+      // a wind pump lifting seawater, sails turning
+      part(D, 'cyl', B, .62, -.01, .3, .1, .45, .1, era >= 5 ? '#d8d8d4' : '#e8e0d0'); part(D, 'cone', B, .62, .44, .3, .12, .1, .12, '#5a4a3a');
+      const M = B.clone().multiply(tmpM.makeTranslation(.62, .44, .38)).multiply(new THREE.Matrix4().makeRotationZ(clock * 1.5 + k));
+      for (let q = 0; q < 4; q++) part(D, 'box', M, 0, 0, 0, .03, .26, .01, '#e8e4dc', 0, 0, q * Math.PI / 2);
+    }
+    if (era >= 5) {
+      // a conveyor up onto a truck
+      part(D, 'box', B, -.62, .02, .05, .04, .02, .42, '#5a5a5a', -.35, 0, 0);
+      part(D, 'box', B, -.62, .0, .38, .14, .08, .24, era >= 6 ? '#3a6aa0' : '#c8a032'); part(D, 'box', B, -.62, .08, .3, .12, .05, .07, '#2a3038'); part(D, 'cone', B, -.62, .08, .44, .08, .04, .1, '#f6f4ee');
+      for (const z of [.3, .46]) for (const s of [-1, 1]) part(D, 'cyl', B, -.62 + s * .07, -.01, z, .05, .02, .05, '#2a2a2a', 0, 0, Math.PI / 2);
+    }
+  }
+  function updateSalt() {
+    const D = world.dset;
+    for (const t of sim.tribes.values()) { const st = saltSite(t); if (st) saltPans(D, base(wx(st.x), st.h, wz(st.y), st.head, 1.15), Math.min(6, t.era), t.id); }
+  }
   function updateLumber() {
     const D = world.dset;
     for (const t of sim.tribes.values()) {
@@ -5926,7 +5986,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCoast(); updateHoly(); updateInns(); updateTunnels(); updateOrchards(); updatePlague(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCoast(); updateHoly(); updateInns(); updateTunnels(); updateOrchards(); updatePlague(); updateSalt(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -6450,6 +6510,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (const r of world.tradeRoads || []) { const c = r.inn; if (c) for (const [a, b] of [[0, 0], [.5, 0], [-.5, 0], [0, .5], [0, -.5]]) world.siteClear.add(Math.floor(c.iy + b) * W + Math.floor(c.ix + a)); }   // and roadside inns
     for (const t of sim.tribes.values()) for (const o of orchardSites(t)) world.siteClear.add(o.i);   // and orchards
     for (const t of sim.tribes.values()) { const c = t.plague && plagueSite(t); if (c) for (const i of c.tiles) world.siteClear.add(i); }   // and plague camps
+    for (const t of sim.tribes.values()) { const c = saltSite(t); if (c) world.siteClear.add(c.i); }   // and salt pans
       // and the terraced hillsides   // and the hilltop beacon   // and a clearing for the logging camp
                       // and for observatories               // and for the shipyard
     for (const bw of borderWalls()) drawBorderWall(S, bw, lamps);
@@ -6690,6 +6751,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   window.addEventListener('focusTunnel', e => { const seen = new Set(), ps = []; for (const r of world.tradeRoads || []) { const pk = Math.min(r.a.id, r.b.id) + ':' + Math.max(r.a.id, r.b.id); if (seen.has(pk)) continue; seen.add(pk); for (const p of tunnelsOf(r)) ps.push([r, p]); } const [r, p] = ps[(e.detail.i || 0) % Math.max(1, ps.length)] || []; window.__tun = ps.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era + ' len ' + p.len.toFixed(1) : ''); if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: p.x, y: p.y, h: p.h + .25, d: e.detail.d || .3, a: p.head + Math.PI + .5 } })); });
   window.addEventListener('focusOrchard', e => { const os = []; for (const t of sim.tribes.values()) for (const o of orchardSites(t)) os.push([t, o]); const [t, o] = os[(e.detail.i || 0) % Math.max(1, os.length)] || []; if (e.detail.season !== undefined) sim.tick = Math.floor(sim.tick / YEAR) * YEAR + Math.floor(e.detail.season * YEAR); window.__orch = os.length + (t ? ' ' + t.name + ' era ' + t.era + ' ' + o.kind : ''); if (!t) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: o.x, y: o.y, h: heightAt(o.x, o.y) + .15, d: e.detail.d || .25, a: o.head + 2.4 } })); });
   window.addEventListener('focusPlague', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 3 && plagueSite(t)).sort((a, b) => a.id - b.id), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__plague = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; if (!t.plague) { t.plague = 300; t.plagueDeaths = 0; } const c = plagueSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .2, d: e.detail.d || .25, a: c.head + 2.3 } })); });
+  window.addEventListener('focusSalt', e => { const ts = [...sim.tribes.values()].filter(t => saltSite(t)).sort((a, b) => a.id - b.id), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__salt = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const c = saltSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .1, d: e.detail.d || .25, a: c.head + 2.5 } })); });
   window.addEventListener('focusBridge', e => { const rs = []; for (const r of world.tradeRoads || []) { if (r.br === undefined) r.br = bridgesOf(r); for (const br of r.br) rs.push([r, br]); } if (e.detail.era !== undefined) { const f = rs.filter(([r]) => r.era === e.detail.era); if (f.length) rs.splice(0, rs.length, ...f); } const [r, br] = rs[(e.detail.i || 0) % Math.max(1, rs.length)] || []; window.__bridge = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era + ' S ' + br.S.toFixed(2) + ' H ' + br.H.toFixed(2) : ''); if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: br.x, y: br.y, h: br.yc + br.H * .5, d: e.detail.d || .33, a: br.head + 1.3 } })); });
   window.addEventListener('focusCrossing', e => { const rs = (world.tradeRoads || []).filter(r => (r.c = crossingOf(r))), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__cross = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era : ''); if (!r) return; if (e.detail.war) { const w = { since: sim.tick, deaths: 0 }; r.a.wars.set(r.b.id, w); r.b.wars.set(r.a.id, w); } window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: r.c.x, y: r.c.y, h: r.c.h + .2, d: e.detail.d || .33, a: r.c.head + 1.1 } })); });
   window.addEventListener('focusObs', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 8 && obsSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__obs = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = obsSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y + .3, h: st.h, d: e.detail.d || .35 } })); });
