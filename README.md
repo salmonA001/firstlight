@@ -206,6 +206,10 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 
   ![Salt pans](docs/salt.png)
 
+- **Drill grounds:** nations that are arming for war or already fighting (and any big town) train soldiers on a field outside town. Recruits practise spear thrusts at straw targets in antiquity, knights charge each other along a jousting tilt in the Middle Ages, a musket line fires volleys to a drummer in the 1700s, a column marches past brick barracks and a flagpole in the 1800s, and from the 1900s soldiers in khaki run a rifle range and obstacle course, with a helipad added in the 2000s. At war the field fills with a second rank.
+
+  ![Drill grounds](docs/drill.png)
+
 - **Wartime forts:** a nation at war fortifies the side of town facing its nearest enemy, with its colors flying. It starts as a timber watchtower behind a palisade, then becomes a stone tower with battlements, a star fort with cannon, an earthwork redoubt with a field gun, a zigzag trench line with a concrete pillbox and barbed wire, and finally an air defense post with a turning radar and missile launcher.
 
   ![A stone watchtower flying its nation's flag outside a town at war](docs/fort.png)
