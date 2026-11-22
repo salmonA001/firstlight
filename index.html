@@ -4960,6 +4960,97 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     const D = world.dset;
     for (const t of sim.tribes.values()) { const st = drillSite(t); if (st) drillGround(D, base(wx(st.x), st.h, wz(st.y), st.head, 1.2), Math.min(6, t.era), t.color, t.wars.size ? 12 : 4 + (t.ai.strategy === 'military' ? 3 : 0), t.id); }
   }
+  // ranches: herding nations pen their animals in a paddock outside town (horses on the steppe, sheep, goats, cattle,
+  // llamas or reindeer elsewhere). A stone kraal and herder's hut early, timber rails and a thatched barn in the Middle Ages,
+  // a red barn with a wind pump in the 1800s, a silo, tractor and hay bales in the 1900s, steel sheds and wrapped bales in the 2000s
+  function ranchSite(t) {
+    if (!world.ext || t.era < 1 || t.members.size < 7 || (t.farms || 0) < 2) return null;
+    world.ranchAt = world.ranchAt || new Map();
+    const ext = (world.ext.get(t.id) || 2) + (t.walls ? 1.8 : 1), key = sim.ownerVersion + ':' + Math.round(ext * 2) + ':' + (world.sites || []).length, c = world.ranchAt.get(t.id);
+    if (c && c.v === key) return c.site;
+    const avoid = (world.sites || []).map(st => [st.x, st.y, (st.len || 2) / 2 + .9]);
+    for (const f of [mineSite(t), lumberSite(t), beaconSite(t), oilSite(t), yardSite(t), obsSite(t), saltSite(t), drillSite(t), plagueSite(t), t.port != null && coastSite(t), ...victorySpots(t)]) if (f) avoid.push([f.x, f.y, 2]);
+    for (const o of [...terraceSites(t), ...orchardSites(t)]) avoid.push([o.x, o.y, 1.4]);
+    if (t.port != null) avoid.push([t.port % W + .5, ((t.port / W) | 0) + .5, 1.8]);
+    let best = null, bd = 1e9;
+    for (let dy = -9; dy <= 9; dy++) for (let dx = -9; dx <= 9; dx++) {
+      const x = t.camp.x + dx, y = t.camp.y + dy, d = Math.hypot(dx, dy); if (d < ext + .6 || d > ext + 5.5 || x < 2 || y < 2 || x >= W - 2 || y >= H - 2) continue;
+      const i = y * W + x, tr = sim.terrain[i]; if ((tr !== T.GRASS && tr !== T.SAND) || (sim.owner[i] && sim.owner[i] !== t.id) || (sim.river && sim.river[i]) || (world.town && world.town[i]) || (world.rockAt && world.rockAt[i] >= 0)) continue;
+      let ok = true; for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (isWater(x + .5 + ox * .8, y + .5 + oy * .8)) ok = false;
+      if (!ok || avoid.some(([ux, uy, ur]) => Math.hypot(x + .5 - ux, y + .5 - uy) < ur)) continue;
+      const hs = [[-.55, -.5], [.55, -.5], [-.55, .5], [.55, .5], [0, 0]].map(([a, b]) => heightAt(x + .5 + a, y + .5 + b)), sl = Math.max(...hs) - Math.min(...hs); if (sl > .24) continue;
+      const score = Math.abs(d - ext - 2) + sl * 8 + (tr === T.SAND ? .8 : 0) + ((x * 7 + y * 13 + t.id) % 5) * .15; if (score < bd) { bd = score; best = { i, x: x + .5, y: y + .5, h: Math.min(...hs) + sl * .4, head: Math.atan2(dx, dy) }; }
+    }
+    world.ranchAt.set(t.id, { v: key, site: best }); return best;
+  }
+  function ranchKind(t) { const s = STY(t.style); return s === 'steppe' ? 'horse' : (FLOCK[s] || 'sheep'); }
+  function ranch(D, B, era, col, k) {
+    const night = world.night || 0, wood = '#7a5a3a';
+    part(D, 'box', B, 0, -.2, -.05, 1.3, .2, 1.15, era >= 4 ? '#7a8a46' : '#86904e');                       // grazed ground
+    // fence around the paddock (x -.6..+.6, z -.15..+.5)
+    const fence = (x0, z0, x1, z1) => {
+      const L = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(L / .2)), ry = Math.atan2(x1 - x0, z1 - z0);
+      for (let q = 0; q <= n; q++) { const x = x0 + (x1 - x0) * q / n, z = z0 + (z1 - z0) * q / n;
+        if (era <= 1) part(D, 'sphere', B, x, .01, z, .07, .05, .07, q % 2 ? '#8a8478' : '#9a9488');
+        else part(D, era >= 5 ? 'cyl' : 'box', B, x, -.01, z, .018, .1, .018, era === 4 ? '#e8e4dc' : era >= 5 ? '#6a6058' : wood); }
+      if (era >= 2) for (const y of era >= 5 ? [.04, .07, .095] : [.04, .085]) part(D, 'box', B, (x0 + x1) / 2, y, (z0 + z1) / 2, era >= 5 ? .004 : .012, era >= 5 ? .004 : .014, L, era === 4 ? '#e8e4dc' : era >= 5 ? '#8a8a8a' : '#8a6a48', 0, ry, 0);
+    };
+    fence(-.6, -.15, .6, -.15); fence(.6, -.15, .6, .5); fence(.6, .5, -.6, .5); fence(-.6, .5, -.6, .25);   // gap for the gate
+    if (era >= 2) part(D, 'box', B, -.6, .03, .13, .012, .07, .2, era === 4 ? '#e8e4dc' : wood, 0, Math.sin(clock * .4 + k) * .3, 0);
+    // a water trough
+    part(D, 'box', B, .4, -.01, .38, .2, .05, .06, era >= 5 ? '#8a8a8a' : wood); part(D, 'box', B, .4, .02, .38, .17, .02, .04, '#4a7a9a');
+    if (era <= 1) {
+      // herder's hut of hides and a brush windbreak
+      part(D, 'cone', B, -.3, -.01, -.42, .26, .26, .26, '#7a5a3a'); part(D, 'cone', B, -.3, .2, -.42, .06, .08, .06, '#5a4028');
+      part(D, 'box', B, .2, -.01, -.42, .5, .07, .05, '#6a7040');
+    } else if (era <= 3) {
+      // thatched barn and a haystack
+      part(D, 'box', B, -.15, -.01, -.45, .5, .2, .26, era === 3 ? '#c8b898' : '#8a6a48'); part(D, 'prism', B, -.15, .19, -.45, .56, .14, .3, '#c8a858');
+      part(D, 'box', B, -.15, -.01, -.315, .12, .14, .01, '#4a3626');
+      part(D, 'cone', B, .38, -.01, -.42, .2, .26, .2, '#d8b860');
+    } else if (era === 4) {
+      // red barn, a wind pump turning over the trough
+      part(D, 'box', B, -.15, -.01, -.45, .52, .24, .3, '#a83a2a'); part(D, 'prism', B, -.15, .23, -.45, .58, .16, .34, '#4a4a4a');
+      for (const x of [-.24, -.06]) part(D, 'box', B, x, -.01, -.296, .15, .18, .01, '#e8e4dc');
+      for (const x of [.34, .46]) for (const z of [.26, .38]) part(D, 'cyl', B, x, -.01, z + .05, .008, .42, .008, '#6a6a6a', (z - .32) * -.6, 0, (x - .4) * -.6);
+      const M = B.clone().multiply(tmpM.makeTranslation(.4, .42, .38)).multiply(new THREE.Matrix4().makeRotationZ(clock * 2 + k));
+      for (let q = 0; q < 6; q++) part(D, 'box', M, 0, 0, 0, .02, .11, .006, '#d8d4c8', 0, 0, q * Math.PI / 3);
+      part(D, 'cone', B, .4, .36, .38, .05, .06, .05, '#5a5a5a');
+    } else {
+      // barns and silos; a tractor hauling bales
+      part(D, 'box', B, -.2, -.01, -.45, .52, .22, .3, era >= 6 ? '#c8ccd0' : '#a83a2a'); part(D, 'prism', B, -.2, .21, -.45, .58, .1, .34, era >= 6 ? '#8a9098' : '#5a5a5a');
+      for (const x of era >= 6 ? [.22, .38] : [.22]) { part(D, 'cyl', B, x, -.01, -.45, .14, .5, .14, era >= 6 ? '#d8dce0' : '#b8b0a0'); part(D, 'dome', B, x, .49, -.45, .14, .07, .14, era >= 6 ? '#a8b0b8' : '#7a7a7a'); }
+      for (let q = 0; q < 3; q++) part(D, 'cyl', B, .48, .045, -.12 + q * .13, .09, .1, .09, era >= 6 ? '#f2f2ee' : '#d8b860', 0, 0, Math.PI / 2);
+      const u = Math.sin(clock * .3 + k) * .4;
+      part(D, 'box', B, u, .03, -.25, .1, .07, .14, era >= 6 ? '#3a7a3a' : '#c83a2a'); part(D, 'box', B, u, .1, -.28, .08, .07, .07, '#2a3038');
+      for (const z of [-.3, -.2]) for (const s of [-1, 1]) part(D, 'cyl', B, u + s * .06, .03, z, z < -.25 ? .05 : .08, .02, z < -.25 ? .05 : .08, '#2a2a2a', 0, 0, Math.PI / 2);
+      if (era >= 6) { part(D, 'box', B, -.2, .27, -.45, .4, .01, .2, '#2a3a5a', -.35, 0, 0); }
+    }
+    // the herder (with a dog before the tractors)
+    const hx = Math.sin(clock * .2 + k) * .3, hz = .58, step = Math.sin(clock * 6 + k) * .3;
+    for (const s of [-1, 1]) part(D, 'box', B, hx + s * .013, 0, hz, .016, .05, .016, '#4a3a2a', s * step, 0, 0);
+    part(D, 'box', B, hx, .048, hz, .042, .05, .028, era >= 5 ? '#3a5a8a' : col); part(D, 'sphere', B, hx, .112, hz, .022, .022, .022, '#c9a07a');
+    part(D, 'cone', B, hx, .126, hz, .05, .02, .05, era >= 4 ? '#8a6a3a' : '#c8b078');
+    if (era <= 4) { part(D, 'cyl', B, hx + .035, -.01, hz, .005, .15, .005, '#6a5038', 0, 0, -.15);
+      const dx = hx + .14 + Math.sin(clock * 3 + k) * .04; part(D, 'box', B, dx, .025, hz - .03, .07, .03, .025, '#2a2420', 0, Math.PI / 2, 0); part(D, 'sphere', B, dx + .045, .05, hz - .03, .02, .02, .02, '#2a2420');
+      for (const lx of [-.025, .025]) part(D, 'box', B, dx + lx, -.01, hz - .03, .01, .03, .01, '#2a2420'); }
+    if (night > .4 && era >= 4) part(D, 'sphere', B, -.15, .2, -.29, .03, .03, .03, '#ffd890');
+  }
+  function updateRanch() {
+    const D = world.dset;
+    for (const t of sim.tribes.values()) {
+      const st = ranchSite(t); if (!st) continue;
+      const B = base(wx(st.x), st.h, wz(st.y), st.head, 1.1); ranch(D, B, Math.min(6, t.era), t.color, t.id);
+      // the herd: animals wander inside the paddock (local x -.5..+.5, z -.08..+.42 scaled by 1.1)
+      const kind = ranchKind(t), n = kind === 'horse' || kind === 'cow' ? 4 : 6, cs = Math.cos(st.head), sn = Math.sin(st.head);
+      for (let q = 0; q < n; q++) {
+        const ph = clock * .06 + q * 1.7 + t.id, lx = Math.sin(ph + q) * .34, lz = .18 + Math.cos(ph * 1.3 + q * 2.1) * .13;
+        const vx = Math.cos(ph + q) * .34, vz = -Math.sin(ph * 1.3 + q * 2.1) * .17;
+        const X = st.x + (lx * cs + lz * sn) * 1.1, Y = st.y + (-lx * sn + lz * cs) * 1.1;
+        animal(D, X, Y, st.head + Math.atan2(vx, vz), kind, Math.sin(clock * .7 + q * 2) > 0, q + t.id * 7);
+      }
+    }
+  }
   function updateLumber() {
     const D = world.dset;
     for (const t of sim.tribes.values()) {
@@ -6084,7 +6175,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCoast(); updateHoly(); updateInns(); updateTunnels(); updateOrchards(); updatePlague(); updateSalt(); updateDrill(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCoast(); updateHoly(); updateInns(); updateTunnels(); updateOrchards(); updatePlague(); updateSalt(); updateDrill(); updateRanch(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -6610,6 +6701,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (const t of sim.tribes.values()) { const c = t.plague && plagueSite(t); if (c) for (const i of c.tiles) world.siteClear.add(i); }   // and plague camps
     for (const t of sim.tribes.values()) { const c = saltSite(t); if (c) world.siteClear.add(c.i); }   // and salt pans
     for (const t of sim.tribes.values()) { const c = drillSite(t); if (c) world.siteClear.add(c.i); }   // and drill grounds
+    for (const t of sim.tribes.values()) { const c = ranchSite(t); if (c) world.siteClear.add(c.i); }   // and ranches
       // and the terraced hillsides   // and the hilltop beacon   // and a clearing for the logging camp
                       // and for observatories               // and for the shipyard
     for (const bw of borderWalls()) drawBorderWall(S, bw, lamps);
@@ -6852,6 +6944,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   window.addEventListener('focusPlague', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 3 && plagueSite(t)).sort((a, b) => a.id - b.id), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__plague = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; if (!t.plague) { t.plague = 300; t.plagueDeaths = 0; } const c = plagueSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .2, d: e.detail.d || .25, a: c.head + 2.3 } })); });
   window.addEventListener('focusSalt', e => { const ts = [...sim.tribes.values()].filter(t => saltSite(t)).sort((a, b) => a.id - b.id), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__salt = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const c = saltSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .1, d: e.detail.d || .25, a: c.head + 2.5 } })); });
   window.addEventListener('focusDrill', e => { const ts = [...sim.tribes.values()].filter(t => t.era >= 1 && t.members.size >= 8).sort((a, b) => a.id - b.id), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; if (t && e.detail.mil) t.ai.strategy = 'military'; const c = t && drillSite(t); window.__drill = ts.length + (t ? ' ' + t.name + ' era ' + t.era + (c ? ' site' : ' none') : ''); if (!c) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .1, d: e.detail.d || .25, a: c.head + 2.6 } })); });
+  window.addEventListener('focusRanch', e => { const ts = [...sim.tribes.values()].filter(t => ranchSite(t)).sort((a, b) => a.id - b.id), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__ranch = ts.length + (t ? ' ' + t.name + ' era ' + t.era + ' ' + ranchKind(t) : ''); if (!t) return; const c = ranchSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .1, d: e.detail.d || .25, a: c.head + 2.6 } })); });
   window.addEventListener('focusBridge', e => { const rs = []; for (const r of world.tradeRoads || []) { if (r.br === undefined) r.br = bridgesOf(r); for (const br of r.br) rs.push([r, br]); } if (e.detail.era !== undefined) { const f = rs.filter(([r]) => r.era === e.detail.era); if (f.length) rs.splice(0, rs.length, ...f); } const [r, br] = rs[(e.detail.i || 0) % Math.max(1, rs.length)] || []; window.__bridge = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era + ' S ' + br.S.toFixed(2) + ' H ' + br.H.toFixed(2) : ''); if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: br.x, y: br.y, h: br.yc + br.H * .5, d: e.detail.d || .33, a: br.head + 1.3 } })); });
   window.addEventListener('focusCrossing', e => { const rs = (world.tradeRoads || []).filter(r => (r.c = crossingOf(r))), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__cross = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era : ''); if (!r) return; if (e.detail.war) { const w = { since: sim.tick, deaths: 0 }; r.a.wars.set(r.b.id, w); r.b.wars.set(r.a.id, w); } window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: r.c.x, y: r.c.y, h: r.c.h + .2, d: e.detail.d || .33, a: r.c.head + 1.1 } })); });
   window.addEventListener('focusObs', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 8 && obsSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__obs = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = obsSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y + .3, h: st.h, d: e.detail.d || .35 } })); });
