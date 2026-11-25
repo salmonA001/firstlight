@@ -5182,6 +5182,93 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     const D = world.dset;
     for (const t of sim.tribes.values()) windSites(t).forEach((c, q) => turbine(D, base(wx(c.x), c.h, wz(c.y), WIND_DIR, 1), Math.min(6, t.era), t.id * 5 + q));
   }
+  // fishing villages: coastal towns work a stretch of shore outside town. Fish drying on racks beside beached canoes
+  // early, net poles, rowing boats and a smokehouse in the Middle Ages, a brick cannery on a jetty in the 1800s,
+  // a fish market hall with an ice house and motor boats in the 1900s, and floating fish-farm pens offshore in the 2000s
+  function fishSite(t) {
+    if (!world.ext || t.members.size < 6) return null;
+    world.fishAt = world.fishAt || new Map();
+    const ext = (world.ext.get(t.id) || 2) + (t.walls ? 1.6 : .7), key = sim.ownerVersion + ':' + Math.round(ext * 2) + ':' + (world.sites || []).length, c = world.fishAt.get(t.id);
+    if (c && c.v === key) return c.site;
+    const avoid = (world.sites || []).map(st => [st.x, st.y, (st.len || 2) / 2 + .8]);
+    for (const f of [mineSite(t), lumberSite(t), beaconSite(t), oilSite(t), yardSite(t), obsSite(t), saltSite(t), drillSite(t), ranchSite(t), t.port != null && coastSite(t), ...victorySpots(t), ...windSites(t)]) if (f) avoid.push([f.x, f.y, 1.9]);
+    for (const o of [...terraceSites(t), ...orchardSites(t)]) avoid.push([o.x, o.y, 1.3]);
+    if (t.port != null) avoid.push([t.port % W + .5, ((t.port / W) | 0) + .5, 2.2]);
+    let best = null, bd = 1e9;
+    for (let dy = -8; dy <= 8; dy++) for (let dx = -8; dx <= 8; dx++) {
+      const x = t.camp.x + dx, y = t.camp.y + dy, d = Math.hypot(dx, dy); if (d < ext || d > ext + 5 || x < 2 || y < 2 || x >= W - 2 || y >= H - 2) continue;
+      const i = y * W + x, tr = sim.terrain[i]; if ((tr !== T.SAND && tr !== T.GRASS) || (sim.owner[i] && sim.owner[i] !== t.id) || (sim.river && sim.river[i]) || (world.town && world.town[i]) || (world.rockAt && world.rockAt[i] >= 0)) continue;
+      let sea = null; for (const [ox, oy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if ([.8, 1.4, 2, 2.6].every(r => isWater(x + .5 + ox * r, y + .5 + oy * r))) sea = [ox, oy];
+      if (!sea) continue;
+      if (avoid.some(([ux, uy, ur]) => Math.hypot(x + .5 - ux, y + .5 - uy) < ur)) continue;
+      const hs = [[-.4, -.4], [.4, -.4], [-.4, .4], [.4, .4], [0, 0]].map(([a, b]) => heightAt(x + .5 + a, y + .5 + b)), sl = Math.max(...hs) - Math.min(...hs); if (sl > .3) continue;
+      const score = d + sl * 6 + (tr === T.SAND ? 0 : .6); if (score < bd) { bd = score; best = { i, clr: [i, i - sea[1] * W - sea[0], i + sea[0] * W + sea[1], i - sea[0] * W - sea[1], i - sea[1] * W - sea[0] + sea[0] * W + sea[1], i - sea[1] * W - sea[0] - sea[0] * W - sea[1]], x: x + .5 - sea[0] * .15, y: y + .5 - sea[1] * .15, h: Math.max(.02, Math.min(...hs) + sl * .5), head: Math.atan2(sea[0], sea[1]) }; }
+    }
+    world.fishAt.set(t.id, { v: key, site: best }); return best;
+  }
+  function fishVillage(D, B, era, col, k, sy) {
+    // sy: the sea surface in local units. The shore runs along z ~ .35; the sea lies at +z
+    const night = world.night || 0, bob = q => Math.sin(clock * 1.5 + q + k) * .01;
+    const fisher = (x, z, a) => { const sw = Math.sin(clock * 3 + x * 7 + k) * .3;
+      for (const s of [-1, 1]) part(D, 'box', B, x + s * .012, 0, z, .015, .045, .015, '#4a4038', 0, a, 0);
+      part(D, 'box', B, x, .045, z, .04, .048, .026, era >= 5 ? '#e8c832' : '#8a7a5a', sw * .2, a, 0); part(D, 'sphere', B, x, .105, z, .02, .02, .02, '#c9a07a');
+      part(D, 'cone', B, x, .116, z, .035, .02, .035, era >= 5 ? '#e8c832' : '#c8b078'); };
+    const fish = (x, y, z) => part(D, 'box', B, x, y, z, .012, .05, .02, '#b8c0c8');
+    // a slipway of trodden sand down to the water
+    part(D, 'box', B, 0, -.08, .2, .9, .09, .5, '#d8c89a', -.15, 0, 0);
+    if (era <= 1) {
+      for (const x of [-.3, -.05]) { for (const s of [-1, 1]) part(D, 'box', B, x + s * .09, -.01, -.15, .012, .2, .012, '#6a5038', 0, 0, s * .25);
+        part(D, 'box', B, x, .17, -.15, .22, .01, .01, '#6a5038'); for (let q = 0; q < 5; q++) fish(x - .08 + q * .04, .11, -.15); }
+      for (const [x, a] of [[.25, .2], [.4, -.1]]) boat(D, B.clone().multiply(tmpM.makeTranslation(x, .03, .3)).multiply(new THREE.Matrix4().makeRotationY(a)), 'canoe', col);
+      part(D, 'cone', B, -.35, -.01, -.42, .2, .22, .2, '#8a6a48');
+      const fl = .8 + Math.sin(clock * 9 + k) * .2 + night * .4; part(D, 'cone', B, .2, 0, -.2, .05 * fl, .08 * fl, .05 * fl, '#ff9a3c');
+      for (let p = 0; p < 3; p++) { const ph = (clock * .3 + p / 3) % 1; part(D, 'sphere', B, .2 + ph * .1, .1 + ph * .5, -.2 - ph * .1, .04 + ph * .1, .04 + ph * .1, .04 + ph * .1, '#9a9690'); }
+      fisher(.05, .15, 3); fisher(-.15, -.05, 1);
+      return;
+    }
+    // a jetty out over the water from the Middle Ages on
+    const jl = era >= 4 ? 1.1 : .7;
+    part(D, 'box', B, .35, .01, .3 + jl / 2, .12, .02, jl, era >= 5 ? '#9a9a96' : '#8a6a48');
+    for (let q = 0; q <= jl / .2; q++) for (const s of [-1, 1]) part(D, 'cyl', B, .35 + s * .055, sy - .1, .35 + q * .2, .012, .12 - sy, .012, '#5a4028');
+    if (era <= 3) {
+      // net poles with nets hung to dry, a smokehouse with smoke, rowing boats
+      for (let q = 0; q < 3; q++) { const x = -.45 + q * .2; part(D, 'cyl', B, x, -.01, -.05, .01, .22, .01, '#6a5038'); if (q) part(D, 'box', B, x - .1, .1, -.05, .2, .14, .004, '#7a8a70'); }
+      part(D, 'box', B, -.3, -.01, -.38, .26, .16, .2, '#6a4a30'); part(D, 'prism', B, -.3, .15, -.38, .3, .1, .24, '#5a4a3a');
+      for (let p = 0; p < 3; p++) { const ph = (clock * .25 + p / 3 + k) % 1; part(D, 'sphere', B, -.3 + ph * .12, .26 + ph * .5, -.38, .04 + ph * .1, .04 + ph * .1, .04 + ph * .1, '#8a8a86'); }
+      for (const x of [.15, .35]) part(D, 'cyl', B, x, -.01, -.3, .04, .07, .04, '#7a5a3a');
+      boat(D, B.clone().multiply(tmpM.makeTranslation(.05, .02, .28)).multiply(new THREE.Matrix4().makeRotationY(.3)), 'rowboat', col);
+      boat(D, B.clone().multiply(tmpM.makeTranslation(.52, sy + .02 + bob(1), .75)), 'rowboat', col);
+      fisher(-.1, .05, 2.5); fisher(.35, .5, 0);
+    } else if (era === 4) {
+      // a brick cannery with a chimney, a fishing smack at the jetty
+      part(D, 'box', B, -.25, -.01, -.3, .5, .26, .3, '#9a5a42'); part(D, 'prism', B, -.25, .25, -.3, .54, .1, .34, '#4a4a50');
+      part(D, 'cyl', B, -.05, .2, -.38, .04, .3, .04, '#7a4a3a');
+      for (let p = 0; p < 3; p++) { const ph = (clock * .3 + p / 3 + k) % 1; part(D, 'sphere', B, -.05 + ph * .15, .5 + ph * .5, -.38, .04 + ph * .12, .04 + ph * .12, .04 + ph * .12, '#5a5856'); }
+      for (let q = 0; q < 4; q++) part(D, 'box', B, -.42 + q * .11, .08, -.145, .05, .07, .005, night > .3 ? '#ffd890' : '#3a4048');
+      boat(D, B.clone().multiply(tmpM.makeTranslation(.55, sy + .02 + bob(2), .85)), 'sailboat', col);
+      for (let q = 0; q < 4; q++) part(D, 'cyl', B, .1 + (q % 2) * .08, -.01 + Math.floor(q / 2) * .07, .05, .035, .065, .035, '#7a5a3a');
+      fisher(.35, .6, 0); fisher(.1, -.05, 2);
+    } else {
+      // an open fish market hall, an ice house; motor boats at the jetty
+      for (const [x, z] of [[-.55, -.45], [-.05, -.45], [-.55, -.1], [-.05, -.1]]) part(D, 'cyl', B, x, -.01, z, .012, .2, .012, '#8a8a86');
+      part(D, 'prism', B, -.3, .19, -.27, .58, .08, .42, era >= 6 ? '#3a6aa0' : '#a83a2a');
+      for (let q = 0; q < 3; q++) { part(D, 'box', B, -.45 + q * .15, .05, -.27, .1, .015, .2, '#c8c8c4'); for (let f = 0; f < 3; f++) part(D, 'box', B, -.47 + q * .15 + f * .03, .065, -.27, .015, .006, .05, '#b8c0c8'); }
+      part(D, 'box', B, .15, -.01, -.4, .2, .18, .18, '#e8e8e4');
+      for (const [z, a] of [[.6, 0], [.95, .2]]) { const M = B.clone().multiply(tmpM.makeTranslation(.55, sy + .02 + bob(z * 5), z)).multiply(new THREE.Matrix4().makeRotationY(a));
+        part(D, 'hull', M, 0, -.03, 0, .16, .08, .42, era >= 6 ? '#e8e8e4' : '#3a6a8a'); part(D, 'box', M, 0, .04, -.06, .1, .08, .12, '#e8e8e4'); part(D, 'cyl', M, 0, .1, .04, .006, .18, .006, '#5a5a5a'); }
+      fisher(-.2, -.1, 0); fisher(.3, .4, 3);
+      if (era >= 6) {
+        // floating fish-farm pens offshore with a feed barge
+        for (const [x, z] of [[-.35, 1.1], [-.05, 1.3], [-.45, 1.45]]) { part(D, 'cyl', B, x, sy, z, .15, .02, .15, '#3a3a3a'); part(D, 'cyl', B, x, sy + .005, z, .13, .02, .13, '#2a5a6a');
+          for (let q = 0; q < 6; q++) { const a = q * 1.047; part(D, 'cyl', B, x + Math.cos(a) * .14, sy, z + Math.sin(a) * .14, .006, .07, .006, '#9a9a9a'); } }
+        part(D, 'box', B, .2, sy, 1.35, .22, .06, .14, '#e8c832'); part(D, 'box', B, .2, sy + .06, 1.35, .1, .06, .08, '#e8e8e4');
+      }
+    }
+  }
+  function updateFish() {
+    const D = world.dset;
+    for (const t of sim.tribes.values()) { const st = fishSite(t); if (st) { const s = 1.1; fishVillage(D, base(wx(st.x), st.h, wz(st.y), st.head, s), Math.min(6, t.era), t.color, t.id, (-.03 - st.h) / s); } }
+  }
   function updateLumber() {
     const D = world.dset;
     for (const t of sim.tribes.values()) {
@@ -6306,7 +6393,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCoast(); updateHoly(); updateInns(); updateTunnels(); updateOrchards(); updatePlague(); updateSalt(); updateDrill(); updateRanch(); updateDigs(); updateWind(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCoast(); updateHoly(); updateInns(); updateTunnels(); updateOrchards(); updatePlague(); updateSalt(); updateDrill(); updateRanch(); updateDigs(); updateWind(); updateFish(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -6835,6 +6922,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (const t of sim.tribes.values()) { const c = ranchSite(t); if (c) world.siteClear.add(c.i); }   // and ranches
     for (const r of sim.ruins || []) { const c = digOf(r); if (c) world.siteClear.add(Math.floor(c.y) * W + Math.floor(c.x)); }   // and archaeology digs
     for (const t of sim.tribes.values()) for (const c of windSites(t)) world.siteClear.add(c.i);   // and wind turbines
+    for (const t of sim.tribes.values()) { const c = fishSite(t); if (c) for (const j of c.clr) world.siteClear.add(j); }   // and fishing villages
       // and the terraced hillsides   // and the hilltop beacon   // and a clearing for the logging camp
                       // and for observatories               // and for the shipyard
     for (const bw of borderWalls()) drawBorderWall(S, bw, lamps);
@@ -7095,6 +7183,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     const g = digOf(q[0]); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: g.x, y: g.y, h: g.h + .1, d: e.detail.d || .25, a: g.head + 2.6 } }));
   });
   window.addEventListener('focusWind', e => { const ts = [...sim.tribes.values()].filter(t => windSites(t).length).sort((a, b) => a.id - b.id), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__wind = ts.length + (t ? ' ' + t.name + ' era ' + t.era + ' n' + windSites(t).length : ''); if (!t) return; const c = windSites(t)[0]; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .7, d: e.detail.d || 1, a: WIND_DIR + 2.4 } })); });
+  window.addEventListener('focusFish', e => { const ts = [...sim.tribes.values()].filter(t => fishSite(t)).sort((a, b) => a.id - b.id), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__fish = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const c = fishSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .1, d: e.detail.d || .3, a: c.head + 2.5 } })); });
   window.addEventListener('focusBridge', e => { const rs = []; for (const r of world.tradeRoads || []) { if (r.br === undefined) r.br = bridgesOf(r); for (const br of r.br) rs.push([r, br]); } if (e.detail.era !== undefined) { const f = rs.filter(([r]) => r.era === e.detail.era); if (f.length) rs.splice(0, rs.length, ...f); } const [r, br] = rs[(e.detail.i || 0) % Math.max(1, rs.length)] || []; window.__bridge = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era + ' S ' + br.S.toFixed(2) + ' H ' + br.H.toFixed(2) : ''); if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: br.x, y: br.y, h: br.yc + br.H * .5, d: e.detail.d || .33, a: br.head + 1.3 } })); });
   window.addEventListener('focusCrossing', e => { const rs = (world.tradeRoads || []).filter(r => (r.c = crossingOf(r))), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__cross = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era : ''); if (!r) return; if (e.detail.war) { const w = { since: sim.tick, deaths: 0 }; r.a.wars.set(r.b.id, w); r.b.wars.set(r.a.id, w); } window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: r.c.x, y: r.c.y, h: r.c.h + .2, d: e.detail.d || .33, a: r.c.head + 1.1 } })); });
   window.addEventListener('focusObs', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 8 && obsSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__obs = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = obsSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y + .3, h: st.h, d: e.detail.d || .35 } })); });
