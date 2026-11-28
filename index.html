@@ -5449,6 +5449,135 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     const D = world.dset;
     for (const t of sim.tribes.values()) { if (!fairOn(t)) continue; const st = fairSite(t); if (st) fairGround(D, base(wx(st.x), st.h, wz(st.y), st.head, 1.15), Math.min(6, t.era), t.color, t.id); }
   }
+  // race courses: a big town lays out a racing oval in open country just outside the walls.
+  // A hippodrome with a spina and chariots in antiquity, a horse race behind wooden rails in the Middle Ages, a roofed
+  // grandstand in the 1700s and 1800s, a motor circuit with pit garages in the 1900s and a floodlit grand-prix track in the 2000s
+  const RACE_RX = .95, RACE_RZ = .48;
+  function raceSite(t) {
+    if (!world.ext || t.era < 1 || t.members.size < 12) return null;
+    world.raceAt = world.raceAt || new Map();
+    const ext = (world.ext.get(t.id) || 2) + (t.walls ? 1.7 : .8), key = sim.ownerVersion + ':' + Math.round(ext * 2) + ':' + (world.sites || []).length + ':' + (world.tradeRoads || []).length, c = world.raceAt.get(t.id);
+    if (c && c.v === key) return c.site;
+    const avoid = (world.sites || []).map(st => [st.x, st.y, (st.len || 2) / 2 + 1]);
+    for (const f of [mineSite(t), lumberSite(t), beaconSite(t), oilSite(t), yardSite(t), obsSite(t), saltSite(t), drillSite(t), ranchSite(t), fishSite(t), huntSite(t), plagueSite(t), fairSite(t), t.port != null && coastSite(t), ...victorySpots(t), ...windSites(t)]) if (f) avoid.push([f.x, f.y, 1.3]);
+    for (const o of [...terraceSites(t), ...orchardSites(t)]) avoid.push([o.x, o.y, 1.2]);
+    for (const r of (sim.religions || new Map()).values()) { const h = holySite(r); if (h) for (const i of h.tiles) avoid.push([i % W + .5, ((i / W) | 0) + .5, 1.2]); }
+    if (t.port != null) avoid.push([t.port % W + .5, ((t.port / W) | 0) + .5, 1.6]);
+    const segs = [...(world.tradeRoads || []), ...(world.routes || [])].map(r => [r.x1, r.y1, r.x2, r.y2]);
+    const segD = (px, py, [x1, y1, x2, y2]) => { const vx = x2 - x1, vy = y2 - y1, l = vx * vx + vy * vy || 1, u = Math.max(0, Math.min(1, ((px - x1) * vx + (py - y1) * vy) / l)); return Math.hypot(px - x1 - u * vx, py - y1 - u * vy); };
+    let best = null, bd = 1e9;
+    for (let dy = -12; dy <= 12; dy++) for (let dx = -12; dx <= 12; dx++) {
+      const x = t.camp.x + dx, y = t.camp.y + dy, d = Math.hypot(dx, dy); if (d < ext + 1.3 || d > ext + 6.5 || x < 3 || y < 3 || x >= W - 3 || y >= H - 3) continue;
+      const head = Math.atan2(-dx, -dy), cs = Math.cos(head), sn = Math.sin(head), cx = x + .5, cy = y + .5, hs = [], tiles = new Set(); let ok = true;
+      // the whole oval plus the stands (on the town side, +z) must be open, owned land
+      for (let lx = -1.15; lx <= 1.16 && ok; lx += .38) for (let lz = -.95; lz <= 1.11 && ok; lz += .41) {
+        const px = cx + lx * cs + lz * sn, py = cy - lx * sn + lz * cs, ti = Math.floor(py) * W + Math.floor(px), tr = sim.terrain[ti];
+        if ((tr !== T.GRASS && tr !== T.SAND && tr !== T.FARM) || (sim.owner[ti] && sim.owner[ti] !== t.id) || (sim.river && sim.river[ti]) || (world.town && world.town[ti]) || (world.rockAt && world.rockAt[ti] >= 0) || isWater(px, py)) ok = false;
+        else if (avoid.some(([ux, uy, ur]) => Math.hypot(px - ux, py - uy) < ur) || segs.some(s => segD(px, py, s) < .35)) ok = false;
+        else { hs.push(heightAt(px, py)); tiles.add(ti); }
+      }
+      if (!ok) continue;
+      const sl = Math.max(...hs) - Math.min(...hs); if (sl > .26) continue;
+      const score = d + sl * 8 + hash(x, y) * .6; if (score < bd) { bd = score; best = { i: y * W + x, x: cx, y: cy, h: Math.max(...hs) + .005, head, tiles: [...tiles] }; }
+    }
+    world.raceAt.set(t.id, { v: key, site: best }); return best;
+  }
+  function raceCourse(D, B, era, col, k) {
+    const night = world.night || 0, lit = night > .3, RX = RACE_RX, RZ = RACE_RZ, N = 28;
+    const ground = era === 1 ? '#c8b088' : era >= 5 ? '#4a4a4e' : '#6f9448';
+    part(D, 'box', B, 0, -.3, .1, 2.45, .3, 2.05, era >= 5 ? '#7a9a52' : '#8a9e58');   // levelled field
+    // the track: a ring of segments; kerbs and rails follow its edges
+    const pt = (a, r) => [Math.cos(a) * (RX + r), Math.sin(a) * (RZ + r)];
+    for (let q = 0; q < N; q++) {
+      const a0 = q / N * 6.283, a1 = (q + 1) / N * 6.283, am = (a0 + a1) / 2;
+      const seg = (r, w, y, h, c) => { const [x0, z0] = pt(a0, r), [x1, z1] = pt(a1, r); part(D, 'box', B, (x0 + x1) / 2, y, (z0 + z1) / 2, Math.hypot(x1 - x0, z1 - z0) + .01, h, w, c, 0, Math.atan2(-(z1 - z0), x1 - x0), 0); };
+      seg(0, .2, -.01, .016, ground);
+      if (era >= 5) { seg(-.105, .025, -.008, .016, q % 2 ? '#e8e8e4' : '#c83a2a'); seg(.15, .015, -.01, era >= 6 ? .04 : .03, era >= 6 ? '#3a8ac8' : '#9a9a98'); }
+      else if (era >= 2) for (const r of [-.11, .12]) { const [px, pz] = pt(a0, r); part(D, 'cyl', B, px, -.01, pz, .006, .055, .006, era === 2 ? '#6a5038' : '#f0ece2'); seg(r, .008, .045, .008, era === 2 ? '#7a5a40' : '#f4f2ec'); }
+      if (era >= 6 && q % 2 === 0) { const [px, pz] = pt(am, .19); for (let s = 0; s < 2; s++) part(D, 'cyl', B, px, -.01 + s * .02, pz, .018, .02, .018, '#222'); }   // tyre walls
+    }
+    // finish line in front of the stands
+    part(D, 'box', B, 0, -.0, RZ, .02, .008, .2, '#f4f2ec'); if (era >= 2) { part(D, 'cyl', B, .0, -.01, RZ + .13, .008, .16, .008, '#f4f2ec'); part(D, 'box', B, 0, .15, RZ + .13, .05, .04, .01, era >= 5 ? '#2a2a2a' : col); }
+    const fan = (x, z, y, q) => { const bob = Math.max(0, Math.sin(clock * 6 + q * 2.3)) * .012; part(D, 'box', B, x, y + bob, z, .022, .03, .018, ['#c83a2a', '#e8c832', '#3a6aa0', '#e8e0cc', col, '#7aa040'][(q * 7 + k) % 6]); part(D, 'sphere', B, x, y + .04 + bob, z, .011, .011, .011, '#c9a07a'); };
+    // stands: tiers stepping up away from the track, a crowd on each
+    const stand = (side, len, tierC, roofC) => {
+      for (let r = 0; r < 3; r++) { const z = side * (RZ + .24 + r * .09), y = .03 + r * .045; part(D, 'box', B, 0, -.02, z, len, y + .02, .09, tierC);
+        for (let q = 0; q < Math.round(len / .07); q++) fan(-len / 2 + .04 + q * .07, z, y, q + r * 13 + (side > 0 ? 0 : 50)); }
+      if (roofC) { for (const x of [-len / 2 + .03, 0, len / 2 - .03]) part(D, 'cyl', B, x, -.01, side * (RZ + .45), .01, .3, .01, era >= 5 ? '#9a9a9a' : '#5a4a3a');
+        part(D, 'box', B, 0, .29, side * (RZ + .34), len + .06, .02, .3, roofC, side * .12, 0, 0); }
+    };
+    if (era === 1) {
+      // hippodrome: stone stands on both sides, a central spina with an obelisk and turning posts
+      stand(1, 1.3, '#cfc2a2'); stand(-1, 1.1, '#cfc2a2');
+      part(D, 'box', B, 0, -.01, 0, 1.15, .05, .06, '#d8cdb0'); part(D, 'pyr', B, 0, .04, 0, .05, .3, .05, '#c8b890');
+      for (const x of [-.6, .6]) for (let s = 0; s < 3; s++) part(D, 'cone', B, x, .04, (s - 1) * .02, .018, .12, .018, '#b8a070');
+      for (const x of [-.3, .3]) { part(D, 'cyl', B, x, .04, 0, .008, .08, .008, '#d8cdb0'); part(D, 'sphere', B, x, .13, 0, .018, .018, .018, '#c8a858'); }
+    } else if (era <= 4) {
+      const tc = era === 2 ? '#8a6a48' : era === 3 ? '#9a7a58' : '#9a5a44', rc = era === 2 ? null : era === 3 ? '#6a4a34' : '#4a5058';
+      stand(1, era === 2 ? .9 : 1.3, tc, rc);
+      if (era === 2) for (const x of [-.55, .55]) { part(D, 'cyl', B, x, -.01, RZ + .3, .09, .1, .09, x < 0 ? col : '#e8e0cc'); part(D, 'cone', B, x, .09, RZ + .3, .11, .1, .11, x < 0 ? '#e8e0cc' : col); }   // pavilions
+      for (const x of [-.75, -.25, .25, .75]) { part(D, 'cyl', B, x, -.01, RZ + .62, .005, .24, .005, '#8a8a8a'); part(D, 'box', B, x + .03, .2, RZ + .62, .06, .035, .004, col, 0, 0, Math.sin(clock * 4 + x * 5) * .2); }
+      if (era === 4) { part(D, 'box', B, .78, -.01, RZ + .3, .1, .38, .1, '#9a5a44'); part(D, 'pyr', B, .78, .37, RZ + .3, .07, .08, .07, '#4a5058'); part(D, 'cyl', B, .78, .3, RZ + .245, .03, .004, .03, '#f4f2ec', Math.PI / 2, 0, 0); }   // clock tower
+    } else {
+      stand(1, 1.5, era >= 6 ? '#d0d4d8' : '#b8b8b0', era >= 6 ? '#4a7ab0' : '#8a8a88');
+      // pit garages and a control tower in the infield
+      part(D, 'box', B, 0, -.01, -.24, .8, .08, .12, era >= 6 ? '#e8e8ec' : '#c8c4b8');
+      for (let q = 0; q < 8; q++) part(D, 'box', B, -.35 + q * .1, -.0, -.175, .07, .055, .005, ['#c83a2a', '#3a6aa0', '#e8c832', '#2a2a2a'][q % 4]);
+      part(D, 'box', B, .48, -.01, -.24, .1, .3, .1, '#d8d8d8'); part(D, 'box', B, .48, .29, -.24, .15, .06, .15, lit ? '#ffe8a0' : '#3a5a7a');
+      if (era >= 6) {
+        part(D, 'box', B, -.75, .1, RZ + .55, .3, .16, .015, lit || Math.floor(clock) % 2 ? ['#c83aa0', '#3a8ac8', '#e8c832'][Math.floor(clock * .7) % 3] : '#2a3038');   // big screen
+        part(D, 'cyl', B, -.75, -.01, RZ + .56, .012, .12, .012, '#7a7a7a');
+        for (const [x, z] of [[-1.05, -.6], [1.05, -.6], [-1.05, .8], [1.05, .8]]) { part(D, 'cyl', B, x, -.01, z, .012, .55, .012, '#9a9a9a'); part(D, 'box', B, x, .55, z, .1, .06, .03, lit ? '#fff8e0' : '#6a6a6a');
+          if (lit && world.beaconFires) { const p = new THREE.Vector3(x, .5, z).applyMatrix4(B); world.beaconFires.push([p.x, p.y, p.z, .9, false, p.y - .5]); } }
+      }
+    }
+  }
+  function miniHorse(D, B, ox, oz, q) {
+    // a small racehorse in step with the stands and the crowd (the wild herds use the full-size animal())
+    const c = ['#6a4028', '#3a2a20', '#8a5a34', '#d8d0c0', '#a06a3a'][q % 5], sw = Math.sin(clock * 16 + q * 1.3) * .6;
+    part(D, 'box', B, ox, .038, oz, .03, .03, .09, c); part(D, 'box', B, ox, .052, oz + .04, .018, .04, .02, c, .7, 0, 0); part(D, 'box', B, ox, .078, oz + .068, .015, .015, .032, c);
+    for (const [sx, sz, ph] of [[-1, 1, 1], [1, 1, -1], [-1, -1, -1], [1, -1, 1]]) part(D, 'box', B, ox + sx * .009, 0, oz + sz * .033, .008, .042, .008, c, ph * sw, 0, 0);
+    part(D, 'box', B, ox, .05, oz - .05, .006, .006, .03, '#2a2018', -.5 + sw * .3, 0, 0);
+  }
+  function racer(D, x, y, hd, era, col, q, h) {
+    const silk = [col, '#c83a2a', '#e8c832', '#3a6aa0', '#f0ece2', '#2a8a5a'][q % 6];
+    if (era >= 5) {
+      // racing cars: a tall cigar-shaped car in the 1900s, a low winged car in the 2000s
+      const B = base(wx(x), h, wz(y), hd, .5), lo = era >= 6, bh = lo ? .022 : .035;
+      part(D, 'box', B, 0, .012, 0, lo ? .06 : .055, bh, .2, silk); part(D, 'sphere', B, 0, .012 + bh, lo ? -.01 : -.02, .018, .016, .018, '#2a2a2a');
+      for (const [sx, sz] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) part(D, 'cyl', B, sx * (lo ? .042 : .038), 0, sz * .065, .022, .02, .022, '#1a1a1a', 0, 0, Math.PI / 2);
+      if (lo) { part(D, 'box', B, 0, .012, .11, .1, .006, .025, silk); part(D, 'box', B, 0, .055, -.095, .08, .006, .03, '#2a2a2a'); part(D, 'box', B, 0, .03, -.095, .006, .03, .006, '#2a2a2a'); }
+      return;
+    }
+    const B = base(wx(x), h, wz(y), hd, 1);
+    if (era === 1) {
+      // a chariot: two horses side by side, the car and its driver behind
+      for (const s of [-1, 1]) miniHorse(D, B, s * .02, .04, q * 2 + (s > 0 ? 1 : 0));
+      part(D, 'box', B, 0, .015, -.06, .045, .028, .03, '#a8743a'); for (const s of [-1, 1]) part(D, 'cyl', B, s * .026, .016, -.06, .016, .005, .016, '#5a4028', 0, 0, Math.PI / 2);
+      part(D, 'box', B, 0, .03, -.062, .014, .03, .012, silk); part(D, 'sphere', B, 0, .07, -.062, .009, .009, .009, '#c9a07a');
+      part(D, 'box', B, 0, .04, -.03, .003, .003, .07, '#6a5038', -.15, 0, 0);
+      return;
+    }
+    // a horse and its jockey, crouched forward in racing silks
+    miniHorse(D, B, 0, 0, q);
+    part(D, 'box', B, 0, .066, .005, .02, .026, .016, silk, .8, 0, 0); part(D, 'sphere', B, 0, .088, .022, .009, .008, .009, silk);
+  }
+  function updateRaces() {
+    const D = world.dset;
+    for (const t of sim.tribes.values()) {
+      const st = raceSite(t); if (!st) continue;
+      const era = Math.min(6, t.era), cs = Math.cos(st.head), sn = Math.sin(st.head);
+      raceCourse(D, base(wx(st.x), st.h, wz(st.y), st.head, 1), era, t.color, t.id);
+      const at = (lx, lz) => [st.x + lx * cs + lz * sn, st.y - lx * sn + lz * cs];
+      const n = era === 1 ? 4 : era >= 5 ? 6 : 5, w = era >= 5 ? .75 : .42;
+      for (let q = 0; q < n; q++) {
+        // each racer has its own pace that swells and fades, so places change on the way round
+        const lane = ((q % 3) - 1) * .05, ang = a => clock * w + t.id + q * .85 + Math.sin(clock * .23 + q * 1.9) * .5 + a;
+        const loop = a => at(Math.cos(ang(a)) * (RACE_RX + lane), Math.sin(ang(a)) * (RACE_RZ + lane));
+        const [x, y] = loop(0), [x2, y2] = loop(.03); racer(D, x, y, Math.atan2(x2 - x, y2 - y), era, t.color, q + t.id, st.h);
+      }
+    }
+  }
   function updateLumber() {
     const D = world.dset;
     for (const t of sim.tribes.values()) {
@@ -6573,7 +6702,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
       const B = base(wx(x), -.03 + Math.sin(clock * 2 + s.id) * .025, wz(y), s.heading, 1.1);
       if (s.merchant) merchant(world.dset, B, s.era, t.color, s.amt > 0 && s.mode === 'trade'); else ship(world.dset, B, s.era, t.color, STY(t.style), s.id);
     }
-    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCoast(); updateHoly(); updateInns(); updateTunnels(); updateOrchards(); updatePlague(); updateSalt(); updateDrill(); updateRanch(); updateDigs(); updateWind(); updateFish(); updateHunts(); updateFairs(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
+    updateLinks(); updateSeaFx(); if (Q.life) { updateSea(); updateCars(); updateCaravans(); } updateMines(); updateYards(); updateScars(); updateFronts(); updateObs(); updateLumber(); updateBeacons(); updateOil(); updateTerraces(); updateSummits(); updateRefugees(); updateVictories(); updateCrossings(); updateBridges(); updateCoast(); updateHoly(); updateInns(); updateTunnels(); updateOrchards(); updatePlague(); updateSalt(); updateDrill(); updateRanch(); updateDigs(); updateWind(); updateFish(); updateHunts(); updateFairs(); updateRaces(); updateCamps(); updateRiverLife(); updateGrass(); updateRuins();
     const D = world.dset;
     for (const e of sim.effects) {
       if (e.type !== 'torpedo' && e.type !== 'missile') continue;
@@ -7105,6 +7234,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     for (const t of sim.tribes.values()) { const c = fishSite(t); if (c) for (const j of c.clr) world.siteClear.add(j); }   // and fishing villages
     for (const t of sim.tribes.values()) { const c = huntSite(t); if (c) world.siteClear.add(c.i); }   // and hunting lodges
     for (const t of sim.tribes.values()) { const c = fairSite(t); if (c) world.siteClear.add(c.i); }   // and fairgrounds
+    for (const t of sim.tribes.values()) { const c = raceSite(t); if (c) for (const i of c.tiles) world.siteClear.add(i); }   // and race courses
       // and the terraced hillsides   // and the hilltop beacon   // and a clearing for the logging camp
                       // and for observatories               // and for the shipyard
     for (const bw of borderWalls()) drawBorderWall(S, bw, lamps);
@@ -7368,6 +7498,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   window.addEventListener('focusFish', e => { const ts = [...sim.tribes.values()].filter(t => fishSite(t)).sort((a, b) => a.id - b.id), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__fish = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const c = fishSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .1, d: e.detail.d || .3, a: c.head + 2.5 } })); });
   window.addEventListener('focusHunt', e => { const ts = [...sim.tribes.values()].filter(t => huntSite(t)).sort((a, b) => a.id - b.id), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__hunt = ts.length + (t ? ' ' + t.name + ' era ' + t.era + ' ' + huntSite(t).prey : ''); if (!t) return; const c = huntSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .1, d: e.detail.d || .3, a: c.head + Math.PI } })); });
   window.addEventListener('focusFair', e => { const ts = [...sim.tribes.values()].filter(t => fairSite(t)).sort((a, b) => a.id - b.id), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__fair = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; t._fairForce = true; const c = fairSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .15, d: e.detail.d || .35, a: c.head + 2.6 } })); });
+  window.addEventListener('focusRace', e => { let ts = [...sim.tribes.values()].filter(t => raceSite(t)).sort((a, b) => a.id - b.id); if (e.detail.era !== undefined) { const f = ts.filter(t => Math.min(6, t.era) === e.detail.era); if (f.length) ts = f; } const t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__race = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const c = raceSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: c.x, y: c.y, h: c.h + .2, d: e.detail.d || .45, a: c.head + 2.5 } })); });
   window.addEventListener('focusBridge', e => { const rs = []; for (const r of world.tradeRoads || []) { if (r.br === undefined) r.br = bridgesOf(r); for (const br of r.br) rs.push([r, br]); } if (e.detail.era !== undefined) { const f = rs.filter(([r]) => r.era === e.detail.era); if (f.length) rs.splice(0, rs.length, ...f); } const [r, br] = rs[(e.detail.i || 0) % Math.max(1, rs.length)] || []; window.__bridge = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era + ' S ' + br.S.toFixed(2) + ' H ' + br.H.toFixed(2) : ''); if (!r) return; window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: br.x, y: br.y, h: br.yc + br.H * .5, d: e.detail.d || .33, a: br.head + 1.3 } })); });
   window.addEventListener('focusCrossing', e => { const rs = (world.tradeRoads || []).filter(r => (r.c = crossingOf(r))), r = rs[(e.detail.i || 0) % Math.max(1, rs.length)]; window.__cross = rs.length + (r ? ' ' + r.a.name + '-' + r.b.name + ' era ' + r.era : ''); if (!r) return; if (e.detail.war) { const w = { since: sim.tick, deaths: 0 }; r.a.wars.set(r.b.id, w); r.b.wars.set(r.a.id, w); } window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: r.c.x, y: r.c.y, h: r.c.h + .2, d: e.detail.d || .33, a: r.c.head + 1.1 } })); });
   window.addEventListener('focusObs', e => { const ts = [...sim.tribes.values()].filter(t => t.members.size >= 8 && obsSite(t)), t = ts[(e.detail.i || 0) % Math.max(1, ts.length)]; window.__obs = ts.length + (t ? ' ' + t.name + ' era ' + t.era : ''); if (!t) return; const st = obsSite(t); window.dispatchEvent(new CustomEvent('focusTile', { detail: { x: st.x, y: st.y + .3, h: st.h, d: e.detail.d || .35 } })); });

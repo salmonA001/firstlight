@@ -234,6 +234,10 @@ There are **53 technologies** across seven eras. They run from Stone Tools, Fire
 
   ![Harvest fairs](docs/fair.png)
 
+- **Race courses:** big towns lay out a racing oval in open country outside town, with a cheering crowd in the stands. Antiquity has a hippodrome where chariots race around a spina with an obelisk. From the Middle Ages, jockeys in racing silks ride horses behind wooden rails, then in front of a roofed grandstand, which becomes brick with a clock tower in the 1800s. The 1900s bring a motor circuit with red and white kerbs, pit garages and a control tower. In the 2000s it is a floodlit grand-prix track with winged cars, tyre walls and a big screen.
+
+  ![Race courses](docs/race.png)
+
 - **Wartime forts:** a nation at war fortifies the side of town facing its nearest enemy, with its colors flying. It starts as a timber watchtower behind a palisade, then becomes a stone tower with battlements, a star fort with cannon, an earthwork redoubt with a field gun, a zigzag trench line with a concrete pillbox and barbed wire, and finally an air defense post with a turning radar and missile launcher.
 
   ![A stone watchtower flying its nation's flag outside a town at war](docs/fort.png)
